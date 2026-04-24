@@ -1,0 +1,59 @@
+# Segredos e configurações locais
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+
+# Logs
+logs/
+*.log
+
+# Dados locais
+dados/
+data/
+
+# Docker
+*.override.yml
+
+# Baseline local-only ignores
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+id_rsa
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+env/
+
+# Node
+node_modules/
+.next/
+dist/
+build/
+coverage/
+
+# Editor and local tooling
+.idea/
+.vscode/
+.cursor/
+.claude/
+.uix/
+
+# Local artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.pkl
+*.joblib
+tmp/
+.cache/

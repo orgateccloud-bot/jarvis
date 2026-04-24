@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. HyperAgent</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#020810;--surface:#0a1628;--surface2:#0d1f3c;
+  --border:rgba(0,180,255,0.15);--glow:rgba(0,180,255,0.4);
+  --primary:#00b4ff;--bright:#00e5ff;--dim:#0077aa;
+  --accent:#ff6b00;--green:#00ff88;--red:#ff3355;--yellow:#ffaa00;
+  --text:#c8dce8;--text-dim:#4a6a80;--text-bright:#e8f4ff;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif}
+
+/* ── Background ── */
+.bg-canvas{position:fixed;inset:0;z-index:0}
+.scanline{position:fixed;top:0;left:0;right:0;height:2px;z-index:1;
+  background:linear-gradient(90deg,transparent,var(--primary),transparent);
+  animation:scan 6s linear infinite;opacity:.2}
+@keyframes scan{0%{top:0}100%{top:100vh}}
+
+/* ── Boot Screen ── */
+.boot{position:fixed;inset:0;z-index:200;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity 1s}
+.boot.gone{opacity:0;pointer-events:none}
+.boot-ring{width:100px;height:100px;position:relative;margin-bottom:24px}
+.boot-ring svg{width:100%;height:100%;animation:bootSpin 2s linear infinite}
+.boot-title{font-family:'Orbitron',monospace;font-size:28px;letter-spacing:10px;
+  color:var(--bright);filter:drop-shadow(0 0 12px var(--primary));
+  overflow:hidden;white-space:nowrap;border-right:2px solid var(--bright);
+  animation:typeIn 1.5s steps(10) forwards;width:0}
+@keyframes typeIn{to{width:320px}}
+@keyframes bootSpin{to{transform:rotate(360deg)}}
+.boot-log{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);
+  margin-top:20px;line-height:2;opacity:0;animation:fadeIn .5s .5s forwards}
+.boot-log .ok{color:var(--green)} .boot-log .ld{color:var(--primary)}
+@keyframes fadeIn{to{opacity:1}}
+
+/* ── Layout ── */
+.app{position:relative;z-index:2;display:grid;
+  grid-template-rows:56px 1fr;height:100vh;opacity:0;transition:opacity .8s}
+.app.visible{opacity:1}
+
+/* ── Header ── */
+.header{display:flex;justify-content:space-between;align-items:center;
+  padding:0 24px;
+  background:linear-gradient(180deg,rgba(0,20,40,.98),rgba(0,10,25,.92));
+  border-bottom:1px solid var(--border);position:relative}
+.header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--bright),var(--accent),var(--bright),transparent);
+  animation:hglow 3s ease-in-out infinite}
+@keyframes hglow{0%,100%{opacity:.4}50%{opacity:1}}
+
+.logo{display:flex;align-items:center;gap:12px}
+.arc-mini{width:36px;height:36px;position:relative;display:flex;align-items:center;justify-content:center}
+.arc-mini::before{content:'';position:absolute;inset:0;border:2px solid var(--primary);
+  border-radius:50%;animation:arcPulse 2s ease-in-out infinite;
+  box-shadow:0 0 12px var(--glow),inset 0 0 8px var(--glow)}
+.arc-mini::after{content:'';position:absolute;inset:3px;border:1px solid rgba(0,180,255,.3);
+  border-top-color:transparent;border-bottom-color:transparent;
+  border-radius:50%;animation:arcSpin 4s linear infinite}
+.arc-dot{width:14px;height:14px;background:radial-gradient(circle,var(--bright),var(--dim));
+  border-radius:50%;box-shadow:0 0 8px var(--glow)}
+@keyframes arcPulse{0%,100%{box-shadow:0 0 12px var(--glow)}50%{box-shadow:0 0 24px var(--glow),0 0 40px rgba(0,180,255,.2)}}
+@keyframes arcSpin{to{transform:rotate(360deg)}}
+
+.logo-text h1{font-family:'Orbitron',monospace;font-size:16px;font-weight:700;
+  letter-spacing:6px;background:linear-gradient(135deg,var(--bright),var(--primary),var(--accent));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 6px var(--glow))}
+.logo-text .sub{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);
+  letter-spacing:3px}
+
+.hdr-right{display:flex;align-items:center;gap:20px}
+.hdr-stat{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim);
+  display:flex;align-items:center;gap:6px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 8px var(--green);animation:blink 2s ease-in-out infinite}
+.dot.off{background:var(--red);box-shadow:0 0 8px var(--red)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+.clock{font-family:'Orbitron',monospace;font-size:13px;color:var(--primary);letter-spacing:2px}
+
+/* ── Main 3-col ── */
+.main-layout{display:grid;grid-template-columns:240px 1fr 260px;height:100%}
+
+/* ── Sidebar ── */
+.sidebar{background:rgba(10,22,40,.6);border-right:1px solid var(--border);
+  overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.sidebar::-webkit-scrollbar{width:3px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--dim)}
+
+.sec-title{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:3px;
+  color:var(--text-dim);text-transform:uppercase;
+  border-bottom:1px solid var(--border);padding-bottom:6px}
+
+.agent-card{background:rgba(0,20,40,.4);border:1px solid var(--border);
+  border-radius:6px;padding:8px 10px;cursor:pointer;transition:all .2s}
+.agent-card:hover{border-color:var(--primary);background:rgba(0,100,160,.15);
+  box-shadow:0 0 10px rgba(0,180,255,.1)}
+.agent-row{display:flex;align-items:center;gap:8px}
+.agent-ico{font-size:14px}
+.agent-name{font-family:'Orbitron',monospace;font-size:10px;color:var(--primary);
+  letter-spacing:1px}
+.agent-desc{font-size:10px;color:var(--text-dim);margin-top:3px}
+
+.metrics-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.metric{background:rgba(0,20,40,.4);border:1px solid var(--border);
+  border-radius:6px;padding:8px;text-align:center}
+.metric-val{font-family:'Orbitron',monospace;font-size:14px;color:var(--green)}
+.metric-val.warn{color:var(--yellow)} .metric-val.crit{color:var(--red)}
+.metric-lbl{font-family:'Share Tech Mono',monospace;font-size:8px;color:var(--text-dim);
+  text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.metric-bar{height:2px;background:rgba(0,180,255,.1);border-radius:1px;margin-top:4px}
+.metric-bar-fill{height:100%;background:var(--green);border-radius:1px;transition:width .5s}
+
+.plug-row{display:flex;justify-content:space-between;align-items:center;
+  padding:4px 0;font-family:'Share Tech Mono',monospace;font-size:10px}
+.badge{font-size:8px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:1px}
+.badge.on{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3)}
+.badge.off{background:rgba(255,51,85,.1);color:var(--red);border:1px solid rgba(255,51,85,.2)}
+
+/* ── Center ── */
+.center{display:flex;flex-direction:column;position:relative}
+
+/* ── JARVIS ORB ── */
+.orb-container{
+  display:flex;align-items:center;justify-content:center;
+  padding:20px 0 8px;position:relative;flex-shrink:0}
+.orb-wrap{position:relative;width:140px;height:140px;display:flex;align-items:center;justify-content:center}
+
+/* rings */
+.ring{position:absolute;border-radius:50%;border:1px solid transparent}
+.ring1{width:140px;height:140px;border-color:rgba(0,180,255,.25);animation:orbRot1 8s linear infinite}
+.ring2{width:114px;height:114px;border-color:rgba(0,180,255,.15);animation:orbRot2 6s linear infinite reverse}
+.ring3{width:88px;height:88px;border-color:rgba(0,229,255,.3);animation:orbRot1 4s linear infinite}
+
+.ring1::before,.ring2::before,.ring3::before{
+  content:'';position:absolute;width:6px;height:6px;background:var(--bright);
+  border-radius:50%;top:-3px;left:50%;transform:translateX(-50%);
+  box-shadow:0 0 8px var(--bright)}
+
+/* core */
+.orb-core{width:64px;height:64px;position:relative;cursor:pointer}
+.orb-core canvas{position:absolute;inset:0;border-radius:50%}
+.orb-glow{position:absolute;inset:-20px;border-radius:50%;
+  background:radial-gradient(circle,rgba(0,180,255,.15),transparent 70%);
+  animation:orbPulse 2s ease-in-out infinite;pointer-events:none}
+@keyframes orbPulse{0%,100%{transform:scale(1);opacity:.6}50%{transform:scale(1.2);opacity:1}}
+@keyframes orbRot1{to{transform:rotate(360deg)}}
+@keyframes orbRot2{to{transform:rotate(-360deg)}}
+
+/* talking state */
+.orb-core.talking .orb-glow{animation:orbTalk .4s ease-in-out infinite;
+  background:radial-gradient(circle,rgba(0,229,255,.3),transparent 70%)}
+@keyframes orbTalk{0%,100%{transform:scale(1)}50%{transform:scale(1.4)}}
+
+/* corner HUD decorations */
+.hud-corner{position:absolute;width:20px;height:20px}
+.hud-tl{top:0;left:0;border-top:2px solid var(--primary);border-left:2px solid var(--primary)}
+.hud-tr{top:0;right:0;border-top:2px solid var(--primary);border-right:2px solid var(--primary)}
+.hud-bl{bottom:0;left:0;border-bottom:2px solid var(--primary);border-left:2px solid var(--primary)}
+.hud-br{bottom:0;right:0;border-bottom:2px solid var(--primary);border-right:2px solid var(--primary)}
+
+.orb-label{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);
+  font-family:'Orbitron',monospace;font-size:8px;color:var(--text-dim);
+  letter-spacing:3px;white-space:nowrap}
+
+/* ── Chat ── */
+.chat-area{flex:1;overflow-y:auto;padding:12px 20px;display:flex;flex-direction:column;gap:10px}
+.chat-area::-webkit-scrollbar{width:3px}
+.chat-area::-webkit-scrollbar-thumb{background:var(--dim)}
+
+.msg{display:flex;flex-direction:column;max-width:80%}
+.msg.user{align-self:flex-end;align-items:flex-end}
+.msg.jarvis{align-self:flex-start;align-items:flex-start}
+
+.bubble{padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;
+  font-family:'Rajdhani',sans-serif}
+.msg.user .bubble{
+  background:linear-gradient(135deg,rgba(255,107,0,.2),rgba(200,80,0,.15));
+  border:1px solid rgba(255,107,0,.3);color:var(--text-bright)}
+.msg.jarvis .bubble{
+  background:linear-gradient(135deg,rgba(0,40,80,.8),rgba(0,20,50,.9));
+  border:1px solid var(--border);color:var(--text)}
+.bubble pre{background:rgba(0,0,0,.4);border:1px solid var(--border);
+  border-radius:6px;padding:8px;margin-top:6px;font-size:11px;
+  font-family:'Share Tech Mono',monospace;overflow-x:auto;color:var(--bright)}
+.bubble strong{color:var(--bright)}
+
+.msg-meta{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim);
+  margin-top:3px;display:flex;gap:8px;align-items:center}
+.msg-agents{font-size:9px;color:var(--dim)}
+
+/* typing */
+.typing-row{display:flex;align-items:center;gap:6px;padding:4px 20px;
+  font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text-dim)}
+.tdot{width:5px;height:5px;border-radius:50%;background:var(--primary);
+  animation:tdot .8s ease-in-out infinite}
+.tdot:nth-child(2){animation-delay:.2s} .tdot:nth-child(3){animation-delay:.4s}
+@keyframes tdot{0%,100%{transform:scale(1);opacity:.4}50%{transform:scale(1.4);opacity:1}}
+
+/* ── Input ── */
+.input-area{padding:12px 16px;border-top:1px solid var(--border);
+  background:rgba(5,15,30,.9)}
+.input-row{display:flex;gap:8px;align-items:center}
+.input-wrap{flex:1;position:relative;display:flex;align-items:center}
+.input-wrap::before{content:'>';position:absolute;left:12px;
+  font-family:'Orbitron',monospace;font-size:10px;color:var(--dim)}
+input[type=text]{
+  width:100%;background:rgba(0,20,40,.6);border:1px solid var(--border);
+  border-radius:8px;padding:10px 12px 10px 28px;color:var(--text-bright);
+  font-family:'Rajdhani',sans-serif;font-size:14px;outline:none;
+  transition:border-color .2s}
+input[type=text]:focus{border-color:var(--primary);box-shadow:0 0 10px rgba(0,180,255,.15)}
+input[type=text]::placeholder{color:var(--text-dim)}
+
+.btn{padding:10px 16px;border-radius:8px;border:none;cursor:pointer;
+  font-family:'Orbitron',monospace;font-size:10px;letter-spacing:1px;
+  transition:all .2s}
+.btn-send{background:linear-gradient(135deg,var(--primary),var(--dim));color:#fff}
+.btn-send:hover{box-shadow:0 0 16px rgba(0,180,255,.4)}
+.btn-send:disabled{opacity:.4;cursor:not-allowed}
+.btn-mic{background:rgba(0,180,255,.1);border:1px solid var(--border);
+  color:var(--primary);width:42px;font-size:16px;padding:0;
+  display:flex;align-items:center;justify-content:center}
+.btn-mic.listening{background:rgba(255,51,85,.15);border-color:var(--red);
+  color:var(--red);animation:micPulse .6s ease-in-out infinite}
+@keyframes micPulse{0%,100%{box-shadow:0 0 6px rgba(255,51,85,.3)}50%{box-shadow:0 0 14px rgba(255,51,85,.6)}}
+
+.shortcuts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.sc{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--dim);
+  padding:3px 8px;border:1px solid rgba(0,180,255,.15);border-radius:4px;
+  cursor:pointer;transition:all .2s;letter-spacing:1px}
+.sc:hover{color:var(--primary);border-color:var(--primary);
+  background:rgba(0,180,255,.05)}
+
+/* ── Right Panel ── */
+.rpanel{background:rgba(10,22,40,.6);border-left:1px solid var(--border);
+  overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.rpanel::-webkit-scrollbar{width:3px}
+.rpanel::-webkit-scrollbar-thumb{background:var(--dim)}
+
+.task-item{background:rgba(0,20,40,.4);border:1px solid var(--border);
+  border-radius:6px;padding:8px;transition:border-color .2s}
+.task-item:hover{border-color:var(--dim)}
+.task-desc{font-size:11px;color:var(--text);margin-bottom:4px;
+  font-family:'Rajdhani',sans-serif}
+.task-row{display:flex;justify-content:space-between}
+.task-st{font-family:'Share Tech Mono',monospace;font-size:9px;font-weight:700;
+  letter-spacing:1px;text-transform:uppercase}
+.task-st.completed{color:var(--green)} .task-st.failed{color:var(--red)}
+.task-st.running{color:var(--primary)} .task-st.pending{color:var(--yellow)}
+.task-id{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text-dim)}
+
+.mem-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.mem-card{text-align:center;padding:8px;background:rgba(0,20,40,.4);
+  border:1px solid var(--border);border-radius:6px}
+.mem-val{font-family:'Orbitron',monospace;font-size:16px;color:var(--accent)}
+.mem-lbl{font-family:'Share Tech Mono',monospace;font-size:8px;
+  color:var(--text-dim);text-transform:uppercase;letter-spacing:1px}
+
+.net-row{display:flex;justify-content:space-between;padding:4px 0;
+  font-family:'Share Tech Mono',monospace;font-size:10px}
+</style>
+</head>
+<body>
+
+<canvas class="bg-canvas" id="bgCanvas"></canvas>
+<div class="scanline"></div>
+
+<!-- Boot -->
+<div class="boot" id="boot">
+  <div class="boot-ring">
+    <svg viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(0,180,255,.3)" stroke-width="1"/>
+      <circle cx="50" cy="50" r="45" fill="none" stroke="#00b4ff" stroke-width="2"
+        stroke-dasharray="70 212" stroke-linecap="round"/>
+      <circle cx="50" cy="50" r="35" fill="none" stroke="rgba(0,180,255,.2)" stroke-width="1"/>
+      <circle cx="50" cy="50" r="20" fill="none" stroke="#00e5ff" stroke-width="1"
+        stroke-dasharray="40 86" stroke-linecap="round"/>
+      <circle cx="50" cy="50" r="8" fill="rgba(0,229,255,.6)"/>
+    </svg>
+  </div>
+  <div class="boot-title">J.A.R.V.I.S.</div>
+  <div class="boot-log" id="bootLog"></div>
+</div>
+
+<!-- App -->
+<div class="app" id="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <div class="arc-mini"><div class="arc-dot"></div></div>
+      <div class="logo-text">
+        <h1>J.A.R.V.I.S.</h1>
+        <div class="sub">HYPERAGENT ORCHESTRATOR // GEMMA3</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-stat"><div class="dot" id="statusDot"></div><span id="brainInfo">—</span></div>
+      <div class="hdr-stat" id="agentCount">0 agentes</div>
+      <div class="clock" id="clockEl">--:--:--</div>
+    </div>
+  </div>
+
+  <!-- 3-col -->
+  <div class="main-layout">
+
+    <!-- Left -->
+    <div class="sidebar">
+      <div class="sec-title">Sub-Agentes</div>
+      <div id="agentList"></div>
+      <div class="sec-title">Sistema</div>
+      <div class="metrics-grid">
+        <div class="metric">
+          <div class="metric-val" id="cpuV">--</div>
+          <div class="metric-lbl">CPU</div>
+          <div class="metric-bar"><div class="metric-bar-fill" id="cpuB" style="width:0"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-val" id="ramV">--</div>
+          <div class="metric-lbl">RAM</div>
+          <div class="metric-bar"><div class="metric-bar-fill" id="ramB" style="width:0;background:var(--yellow)"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-val" id="diskV">--</div>
+          <div class="metric-lbl">Disco</div>
+          <div class="metric-bar"><div class="metric-bar-fill" id="diskB" style="width:0"></div></div>
+        </div>
+        <div class="metric">
+          <div class="metric-val" id="procV" style="color:var(--primary)">--</div>
+          <div class="metric-lbl">Procs</div>
+          <div class="metric-bar"><div class="metric-bar-fill" id="procB" style="width:0;background:var(--primary)"></div></div>
+        </div>
+      </div>
+      <div class="sec-title">Integracoes</div>
+      <div id="pluginStatus"></div>
+    </div>
+
+    <!-- Center -->
+    <div class="center">
+
+      <!-- ORB -->
+      <div class="orb-container">
+        <div class="hud-corner hud-tl"></div>
+        <div class="hud-corner hud-tr"></div>
+        <div class="hud-corner hud-bl"></div>
+        <div class="hud-corner hud-br"></div>
+        <div class="orb-wrap">
+          <div class="ring ring1"></div>
+          <div class="ring ring2"></div>
+          <div class="ring ring3"></div>
+          <div class="orb-core" id="orbCore" onclick="toggleVoice()">
+            <canvas id="orbCanvas" width="64" height="64"></canvas>
+            <div class="orb-glow"></div>
+          </div>
+        </div>
+        <div class="orb-label" id="orbLabel">CLIQUE PARA FALAR</div>
+      </div>
+
+      <!-- Chat -->
+      <div class="chat-area" id="chatArea">
+        <div class="msg jarvis">
+          <div class="bubble">
+            Olá, Senhor. Sou o <strong>J.A.R.V.I.S.</strong> — seu HyperAgent pessoal.<br>
+            Tenho <strong>7 sub-agentes</strong> especializados prontos.<br>
+            Clique no orbe para <strong>falar</strong> ou digite abaixo.
+          </div>
+          <div class="msg-meta"><span id="initTime">--:--</span></div>
+        </div>
+      </div>
+
+      <!-- Typing -->
+      <div class="typing-row" id="typingRow" style="display:none">
+        <span>Processando</span>
+        <div class="tdot"></div><div class="tdot"></div><div class="tdot"></div>
+      </div>
+
+      <!-- Input -->
+      <div class="input-area">
+        <div class="input-row">
+          <button class="btn btn-mic" id="micBtn" onclick="toggleVoice()" title="Microfone">🎤</button>
+          <div class="input-wrap">
+            <input type="text" id="userInput" placeholder="Fale com o J.A.R.V.I.S. ..." autocomplete="off">
+          </div>
+          <button class="btn btn-send" id="sendBtn" onclick="sendMsg()">ENVIAR</button>
+        </div>
+        <div class="shortcuts">
+          <span class="sc" onclick="qcmd('status do sistema')">// STATUS</span>
+          <span class="sc" onclick="qcmd('cotacao do dolar hoje')">// COTACOES</span>
+          <span class="sc" onclick="qcmd('pesquisar noticias do Brasil')">// NOTICIAS</span>
+          <span class="sc" onclick="qcmd('listar processos ativos')">// PROCESSOS</span>
+          <span class="sc" onclick="qcmd('gerar um script Python de exemplo')">// CODE</span>
+          <span class="sc" onclick="qcmd('minhas notas e memoria')">// MEMORIA</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right -->
+    <div class="rpanel">
+      <div class="sec-title">Tarefas Recentes</div>
+      <div id="taskList"><div style="font-size:10px;color:var(--text-dim);text-align:center;padding:20px;font-family:Share Tech Mono">Nenhuma tarefa</div></div>
+
+      <div class="sec-title">Memoria</div>
+      <div class="mem-grid" id="memInfo">
+        <div class="mem-card"><div class="mem-val">0</div><div class="mem-lbl">Notas</div></div>
+        <div class="mem-card"><div class="mem-val">0</div><div class="mem-lbl">Aprend.</div></div>
+        <div class="mem-card"><div class="mem-val">0</div><div class="mem-lbl">Conv.</div></div>
+      </div>
+
+      <div class="sec-title">Rede</div>
+      <div>
+        <div class="net-row"><span>ENVIADO</span><span id="netS" style="color:var(--primary)">--</span></div>
+        <div class="net-row"><span>RECEBIDO</span><span id="netR" style="color:var(--accent)">--</span></div>
+        <div class="net-row"><span>BOOT</span><span id="bootT" style="color:var(--text)">--</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let busy = false, listening = false, tts = null, orbAnim = null;
+
+// ── Background canvas particles ────────────────────
+const bgC = document.getElementById('bgCanvas');
+const bgX = bgC.getContext('2d');
+bgC.width = window.innerWidth; bgC.height = window.innerHeight;
+const particles = Array.from({length:60},()=>({
+  x:Math.random()*bgC.width, y:Math.random()*bgC.height,
+  vx:(Math.random()-.5)*.3, vy:(Math.random()-.5)*.3,
+  r:Math.random()*1.5+.5, a:Math.random()*.4+.1
+}));
+function drawBg(){
+  bgX.clearRect(0,0,bgC.width,bgC.height);
+  // Grid
+  bgX.strokeStyle='rgba(0,180,255,0.03)';bgX.lineWidth=1;
+  for(let x=0;x<bgC.width;x+=40){bgX.beginPath();bgX.moveTo(x,0);bgX.lineTo(x,bgC.height);bgX.stroke()}
+  for(let y=0;y<bgC.height;y+=40){bgX.beginPath();bgX.moveTo(0,y);bgX.lineTo(bgC.width,y);bgX.stroke()}
+  // Particles
+  particles.forEach(p=>{
+    p.x+=p.vx; p.y+=p.vy;
+    if(p.x<0)p.x=bgC.width; if(p.x>bgC.width)p.x=0;
+    if(p.y<0)p.y=bgC.height; if(p.y>bgC.height)p.y=0;
+    bgX.beginPath();bgX.arc(p.x,p.y,p.r,0,Math.PI*2);
+    bgX.fillStyle=`rgba(0,180,255,${p.a})`;bgX.fill();
+  });
+  requestAnimationFrame(drawBg);
+}
+drawBg();
+window.addEventListener('resize',()=>{bgC.width=window.innerWidth;bgC.height=window.innerHeight});
+
+// ── Orb canvas waveform ────────────────────────────
+const orbC = document.getElementById('orbCanvas');
+const orbX = orbC.getContext('2d');
+let orbTalking = false, orbPhase = 0;
+function drawOrb(){
+  orbX.clearRect(0,0,64,64);
+  const cx=32,cy=32,r=28;
+  // Glow gradient
+  const g = orbX.createRadialGradient(cx,cy,2,cx,cy,r);
+  if(orbTalking){
+    g.addColorStop(0,'rgba(0,229,255,0.9)');
+    g.addColorStop(.5,'rgba(0,180,255,0.4)');
+    g.addColorStop(1,'rgba(0,100,180,0.05)');
+  } else {
+    g.addColorStop(0,'rgba(0,180,255,0.7)');
+    g.addColorStop(.5,'rgba(0,120,180,0.3)');
+    g.addColorStop(1,'rgba(0,60,120,0.05)');
+  }
+  orbX.beginPath();orbX.arc(cx,cy,r,0,Math.PI*2);orbX.fillStyle=g;orbX.fill();
+
+  // Waveform ring
+  orbX.beginPath();
+  const pts = 64, amp = orbTalking ? 4+Math.sin(orbPhase*3)*3 : 1.2;
+  for(let i=0;i<=pts;i++){
+    const a=(i/pts)*Math.PI*2;
+    const noise = orbTalking ? Math.sin(i*.8+orbPhase)*amp + Math.sin(i*.3+orbPhase*2)*amp*.5 : amp;
+    const rr = r - 3 + noise;
+    const x=cx+Math.cos(a)*rr, y=cy+Math.sin(a)*rr;
+    i===0 ? orbX.moveTo(x,y) : orbX.lineTo(x,y);
+  }
+  orbX.closePath();
+  orbX.strokeStyle = orbTalking ? 'rgba(0,229,255,0.9)' : 'rgba(0,180,255,0.6)';
+  orbX.lineWidth = orbTalking ? 2 : 1;
+  orbX.stroke();
+
+  // Center dot
+  orbX.beginPath();orbX.arc(cx,cy,orbTalking?5:4,0,Math.PI*2);
+  orbX.fillStyle=orbTalking?'#00e5ff':'#00b4ff';orbX.fill();
+
+  orbPhase += orbTalking ? 0.15 : 0.03;
+  requestAnimationFrame(drawOrb);
+}
+drawOrb();
+
+function setTalking(v){
+  orbTalking = v;
+  document.getElementById('orbCore').classList.toggle('talking', v);
+  document.getElementById('orbLabel').textContent = v ? '● FALANDO' : listening ? '● OUVINDO' : 'CLIQUE PARA FALAR';
+}
+
+// ── TTS ────────────────────────────────────────────
+function speak(text){
+  if(!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/```[\s\S]*?```/g,'código').replace(/[*#]/g,'');
+  const utt = new SpeechSynthesisUtterance(clean.substring(0,300));
+  utt.lang='pt-BR'; utt.rate=1.05; utt.pitch=0.9; utt.volume=1;
+  const voices = speechSynthesis.getVoices();
+  const ptVoice = voices.find(v=>v.lang.startsWith('pt'));
+  if(ptVoice) utt.voice = ptVoice;
+  utt.onstart = ()=> setTalking(true);
+  utt.onend = ()=> setTalking(false);
+  utt.onerror = ()=> setTalking(false);
+  speechSynthesis.speak(utt);
+}
+
+// ── STT ────────────────────────────────────────────
+let recog = null;
+if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recog = new SR();
+  recog.lang='pt-BR'; recog.continuous=false; recog.interimResults=false;
+  recog.onresult = e=>{
+    const txt = e.results[0][0].transcript;
+    document.getElementById('userInput').value = txt;
+    stopListening();
+    sendMsg();
+  };
+  recog.onerror = ()=> stopListening();
+  recog.onend = ()=> stopListening();
+}
+
+function toggleVoice(){
+  if(busy) return;
+  if(listening) stopListening();
+  else startListening();
+}
+function startListening(){
+  if(!recog){ addMsg('Reconhecimento de voz não suportado neste browser. Use Chrome.','jarvis'); return; }
+  listening=true;
+  document.getElementById('micBtn').classList.add('listening');
+  document.getElementById('micBtn').textContent='🔴';
+  document.getElementById('orbLabel').textContent='● OUVINDO';
+  recog.start();
+}
+function stopListening(){
+  listening=false;
+  document.getElementById('micBtn').classList.remove('listening');
+  document.getElementById('micBtn').textContent='🎤';
+  if(!orbTalking) document.getElementById('orbLabel').textContent='CLIQUE PARA FALAR';
+  try{ recog && recog.stop(); }catch(e){}
+}
+
+// ── Boot ───────────────────────────────────────────
+const bootLines=[
+  ['[CORE]','Brain neural network init','ld'],
+  ['[CORE]','Orchestrator online','ok'],
+  ['[AGENT]','SystemAgent loaded','ok'],
+  ['[AGENT]','WebAgent loaded','ok'],
+  ['[AGENT]','FileAgent loaded','ok'],
+  ['[AGENT]','CodeAgent loaded','ok'],
+  ['[AGENT]','MemoryAgent loaded','ok'],
+  ['[AGENT]','DataAgent loaded','ok'],
+  ['[AGENT]','PluginAgent loaded','ok'],
+  ['[SYS]','All systems operational — gemma3:12b','ok'],
+];
+async function boot(){
+  const log=document.getElementById('bootLog');
+  for(const [pre,txt,cls] of bootLines){
+    await sleep(100+Math.random()*150);
+    log.innerHTML+=`<div><span class="${cls}">${pre}</span> ${txt}</div>`;
+  }
+  await sleep(600);
+  document.getElementById('boot').classList.add('gone');
+  document.getElementById('app').classList.add('visible');
+  document.getElementById('initTime').textContent=now();
+  speechSynthesis.getVoices(); // preload voices
+  refresh();
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const now=()=>new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+boot();
+
+// ── Clock ──────────────────────────────────────────
+setInterval(()=>{ document.getElementById('clockEl').textContent=now(); },1000);
+
+// ── Metrics ───────────────────────────────────────
+function setM(vid,bid,val,isCount){
+  const el=document.getElementById(vid), bar=document.getElementById(bid);
+  const pct=isCount?Math.min(val/5,100):val;
+  el.textContent=isCount?val:val.toFixed(1)+'%';
+  el.className='metric-val'+(pct>85?' crit':pct>60?' warn':'');
+  if(bar){bar.style.width=Math.min(pct,100)+'%';
+    bar.style.background=pct>85?'var(--red)':pct>60?'var(--yellow)':'var(--green)'}
+}
+
+// ── Agent icons ────────────────────────────────────
+const ICONS={system:'🖥',web:'🌐',files:'📁',code:'💻',memory:'🧠',data:'📊',plugin:'🔌'};
+
+async function refresh(){
+  try{
+    const [health,status,agents,tasks,mem]=await Promise.all([
+      fetch(`${API}/health`).then(r=>r.json()),
+      fetch(`${API}/status`).then(r=>r.json()),
+      fetch(`${API}/agents`).then(r=>r.json()),
+      fetch(`${API}/tasks`).then(r=>r.json()).catch(()=>({historico:[]})),
+      fetch(`${API}/memoria`).then(r=>r.json()).catch(()=>({})),
+    ]);
+
+    // Brain
+    const alive=health.status==='online';
+    document.getElementById('statusDot').className='dot'+(alive?'':' off');
+    document.getElementById('brainInfo').textContent=
+      health.brain==='none'?'Aguardando LLM':`${health.brain} // ${health.model}`;
+    document.getElementById('agentCount').textContent=`${health.agentes} agentes`;
+
+    // System
+    const s=status.sistema||{};
+    setM('cpuV','cpuB',s.cpu_percent||0);
+    setM('ramV','ramB',s.ram_percent||0);
+    setM('diskV','diskB',s.disco_percent||0);
+    setM('procV','procB',s.processos_ativos||0,true);
+    document.getElementById('netS').textContent=(s.rede_enviado_mb||0).toLocaleString()+' MB';
+    document.getElementById('netR').textContent=(s.rede_recebido_mb||0).toLocaleString()+' MB';
+    document.getElementById('bootT').textContent=s.boot_time||'--';
+
+    // Agents
+    const al=document.getElementById('agentList');
+    al.innerHTML='';
+    for(const [name,info] of Object.entries(agents.agentes||{})){
+      al.innerHTML+=`<div class="agent-card" onclick="qcmd('agente ${name}: o que voce pode fazer?')">
+        <div class="agent-row">
+          <span class="agent-ico">${ICONS[name]||'⚙'}</span>
+          <span class="agent-name">${name.toUpperCase()}</span>
+        </div>
+        <div class="agent-desc">${info.descricao}</div>
+      </div>`;
+    }
+
+    // Tasks
+    const tl=document.getElementById('taskList');
+    const hist=(tasks.historico||[]).slice(-10).reverse();
+    if(!hist.length){
+      tl.innerHTML='<div style="font-size:10px;color:var(--text-dim);text-align:center;padding:20px;font-family:Share Tech Mono">Nenhuma tarefa</div>';
+    } else {
+      tl.innerHTML=hist.map(t=>`
+        <div class="task-item ${t.status}" style="margin-bottom:6px">
+          <div class="task-desc">${(t.description||'').substring(0,55)}</div>
+          <div class="task-row">
+            <span class="task-st ${t.status}">${t.status}</span>
+            <span class="task-id">#${t.id}</span>
+          </div>
+        </div>`).join('');
+    }
+
+    // Memory
+    document.getElementById('memInfo').innerHTML=`
+      <div class="mem-card"><div class="mem-val">${mem.notas||0}</div><div class="mem-lbl">Notas</div></div>
+      <div class="mem-card"><div class="mem-val">${mem.aprendizados||0}</div><div class="mem-lbl">Aprend.</div></div>
+      <div class="mem-card"><div class="mem-val">${mem.conversas||0}</div><div class="mem-lbl">Conv.</div></div>`;
+
+    // Plugins
+    const pl=await fetch(`${API}/plugins`).then(r=>r.json()).catch(()=>({}));
+    const n8n=pl.n8n?.online, wpp=!pl.whatsapp?.erro;
+    document.getElementById('pluginStatus').innerHTML=`
+      <div class="plug-row"><span>n8n Workflows</span><span class="badge ${n8n?'on':'off'}">${n8n?'ONLINE':'OFFLINE'}</span></div>
+      <div class="plug-row"><span>WhatsApp</span><span class="badge ${wpp?'on':'off'}">${wpp?'ONLINE':'OFFLINE'}</span></div>`;
+
+  }catch(e){
+    document.getElementById('statusDot').className='dot off';
+    document.getElementById('brainInfo').textContent='DESCONECTADO';
+  }
+}
+
+// ── Chat ───────────────────────────────────────────
+function addMsg(text, role, agents){
+  const area=document.getElementById('chatArea');
+  const div=document.createElement('div');
+  div.className=`msg ${role}`;
+  let html=text
+    .replace(/```(\w*)\n?([\s\S]*?)```/g,'<pre><code>$2</code></pre>')
+    .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\n/g,'<br>');
+  const agStr=agents&&agents.filter(Boolean).length
+    ?`<span class="msg-agents">[ ${agents.filter(Boolean).join(' · ')} ]</span>`:'';
+  div.innerHTML=`<div class="bubble">${html}</div><div class="msg-meta"><span>${now()}</span>${agStr}</div>`;
+  area.appendChild(div);
+  area.scrollTop=area.scrollHeight;
+}
+
+async function sendMsg(){
+  const inp=document.getElementById('userInput');
+  const msg=inp.value.trim();
+  if(!msg||busy) return;
+  busy=true; inp.value='';
+  document.getElementById('sendBtn').disabled=true;
+  document.getElementById('typingRow').style.display='flex';
+  addMsg(msg,'user');
+
+  try{
+    const res=await fetch(`${API}/chat`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mensagem:msg})
+    });
+    const data=await res.json();
+    const reply=data.resposta||JSON.stringify(data,null,2);
+    addMsg(reply,'jarvis',data.agentes_usados);
+    speak(reply);
+    setTimeout(refresh,800);
+  }catch(e){
+    addMsg(`Erro de conexão: ${e.message}`,'jarvis');
+  }finally{
+    busy=false;
+    document.getElementById('sendBtn').disabled=false;
+    document.getElementById('typingRow').style.display='none';
+    inp.focus();
+  }
+}
+
+function qcmd(cmd){ document.getElementById('userInput').value=cmd; sendMsg(); }
+
+document.getElementById('userInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMsg(); }
+});
+
+setInterval(refresh,15000);
+</script>
+</body>
+</html>

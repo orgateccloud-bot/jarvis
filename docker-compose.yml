@@ -1,0 +1,73 @@
+networks:
+  jarvis-net:
+    driver: bridge
+
+volumes:
+  jarvis_dados:
+  jarvis_logs:
+  postgres_data:
+
+services:
+
+  # ── JARVIS HyperAgent (Orquestrador Central) ──────────
+  jarvis:
+    build:
+      context: .
+      dockerfile: Dockerfile.hyperagent
+    container_name: jarvis-hyperagent
+    restart: always
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+      - EVOLUTION_API_URL=http://evolution:8080
+    env_file:
+      - .env
+    volumes:
+      - ./hyperagent:/app/hyperagent
+      - ./dados:/app/dados
+      - ./logs:/app/logs
+      - ./documentos:/documentos
+      - ./agenda:/agenda
+    depends_on:
+      redis-jarvis:
+        condition: service_healthy
+    networks:
+      - jarvis-net
+
+  # ── Redis (Cache / Queue) ─────────────────────────────
+  redis-jarvis:
+    image: redis:7-alpine
+    container_name: redis-jarvis
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - jarvis-net
+
+  # ── PostgreSQL ────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: jarvis-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: jarvis
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jarvis2024}
+      POSTGRES_DB: jarvis_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jarvis"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - jarvis-net
+
+
+ 
