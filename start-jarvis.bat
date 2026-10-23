@@ -1,22 +1,24 @@
 @echo off
-title J.A.R.V.I.S. // Cognitive Architecture v3.0
-cd /d C:\jarvis
-echo.
-echo  ========================================
-echo   J.A.R.V.I.S. v3.0 - Starting...
-echo  ========================================
-echo.
-echo  [1/2] Starting API server on port 8000...
-start "JARVIS-API" cmd /c "cd /d C:\jarvis && python -m uvicorn api.server:app --host 0.0.0.0 --port 8000"
+title J.A.R.V.I.S. 4.0
+rem Roda a partir da pasta deste script, onde quer que o projeto esteja.
+cd /d "%~dp0"
+
+if not exist ".venv\Scripts\python.exe" (
+  echo Ambiente .venv ausente. Rode: python -m venv .venv ^&^& .venv\Scripts\pip install -e .[dev]
+  pause
+  exit /b 1
+)
+
+echo [1/2] API em http://127.0.0.1:8000 ...
+start "JARVIS-API" cmd /c ".venv\Scripts\python -m jarvis"
 timeout /t 3 /nobreak >nul
-echo  [2/2] Starting HUD on port 5173...
-start "JARVIS-HUD" cmd /c "cd /d C:\jarvis\jarvis-hud && npm run dev"
+
+echo [2/2] HUD em http://localhost:5173 ...
+start "JARVIS-HUD" cmd /c "cd /d jarvis-hud && npm run dev"
+
 echo.
-echo  API:  http://localhost:8000
-echo  HUD:  http://localhost:5173
-echo  Health: http://localhost:8000/health
-echo.
-echo  Press any key to stop all services...
+echo Token do HUD: dados\.token
+echo Pressione uma tecla para encerrar tudo...
 pause >nul
 taskkill /fi "WINDOWTITLE eq JARVIS-API" >nul 2>&1
 taskkill /fi "WINDOWTITLE eq JARVIS-HUD" >nul 2>&1

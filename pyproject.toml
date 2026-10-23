@@ -1,0 +1,37 @@
+[project]
+name = "jarvis"
+version = "4.0.0"
+description = "JARVIS 4.0 — assistente pessoal ativo com Claude, memória local e voz"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=2.2,<3",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.9",
+    "python-dotenv>=1.0",
+    "loguru>=0.7",
+    "psutil>=6.0",
+    "ollama>=0.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "bandit>=1.7"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["jarvis*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["_legado", "venv", "jarvis-hud"]
+
+[tool.bandit]
+exclude_dirs = ["_legado", "venv", "tests", "jarvis-hud"]

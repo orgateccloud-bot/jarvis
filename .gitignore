@@ -62,3 +62,7 @@ tmp/
 
 
 
+
+# JARVIS 4.0
+*.egg-info/
+jarvis-hud/dist/

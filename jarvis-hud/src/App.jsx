@@ -1,7 +1,28 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 
-const API = 'http://127.0.0.1:8000'
+const API = import.meta.env.VITE_JARVIS_API || 'http://127.0.0.1:8000'
+
+// Token da API local (dados/.token). Vem do .env.local (VITE_JARVIS_TOKEN) ou é pedido uma vez.
+function getToken() {
+  let token = import.meta.env.VITE_JARVIS_TOKEN || ''
+  try { token = token || localStorage.getItem('jarvis-token') || '' } catch { /* armazenamento ou JSON indisponível: segue sem */ }
+  if (!token) {
+    token = (window.prompt('Token do JARVIS (arquivo dados/.token):') || '').trim()
+    try { if (token) localStorage.setItem('jarvis-token', token) } catch { /* armazenamento ou JSON indisponível: segue sem */ }
+  }
+  return token
+}
+
+function authFetch(path, options = {}) {
+  return fetch(`${API}${path}`, {
+    ...options,
+    headers: { ...(options.headers || {}), Authorization: `Bearer ${getToken()}` },
+  }).then(r => {
+    if (r.status === 401) { try { localStorage.removeItem('jarvis-token') } catch { /* armazenamento ou JSON indisponível: segue sem */ } }
+    return r
+  })
+}
 
 // ===================== HOLOGRAPHIC ORB (Canvas) =====================
 function HoloOrb({ state, emotion }) {
@@ -184,72 +205,73 @@ function SystemPanel({ metrics }) {
         <span>Processes: {metrics.process_count}</span>
         <span>Uptime: {metrics.uptime_hours?.toFixed(1)}h</span>
       </div>
-      <div className="metric-info">
-        <span>NET TX: {metrics.net_sent_mb?.toFixed(0)}MB</span>
-        <span>NET RX: {metrics.net_recv_mb?.toFixed(0)}MB</span>
-      </div>
     </div>
   )
 }
 
-// ===================== CONSCIOUSNESS PANEL =====================
-function ConsciousnessPanel({ consciousness }) {
-  if (!consciousness) return null
+// ===================== NEURAL PANEL (rota, pensamento, último turno) =====================
+function NeuralPanel({ neural }) {
+  if (!neural) return null
   return (
     <div className="panel consciousness-panel">
       <div className="panel-header">
         <span className="panel-dot pulse" />
-        CONSCIOUSNESS
+        NEURAL
       </div>
       <div className="consciousness-grid">
         <div className="con-item">
-          <span className="con-label">State</span>
-          <span className={`con-value state-${consciousness.state}`}>{consciousness.state?.toUpperCase()}</span>
+          <span className="con-label">Rota</span>
+          <span className="con-value">{neural.rota?.toUpperCase() || '—'}</span>
         </div>
         <div className="con-item">
-          <span className="con-label">Emotion</span>
-          <span className="con-value">{consciousness.emotion?.toUpperCase()}</span>
+          <span className="con-label">Modelo</span>
+          <span className="con-value">{neural.modelo || '—'}</span>
         </div>
         <div className="con-item">
-          <span className="con-label">Interactions</span>
-          <span className="con-value">{consciousness.interaction_count}</span>
+          <span className="con-label">Turno</span>
+          <span className="con-value">{neural.custo != null ? `US$ ${neural.custo.toFixed(4)}` : '—'}</span>
         </div>
       </div>
-      {consciousness.session_topics?.length > 0 && (
-        <div className="con-topics">
-          {consciousness.session_topics.map((t, i) => (
-            <span key={i} className="topic-tag">{t}</span>
-          ))}
-        </div>
-      )}
+      {neural.thinking && <div className="con-topics"><span className="topic-tag">{neural.thinking.slice(-280)}</span></div>}
     </div>
   )
 }
 
-// ===================== MEMORY PANEL =====================
-function MemoryPanel({ stats }) {
-  if (!stats) return null
+// ===================== COST PANEL =====================
+function CostPanel({ costs }) {
+  if (!costs) return null
+  const pct = Math.min(100, costs.uso_pct || 0)
+  const color = costs.estado === 'normal' ? '#00e5ff' : costs.estado === 'economia' ? '#ffb300' : '#ff4444'
   return (
     <div className="panel memory-panel">
       <div className="panel-header">
         <span className="panel-dot" />
-        MEMORY CORE
+        CUSTO CLAUDE
+      </div>
+      <div className="metric-row">
+        <span className="metric-label">MÊS</span>
+        <div className="metric-bar-bg">
+          <div className="metric-bar-fill" style={{ width: `${pct}%`, background: color }} />
+        </div>
+        <span className="metric-value">{pct.toFixed(0)}%</span>
       </div>
       <div className="memory-stats">
         <div className="mem-item">
-          <span className="mem-num">{stats.conversations || 0}</span>
-          <span className="mem-label">Conversations</span>
+          <span className="mem-num">${costs.hoje_usd.toFixed(2)}</span>
+          <span className="mem-label">Hoje</span>
         </div>
         <div className="mem-item">
-          <span className="mem-num">{stats.facts || 0}</span>
-          <span className="mem-label">Facts</span>
+          <span className="mem-num">${costs.mes_usd.toFixed(2)}</span>
+          <span className="mem-label">de ${costs.teto_usd}</span>
         </div>
         <div className="mem-item">
-          <span className={`mem-status ${stats.available ? 'online' : 'offline'}`}>
-            {stats.available ? 'ONLINE' : 'OFFLINE'}
-          </span>
-          <span className="mem-label">Status</span>
+          <span className="mem-num">{costs.cache_hit_pct}%</span>
+          <span className="mem-label">Cache</span>
         </div>
+      </div>
+      <div className="metric-info">
+        <span>Modo: {costs.estado.toUpperCase()}</span>
+        <span>Turnos: {costs.turnos_claude_mes}</span>
       </div>
     </div>
   )
@@ -276,14 +298,14 @@ function ChatHistory({ messages }) {
 // ===================== MAIN APP =====================
 export default function App() {
   const [state, setState] = useState('idle')
-  const [emotion, setEmotion] = useState('neutral')
+  const [emotion] = useState('neutral')
   const [input, setInput] = useState('')
   const [streamText, setStreamText] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [messages, setMessages] = useState([])
   const [metrics, setMetrics] = useState(null)
-  const [consciousness, setConsciousness] = useState(null)
-  const [memoryStats, setMemoryStats] = useState(null)
+  const [neural, setNeural] = useState(null)
+  const [costs, setCosts] = useState(null)
   const [isListening, setIsListening] = useState(false)
   const [bootComplete, setBoot] = useState(false)
   const [scanLine, setScanLine] = useState(0)
@@ -308,19 +330,14 @@ export default function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [sysRes, conRes, memRes] = await Promise.all([
-          fetch(`${API}/system/status`).then(r => r.json()).catch(() => null),
-          fetch(`${API}/consciousness`).then(r => r.json()).catch(() => null),
-          fetch(`${API}/memory/stats`).then(r => r.json()).catch(() => null),
+        const okJson = r => (r.ok ? r.json() : null)
+        const [sysRes, costRes] = await Promise.all([
+          authFetch('/system/status').then(okJson).catch(() => null),
+          authFetch('/costs').then(okJson).catch(() => null),
         ])
         if (sysRes) setMetrics(sysRes)
-        if (conRes) {
-          setConsciousness(conRes)
-          if (conRes.emotion) setEmotion(conRes.emotion)
-          if (conRes.state) setState(conRes.state)
-        }
-        if (memRes) setMemoryStats(memRes)
-      } catch {}
+        if (costRes) setCosts(costRes)
+      } catch { /* armazenamento ou JSON indisponível: segue sem */ }
     }
     fetchData()
     const interval = setInterval(fetchData, 3000)
@@ -381,10 +398,10 @@ export default function App() {
     setState('thinking')
 
     try {
-      const res = await fetch(`${API}/jarvis/stream`, {
+      const res = await authFetch('/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, session_id: 'hud' }),
       })
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -392,28 +409,43 @@ export default function App() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let fullText = ''
+      let thinking = ''
+      let buffer = ''
+
+      const handle = (ev) => {
+        if (ev.type === 'route') setNeural({ rota: ev.data.rota, thinking: '' })
+        else if (ev.type === 'thinking') {
+          thinking += ev.data
+          setNeural(n => ({ ...n, thinking }))
+        } else if (ev.type === 'text') {
+          fullText += ev.data
+          setStreamText(fullText)
+          setState('speaking')
+        } else if (ev.type === 'usage') {
+          setNeural(n => ({ ...n, modelo: ev.data.modelo, custo: ev.data.custo_usd }))
+        } else if (ev.type === 'error') {
+          fullText += `\n[${ev.data}]\n`
+          setStreamText(fullText)
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-
+        // eventos SSE podem chegar partidos entre chunks: só processa linhas completas
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()
         for (const line of lines) {
           if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') continue
-            fullText += data
-            setStreamText(fullText)
-            if (fullText.length < 10) setState('speaking')
+            try { handle(JSON.parse(line.slice(6))) } catch { /* armazenamento ou JSON indisponível: segue sem */ }
           }
         }
       }
 
       setMessages(prev => [...prev, { role: 'jarvis', text: fullText }])
       speak(fullText)
-    } catch (err) {
+    } catch {
       const errMsg = 'Falha de comunicacao com o servidor.'
       setStreamText(errMsg)
       setMessages(prev => [...prev, { role: 'jarvis', text: errMsg }])
@@ -442,7 +474,7 @@ export default function App() {
         <div className="boot-logo">J.A.R.V.I.S.</div>
         <div className="boot-line">Initializing consciousness matrix...</div>
         <div className="boot-bar"><div className="boot-fill" /></div>
-        <div className="boot-sub">v3.0 // Cognitive Architecture Online</div>
+        <div className="boot-sub">v4.0 // Claude Opus 5.5 online</div>
       </div>
     )
   }
@@ -459,7 +491,7 @@ export default function App() {
       {/* Header */}
       <header className="hud-header">
         <div className="hud-title">J.A.R.V.I.S.</div>
-        <div className="hud-subtitle">Just A Rather Very Intelligent System // v3.0</div>
+        <div className="hud-subtitle">Just A Rather Very Intelligent System // v4.0</div>
         <div className={`hud-status ${state}`}>
           <span className="status-dot" />
           {state.toUpperCase()} {emotion !== 'neutral' && `// ${emotion.toUpperCase()}`}
@@ -471,7 +503,7 @@ export default function App() {
         {/* LEFT PANELS */}
         <aside className="hud-left">
           <SystemPanel metrics={metrics} />
-          <MemoryPanel stats={memoryStats} />
+          <CostPanel costs={costs} />
         </aside>
 
         {/* CENTER - ORB + CHAT */}
@@ -529,7 +561,7 @@ export default function App() {
 
         {/* RIGHT PANELS */}
         <aside className="hud-right">
-          <ConsciousnessPanel consciousness={consciousness} />
+          <NeuralPanel neural={neural} />
 
           {/* Quick Actions */}
           <div className="panel actions-panel">
@@ -539,12 +571,9 @@ export default function App() {
             </div>
             <div className="quick-actions">
               {[
-                { label: 'Chrome', cmd: 'abrir chrome' },
-                { label: 'VS Code', cmd: 'abrir vscode' },
-                { label: 'Terminal', cmd: 'abrir terminal' },
-                { label: 'Explorer', cmd: 'abrir explorer' },
-                { label: 'Notepad', cmd: 'abrir notepad' },
                 { label: 'Status', cmd: 'status do sistema' },
+                { label: 'Hora', cmd: 'que horas são?' },
+                { label: 'Bom dia', cmd: 'bom dia' },
               ].map(a => (
                 <button
                   key={a.cmd}
@@ -566,19 +595,19 @@ export default function App() {
             </div>
             <div className="subsystem-list">
               <div className="subsystem-item">
-                <span className="sub-dot online" /> Brain (OpenAI)
+                <span className={`sub-dot ${costs?.estado === 'local' ? 'warning' : 'online'}`} /> Cérebro (Claude Opus 5.5)
               </div>
               <div className="subsystem-item">
-                <span className={`sub-dot ${memoryStats?.available ? 'online' : 'offline'}`} /> Memory (ChromaDB)
+                <span className="sub-dot online" /> Local (Ollama)
               </div>
               <div className="subsystem-item">
-                <span className="sub-dot online" /> Voice (WebSpeech)
+                <span className="sub-dot online" /> Voz (WebSpeech — local na F4)
               </div>
               <div className="subsystem-item">
-                <span className="sub-dot warning" /> Vision (OCR)
+                <span className="sub-dot offline" /> Memória longa (F2)
               </div>
               <div className="subsystem-item">
-                <span className="sub-dot online" /> System Control
+                <span className="sub-dot offline" /> Ferramentas (F3)
               </div>
             </div>
           </div>
