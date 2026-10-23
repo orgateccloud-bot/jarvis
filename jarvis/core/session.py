@@ -120,6 +120,7 @@ class Conversation:
                 "modelo": outcome.model,
                 "custo_usd": outcome.cost_usd,
                 "cache_read": outcome.cache_read_tokens,
+                "cache_write": outcome.cache_write_tokens,
                 "entrada": outcome.input_tokens,
                 "saida": outcome.output_tokens,
                 "audit_hash": result.audit_hash,
