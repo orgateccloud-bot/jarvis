@@ -26,7 +26,9 @@ class Settings(BaseModel):
     )
     data_dir: Path = Field(default_factory=lambda: Path(_env("JARVIS_DATA_DIR", str(ROOT / "dados"))))
 
-    model: str = Field(default_factory=lambda: _env("JARVIS_MODEL", "claude-opus-5-5"))
+    model_simple: str = Field(default_factory=lambda: _env("JARVIS_MODELO_SIMPLES", "claude-haiku-5-5"))
+    model_medium: str = Field(default_factory=lambda: _env("JARVIS_MODELO_MEDIO", "claude-sonnet-5-5"))
+    model_complex: str = Field(default_factory=lambda: _env("JARVIS_MODELO_COMPLEXO", "claude-opus-5-5"))
     max_tokens: int = Field(default_factory=lambda: int(_env("JARVIS_MAX_TOKENS", "16000")))
     monthly_budget_usd: float = Field(default_factory=lambda: float(_env("JARVIS_BUDGET_USD", "15")))
     economy_threshold: float = 0.8

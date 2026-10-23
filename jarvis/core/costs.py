@@ -18,10 +18,14 @@ PRICES: dict[str, tuple[float, float, float, float]] = {
     "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
 }
 UNKNOWN_MODEL_PRICE = PRICES["claude-opus-5"]  # conservador: superestima em vez de subestimar
+# Haiku 5.5 tem segunda tabela quando o prompt passa de 100 mil tokens.
+HAIKU_LONG_PROMPT = (0.50, 2.50, 0.05, 0.625)
 
 
 def price_usage(model: str, input_tokens: int, output_tokens: int, cache_read: int, cache_write: int) -> float:
     p_in, p_out, p_read, p_write = PRICES.get(model, UNKNOWN_MODEL_PRICE)
+    if model == "claude-haiku-5-5" and input_tokens + cache_read + cache_write > 100_000:
+        p_in, p_out, p_read, p_write = HAIKU_LONG_PROMPT
     total = input_tokens * p_in + output_tokens * p_out + cache_read * p_read + cache_write * p_write
     return round(total / 1_000_000, 6)
 

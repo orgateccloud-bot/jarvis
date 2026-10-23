@@ -11,18 +11,20 @@ from pydantic import BaseModel, Field
 
 class Route(StrEnum):
     LOCAL = "local"  # resposta determinística ou Ollama, custo zero
-    CHAT = "chat"  # Claude, effort low
-    TASK = "task"  # Claude, effort high
+    SIMPLE = "simples"  # Haiku 5.5, effort low
+    MEDIUM = "media"  # Sonnet 5.5, effort medium
+    COMPLEX = "complexa"  # Opus 5.5, effort high
 
 
 class BudgetState(StrEnum):
     NORMAL = "normal"
-    ECONOMY = "economia"  # >= 80% do teto: effort low em tudo
+    ECONOMY = "economia"  # >= 80% do teto: desce uma camada, effort low
     LOCAL_ONLY = "local"  # >= 100%: só Ollama
 
 
 class Decision(BaseModel):
     route: Route
+    model: str | None = None
     effort: Literal["low", "medium", "high"] | None = None
     reason: str
 

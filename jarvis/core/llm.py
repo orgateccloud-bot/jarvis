@@ -11,7 +11,7 @@ import anthropic
 import psutil
 from loguru import logger
 
-from .contracts import Route, StreamEvent
+from .contracts import StreamEvent
 from .costs import price_usage
 
 SYSTEM_PROMPT = """Você é o J.A.R.V.I.S., assistente pessoal de {nome}, rodando no PC dele.
@@ -27,7 +27,8 @@ Como responder:
 - Mensagens de sistema no meio da conversa trazem contexto atual (data, telemetria do PC); use quando relevante.
 - Dados pessoais aparecem mascarados (CPF/CNPJ com asteriscos, nomes como PESSOA_XXXX); mantenha-os assim."""
 
-BETAS = ["compact-2026-01-12", "server-side-fallback-2026-07-01"]
+BETA_COMPACTION = "compact-2026-01-12"
+BETA_FALLBACK = "server-side-fallback-2026-07-01"
 
 
 @dataclass
@@ -57,27 +58,36 @@ def telemetry_note() -> str:
     )
 
 
+# Modelos sem fallback de recusa no servidor: a sessão escala para a camada acima.
+NO_SERVER_FALLBACK = {"claude-haiku-5-5"}
+
+
 class ClaudeBrain:
-    def __init__(self, model: str, max_tokens: int, user_name: str, client: Any | None = None):
-        self.model = model
+    def __init__(self, max_tokens: int, user_name: str, client: Any | None = None):
         self.max_tokens = max_tokens
         self.system = SYSTEM_PROMPT.format(nome=user_name)
         self.client = client or anthropic.AsyncAnthropic()
 
-    async def stream(self, messages: list[dict], effort: str) -> AsyncIterator[StreamEvent | TurnOutcome]:
+    def request(self, messages: list[dict], model: str, effort: str) -> dict[str, Any]:
+        params: dict[str, Any] = {
+            "model": model,
+            "max_tokens": self.max_tokens,
+            "system": self.system,
+            "messages": messages,
+            "thinking": {"type": "adaptive", "display": "summarized"},
+            "output_config": {"effort": effort},
+            "cache_control": {"type": "ephemeral"},
+            "context_management": {"edits": [{"type": "compact_20260112"}]},
+            "betas": [BETA_COMPACTION],
+        }
+        if model not in NO_SERVER_FALLBACK:
+            params["fallbacks"] = "default"
+            params["betas"] = [BETA_COMPACTION, BETA_FALLBACK]
+        return params
+
+    async def stream(self, messages: list[dict], model: str, effort: str) -> AsyncIterator[StreamEvent | TurnOutcome]:
         try:
-            async with self.client.beta.messages.stream(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                system=self.system,
-                messages=messages,
-                thinking={"type": "adaptive", "display": "summarized"},
-                output_config={"effort": effort},
-                cache_control={"type": "ephemeral"},
-                context_management={"edits": [{"type": "compact_20260112"}]},
-                fallbacks="default",
-                betas=BETAS,
-            ) as stream:
+            async with self.client.beta.messages.stream(**self.request(messages, model, effort)) as stream:
                 async for event in stream:
                     if event.type == "content_block_delta":
                         if event.delta.type == "thinking_delta" and event.delta.thinking:
@@ -98,15 +108,12 @@ class ClaudeBrain:
         text = "".join(b.text for b in final.content if b.type == "text")
         if final.stop_reason == "refusal":
             category = getattr(getattr(final, "stop_details", None), "category", None)
-            logger.warning(f"Recusa do modelo (categoria={category})")
-            if not text:
-                text = "Não posso ajudar com isso, Senhor."
-                yield StreamEvent(type="text", data=text)
+            logger.warning(f"Recusa de {model} (categoria={category})")
 
         u = final.usage
         cache_read = u.cache_read_input_tokens or 0
         cache_write = u.cache_creation_input_tokens or 0
-        served_by = final.model or self.model
+        served_by = final.model or model
         yield TurnOutcome(
             text=text,
             model=served_by,
@@ -183,6 +190,3 @@ class LocalBrain:
         text = "".join(parts)
         yield TurnOutcome(text=text, model=f"ollama:{self.model}", content=[{"type": "text", "text": text}])
 
-
-def route_label(route: Route, effort: str | None) -> str:
-    return route.value if route is Route.LOCAL else f"{route.value}:{effort}"

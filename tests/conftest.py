@@ -44,7 +44,7 @@ class FakeStream:
         text = "".join(self.owner.reply_pieces)
         return SimpleNamespace(
             content=[_Block(type="thinking", thinking="pensando...", signature="sig"), _Block(type="text", text=text)],
-            stop_reason=self.owner.stop_reason,
+            stop_reason=self.owner.stop_reasons[min(len(self.owner.calls), len(self.owner.stop_reasons)) - 1],
             model=self.kwargs["model"],
             usage=SimpleNamespace(
                 input_tokens=800, output_tokens=300, cache_read_input_tokens=6000, cache_creation_input_tokens=0
@@ -55,7 +55,8 @@ class FakeStream:
 class FakeAnthropic:
     def __init__(self, reply_pieces=("Às ", "ordens."), stop_reason="end_turn", raise_exc=None):
         self.reply_pieces = list(reply_pieces)
-        self.stop_reason = stop_reason
+        # str: mesmo stop_reason sempre; lista: um por chamada (o último se repete)
+        self.stop_reasons = [stop_reason] if isinstance(stop_reason, str) else list(stop_reason)
         self.raise_exc = raise_exc
         self.calls: list[dict] = []
         self.beta = SimpleNamespace(messages=SimpleNamespace(stream=self._stream))

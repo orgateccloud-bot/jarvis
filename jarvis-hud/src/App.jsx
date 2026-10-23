@@ -413,7 +413,7 @@ export default function App() {
       let buffer = ''
 
       const handle = (ev) => {
-        if (ev.type === 'route') setNeural({ rota: ev.data.rota, thinking: '' })
+        if (ev.type === 'route') setNeural({ rota: ev.data.rota, modelo: ev.data.modelo, thinking: '' })
         else if (ev.type === 'thinking') {
           thinking += ev.data
           setNeural(n => ({ ...n, thinking }))
@@ -474,7 +474,7 @@ export default function App() {
         <div className="boot-logo">J.A.R.V.I.S.</div>
         <div className="boot-line">Initializing consciousness matrix...</div>
         <div className="boot-bar"><div className="boot-fill" /></div>
-        <div className="boot-sub">v4.0 // Claude Opus 5.5 online</div>
+        <div className="boot-sub">v4.0 // Haiku · Sonnet · Opus online</div>
       </div>
     )
   }
@@ -595,7 +595,7 @@ export default function App() {
             </div>
             <div className="subsystem-list">
               <div className="subsystem-item">
-                <span className={`sub-dot ${costs?.estado === 'local' ? 'warning' : 'online'}`} /> Cérebro (Claude Opus 5.5)
+                <span className={`sub-dot ${costs?.estado === 'local' ? 'warning' : 'online'}`} /> Cérebro (Haiku · Sonnet · Opus)
               </div>
               <div className="subsystem-item">
                 <span className="sub-dot online" /> Local (Ollama)

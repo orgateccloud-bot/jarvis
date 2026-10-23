@@ -17,17 +17,19 @@ from ..core.audit import AuditChain
 from ..core.contracts import ChatRequest
 from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, LocalBrain
+from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
 
 
 def build_conversation(settings: Settings, claude_client=None) -> Conversation:
     return Conversation(
-        claude=ClaudeBrain(settings.model, settings.max_tokens, settings.user_name, client=claude_client),
+        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client),
         local=LocalBrain(settings.ollama_host, settings.ollama_model, settings.user_name),
         ledger=CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold),
         audit=AuditChain(settings.data_dir / "audit.jsonl"),
         store=SessionStore(settings.data_dir / "sessions"),
         salt=settings.salt(),
+        tiers=Tiers(settings.model_simple, settings.model_medium, settings.model_complex),
     )
 
 
@@ -52,7 +54,12 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
 
     @app.get("/health")
     async def health():
-        return {"status": "online", "versao": __version__, "modelo": settings.model, "hora": datetime.now().isoformat()}
+        return {
+            "status": "online",
+            "versao": __version__,
+            "modelos": [settings.model_simple, settings.model_medium, settings.model_complex],
+            "hora": datetime.now().isoformat(),
+        }
 
     @app.post("/chat/stream", dependencies=[Depends(require_token)])
     async def chat_stream(req: ChatRequest):

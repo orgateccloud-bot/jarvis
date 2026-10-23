@@ -31,7 +31,8 @@ def test_chat_stream_claude_com_pensamento_custo_e_audit(settings, fake_claude):
     resp = client.post("/chat/stream", headers=AUTH, json={"message": "me fala sobre o CPF 123.456.789-09"})
     evs = _events(resp)
     types = [e["type"] for e in evs]
-    assert types[0] == "route" and evs[0]["data"]["rota"] == "chat:low"
+    assert types[0] == "route" and evs[0]["data"]["rota"] == "simples"
+    assert evs[0]["data"]["modelo"] == "claude-haiku-5-5"
     assert "thinking" in types and types[-1] == "done"
     assert "".join(e["data"] for e in evs if e["type"] == "text") == "Às ordens."
     usage = next(e for e in evs if e["type"] == "usage")["data"]
@@ -41,7 +42,8 @@ def test_chat_stream_claude_com_pensamento_custo_e_audit(settings, fake_claude):
     sent_user = call["messages"][0]["content"]
     assert "123.456" not in sent_user  # PII mascarada antes da nuvem
     assert call["messages"][1]["role"] == "system"  # contexto volátil fora do prefixo cacheado
-    assert call["output_config"] == {"effort": "low"} and call["fallbacks"] == "default"
+    assert call["output_config"] == {"effort": "low"}
+    assert "fallbacks" not in call and call["betas"] == ["compact-2026-01-12"]  # Haiku: sem fallback no servidor
     assert "temperature" not in call
 
     assert client.get("/costs", headers=AUTH).json()["turnos_claude_mes"] == 1
@@ -83,8 +85,29 @@ def test_sem_credencial_cai_para_local(settings):
 
 
 def test_teto_atingido_usa_somente_local(settings, fake_claude):
-    settings.monthly_budget_usd = 0.01
+    settings.monthly_budget_usd = 0.0002
     client, _ = _client(settings, fake_claude)
-    client.post("/chat/stream", headers=AUTH, json={"message": "me conta uma curiosidade"})  # gasta ~US$ 0,01
+    client.post("/chat/stream", headers=AUTH, json={"message": "me conta uma curiosidade"})  # Haiku gasta ~US$ 0,0003
     evs = _events(client.post("/chat/stream", headers=AUTH, json={"message": "me conta outra"}))
     assert evs[0]["data"]["orcamento"] == "local" and len(fake_claude.calls) == 1
+
+
+def test_opus_e_sonnet_usam_fallback_do_servidor(settings, fake_claude):
+    client, _ = _client(settings, fake_claude)
+    client.post("/chat/stream", headers=AUTH, json={"message": "resuma este parágrafo"})
+    client.post("/chat/stream", headers=AUTH, json={"message": "/opus planeje a estratégia"})
+    sonnet, opus = fake_claude.calls
+    assert sonnet["model"] == "claude-sonnet-5-5" and sonnet["output_config"] == {"effort": "medium"}
+    assert opus["model"] == "claude-opus-5-5" and opus["output_config"] == {"effort": "high"}
+    assert opus["fallbacks"] == "default" and "server-side-fallback-2026-07-01" in opus["betas"]
+    assert opus["messages"][-2]["content"] == "planeje a estratégia"  # prefixo /opus removido
+
+
+def test_recusa_do_haiku_escala_para_sonnet(settings):
+    fake = FakeAnthropic(stop_reason=["refusal", "end_turn"])
+    client, conv = _client(settings, fake)
+    evs = _events(client.post("/chat/stream", headers=AUTH, json={"message": "me conta uma curiosidade"}))
+    assert [c["model"] for c in fake.calls] == ["claude-haiku-5-5", "claude-sonnet-5-5"]
+    assert any(e["type"] == "error" and "escalando" in e["data"] for e in evs)
+    assert next(e for e in evs if e["type"] == "usage")["data"]["modelo"] == "claude-sonnet-5-5"
+    assert conv.ledger.summary()["turnos_claude_mes"] == 2  # a tentativa recusada também é contabilizada
