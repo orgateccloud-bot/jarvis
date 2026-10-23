@@ -74,7 +74,7 @@ class CostLedger:
     def state(self, now: datetime | None = None) -> BudgetState:
         spent = self.month_total(now)
         if spent >= self.budget:
-            return BudgetState.LOCAL_ONLY
+            return BudgetState.CAP_REACHED
         if spent >= self.budget * self.economy_threshold:
             return BudgetState.ECONOMY
         return BudgetState.NORMAL

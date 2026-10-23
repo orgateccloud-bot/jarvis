@@ -595,10 +595,7 @@ export default function App() {
             </div>
             <div className="subsystem-list">
               <div className="subsystem-item">
-                <span className={`sub-dot ${costs?.estado === 'local' ? 'warning' : 'online'}`} /> Cérebro (Haiku · Sonnet · Opus)
-              </div>
-              <div className="subsystem-item">
-                <span className="sub-dot online" /> Local (Ollama)
+                <span className={`sub-dot ${costs?.estado === 'teto' ? 'warning' : 'online'}`} /> Cérebro (Haiku · Sonnet · Opus)
               </div>
               <div className="subsystem-item">
                 <span className="sub-dot online" /> Voz (WebSpeech — local na F4)

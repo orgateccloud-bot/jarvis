@@ -10,9 +10,9 @@ from pathlib import Path
 from loguru import logger
 
 from .audit import AuditChain
-from .contracts import AgentResult, BudgetState, Route, StreamEvent, UsageRecord
+from .contracts import AgentResult, BudgetState, Decision, Route, StreamEvent, UsageRecord
 from .costs import CostLedger
-from .llm import NO_SERVER_FALLBACK, BrainUnavailable, ClaudeBrain, LocalBrain, TurnOutcome, telemetry_note
+from .llm import NO_SERVER_FALLBACK, BrainUnavailable, ClaudeBrain, RuleResponder, TurnOutcome, telemetry_note
 from .privacy import sanitizar
 from .router import DEFAULT_TIERS, Tiers, decide, escalate, strip_force
 
@@ -40,7 +40,7 @@ class Conversation:
     def __init__(
         self,
         claude: ClaudeBrain,
-        local: LocalBrain,
+        rules: RuleResponder,
         ledger: CostLedger,
         audit: AuditChain,
         store: SessionStore,
@@ -48,7 +48,7 @@ class Conversation:
         tiers: Tiers = DEFAULT_TIERS,
     ):
         self.claude = claude
-        self.local = local
+        self.rules = rules
         self.ledger = ledger
         self.audit = audit
         self.store = store
@@ -65,9 +65,14 @@ class Conversation:
     async def _turn(self, session_id: str, message: str) -> AsyncIterator[StreamEvent]:
         budget = self.ledger.state()
         decision = decide(message, budget, self.tiers)
+        quick = self.rules.answer(message) if decision.route is Route.LOCAL else None
+        if decision.route is Route.LOCAL and quick is None and budget is not BudgetState.CAP_REACHED:
+            # parecia trivial, mas nenhuma regra responde: vai para o modelo simples
+            decision = Decision(route=Route.SIMPLE, model=self.tiers.simple, effort="low",
+                                reason="sem resposta por regra: modelo simples")
         yield StreamEvent(
             type="route",
-            data={"rota": decision.route.value, "modelo": decision.model or "local", "effort": decision.effort,
+            data={"rota": decision.route.value, "modelo": decision.model or "regras", "effort": decision.effort,
                   "motivo": decision.reason, "orcamento": budget.value},
         )
 
@@ -76,7 +81,13 @@ class Conversation:
 
         outcome: TurnOutcome | None = None
         route = decision.route
-        if route is not Route.LOCAL:
+        notice: str | None = None
+        if route is Route.LOCAL:
+            notice = quick or (
+                f"O teto mensal de US$ {self.ledger.budget:.2f} foi atingido, {self.rules.user_name}. "
+                "O Claude volta no próximo mês, ou antes se o teto (JARVIS_BUDGET_USD) for aumentado."
+            )
+        else:
             history.append({"role": "system", "content": telemetry_note()})
             model, effort = decision.model or self.tiers.simple, decision.effort or "low"
             try:
@@ -96,22 +107,20 @@ class Conversation:
                         continue
                     break
             except BrainUnavailable as e:
-                logger.warning(f"Claude indisponível, caindo para o local: {e}")
-                yield StreamEvent(type="error", data=f"Claude indisponível ({e}); usando modelo local.")
+                logger.warning(f"Claude indisponível: {e}")
+                yield StreamEvent(type="error", data=f"Claude indisponível: {e}.")
                 route = Route.LOCAL
+                notice = self.rules.answer(message) or (
+                    f"Estou sem acesso ao Claude no momento, {self.rules.user_name}. Tente de novo em instantes."
+                )
             if outcome and outcome.stop_reason == "refusal" and not outcome.text:
-                outcome.text = f"Não posso ajudar com isso, {self.local.user_name}."
+                outcome.text = f"Não posso ajudar com isso, {self.rules.user_name}."
                 yield StreamEvent(type="text", data=outcome.text)
 
         if outcome is None:
-            async for item in self.local.stream(history, self.claude.system):
-                if isinstance(item, TurnOutcome):
-                    outcome = item
-                else:
-                    yield item
+            yield StreamEvent(type="text", data=notice)
+            outcome = TurnOutcome(text=notice, model="regras", content=[{"type": "text", "text": notice}])
 
-        if outcome is None:
-            raise RuntimeError("nenhum cérebro produziu resposta")
         history.append({"role": "assistant", "content": outcome.content})
         self.store.save(session_id)
 
@@ -136,8 +145,8 @@ class Conversation:
                 "estado_orcamento": self.ledger.state().value,
             },
         )
-        if self.ledger.state() is BudgetState.LOCAL_ONLY and budget is not BudgetState.LOCAL_ONLY:
-            yield StreamEvent(type="error", data="Teto mensal atingido: a partir de agora, só o modelo local.")
+        if self.ledger.state() is BudgetState.CAP_REACHED and budget is not BudgetState.CAP_REACHED:
+            yield StreamEvent(type="error", data="Teto mensal atingido: o Claude fica pausado até o próximo mês.")
         yield StreamEvent(type="done")
 
     def _record(self, session_id: str, route: Route, outcome: TurnOutcome) -> None:

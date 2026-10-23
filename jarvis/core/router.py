@@ -1,11 +1,11 @@
-"""Roteador determinístico (sem LLM, sem custo): local | Haiku | Sonnet | Opus conforme a complexidade.
+"""Roteador determinístico (sem LLM, sem custo): regras | Haiku | Sonnet | Opus conforme a complexidade.
 
 Pontuação de complexidade:
   0     → simples       → Haiku 5.5,  effort low
   1-2   → intermediário → Sonnet 5.5, effort medium
   >= 3  → complexo      → Opus 5.5,   effort high
 Prefixos /haiku, /sonnet, /opus (ou "pense bem") forçam a camada.
-No modo economia (>= 80% do teto) tudo desce uma camada com effort low; no teto, só local.
+No modo economia (>= 80% do teto) tudo desce uma camada com effort low; no teto, o Claude pausa.
 """
 
 from __future__ import annotations
@@ -97,8 +97,8 @@ def escalate(route: Route) -> Route:
 def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Decision:
     t = _norm(text)
 
-    if budget is BudgetState.LOCAL_ONLY:
-        return Decision(route=Route.LOCAL, reason="teto mensal atingido: somente modelo local")
+    if budget is BudgetState.CAP_REACHED:
+        return Decision(route=Route.LOCAL, reason="teto mensal atingido: Claude pausado")
 
     forced = next((r for p, r in _FORCE.items() if t.startswith(p)), None)
     if forced is None and t.startswith("pense bem"):

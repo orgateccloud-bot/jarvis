@@ -89,7 +89,8 @@ def test_teto_atingido_usa_somente_local(settings, fake_claude):
     client, _ = _client(settings, fake_claude)
     client.post("/chat/stream", headers=AUTH, json={"message": "me conta uma curiosidade"})  # Haiku gasta ~US$ 0,0003
     evs = _events(client.post("/chat/stream", headers=AUTH, json={"message": "me conta outra"}))
-    assert evs[0]["data"]["orcamento"] == "local" and len(fake_claude.calls) == 1
+    assert evs[0]["data"]["orcamento"] == "teto" and len(fake_claude.calls) == 1
+    assert "teto mensal" in "".join(e["data"] for e in evs if e["type"] == "text")
 
 
 def test_opus_e_sonnet_usam_fallback_do_servidor(settings, fake_claude):
@@ -111,3 +112,18 @@ def test_recusa_do_haiku_escala_para_sonnet(settings):
     assert any(e["type"] == "error" and "escalando" in e["data"] for e in evs)
     assert next(e for e in evs if e["type"] == "usage")["data"]["modelo"] == "claude-sonnet-5-5"
     assert conv.ledger.summary()["turnos_claude_mes"] == 2  # a tentativa recusada também é contabilizada
+
+
+def test_trivial_sem_regra_vai_para_haiku(settings, fake_claude):
+    client, _ = _client(settings, fake_claude)
+    evs = _events(client.post("/chat/stream", headers=AUTH, json={"message": "e aí!"}))
+    assert evs[0]["data"]["modelo"] == "claude-haiku-5-5" and len(fake_claude.calls) == 1
+
+
+def test_sem_nenhum_modelo_alem_do_claude():
+    import importlib.util
+
+    import jarvis.config as cfg
+
+    assert importlib.util.find_spec("ollama") is None  # dependência removida do ambiente
+    assert not any("ollama" in f for f in cfg.Settings.model_fields)

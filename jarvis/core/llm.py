@@ -1,4 +1,4 @@
-"""Cérebros: Claude (nuvem, com cache/compaction/fallback) e Local (determinístico + Ollama)."""
+"""Cérebro Claude (cache, compaction, fallback) e respostas por regra para o trivial."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ class TurnOutcome:
 
 
 class BrainUnavailable(Exception):
-    """O provedor não respondeu (rede, sobrecarga, credencial); a sessão cai para o modo local."""
+    """O Claude não respondeu (rede, sobrecarga, credencial); a sessão avisa o usuário."""
 
 
 def telemetry_note() -> str:
@@ -127,21 +127,13 @@ class ClaudeBrain:
         )
 
 
-def _plain(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    return "".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+class RuleResponder:
+    """Respostas instantâneas por regra (sem IA, custo zero) para o trivial."""
 
-
-class LocalBrain:
-    """Custo zero: respostas determinísticas para o trivial e Ollama para o resto."""
-
-    def __init__(self, host: str, model: str, user_name: str):
-        self.host = host
-        self.model = model
+    def __init__(self, user_name: str):
         self.user_name = user_name
 
-    def quick_answer(self, text: str) -> str | None:
+    def answer(self, text: str) -> str | None:
         t = text.lower()
         now = datetime.now()
         if any(k in t for k in ("que horas", "horas são", "horas sao")):
@@ -161,32 +153,3 @@ class LocalBrain:
         if t.strip(" !.?,") in ("obrigado", "obrigada", "valeu"):
             return f"Sempre um prazer, {self.user_name}."
         return None
-
-    async def stream(self, messages: list[dict], system: str) -> AsyncIterator[StreamEvent | TurnOutcome]:
-        last_user = next((_plain(m["content"]) for m in reversed(messages) if m["role"] == "user"), "")
-        quick = self.quick_answer(last_user)
-        if quick:
-            yield StreamEvent(type="text", data=quick)
-            yield TurnOutcome(text=quick, model="local", content=[{"type": "text", "text": quick}])
-            return
-
-        import ollama
-
-        chat = [{"role": "system", "content": system}]
-        chat += [{"role": m["role"], "content": _plain(m["content"])} for m in messages[-12:] if m["role"] != "system"]
-        parts: list[str] = []
-        try:
-            client = ollama.AsyncClient(host=self.host)
-            async for chunk in await client.chat(model=self.model, messages=chat, stream=True):
-                piece = chunk["message"]["content"]
-                if piece:
-                    parts.append(piece)
-                    yield StreamEvent(type="text", data=piece)
-        except Exception as e:  # noqa: BLE001 — Ollama fora do ar ou modelo ausente: degrada com aviso
-            logger.error(f"Ollama indisponível: {e}")
-            msg = f"Modelo local indisponível no momento, {self.user_name}. Verifique o Ollama ({self.model})."
-            parts = [msg]
-            yield StreamEvent(type="text", data=msg)
-        text = "".join(parts)
-        yield TurnOutcome(text=text, model=f"ollama:{self.model}", content=[{"type": "text", "text": text}])
-

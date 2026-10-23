@@ -66,7 +66,7 @@ def test_economia_desce_uma_camada_e_teto_forca_local():
     d = decide("analise e planeje a estratégia", BudgetState.ECONOMY)
     assert d.route is Route.MEDIUM and d.effort == "low"
     assert decide("/opus analise", BudgetState.ECONOMY).route is Route.COMPLEX  # forçado não desce
-    assert decide("analise isso", BudgetState.LOCAL_ONLY).route is Route.LOCAL
+    assert decide("analise isso", BudgetState.CAP_REACHED).route is Route.LOCAL
 
 
 # ── custos ───────────────────────────────────────────────────
@@ -91,7 +91,7 @@ def test_estados_do_orcamento(tmp_path):
     ledger.record(rec(0.85))
     assert ledger.state() is BudgetState.ECONOMY
     ledger.record(rec(0.20))
-    assert ledger.state() is BudgetState.LOCAL_ONLY
+    assert ledger.state() is BudgetState.CAP_REACHED
     assert ledger.state(datetime(1999, 1, 1)) is BudgetState.NORMAL  # mês diferente zera
 
 

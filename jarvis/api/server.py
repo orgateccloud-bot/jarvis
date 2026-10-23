@@ -16,7 +16,7 @@ from ..config import Settings, get_settings
 from ..core.audit import AuditChain
 from ..core.contracts import ChatRequest
 from ..core.costs import CostLedger
-from ..core.llm import ClaudeBrain, LocalBrain
+from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
 
@@ -24,7 +24,7 @@ from ..core.session import Conversation, SessionStore
 def build_conversation(settings: Settings, claude_client=None) -> Conversation:
     return Conversation(
         claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client),
-        local=LocalBrain(settings.ollama_host, settings.ollama_model, settings.user_name),
+        rules=RuleResponder(settings.user_name),
         ledger=CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold),
         audit=AuditChain(settings.data_dir / "audit.jsonl"),
         store=SessionStore(settings.data_dir / "sessions"),

@@ -33,9 +33,6 @@ class Settings(BaseModel):
     monthly_budget_usd: float = Field(default_factory=lambda: float(_env("JARVIS_BUDGET_USD", "15")))
     economy_threshold: float = 0.8
 
-    ollama_host: str = Field(default_factory=lambda: _env("OLLAMA_HOST", "http://localhost:11434"))
-    ollama_model: str = Field(default_factory=lambda: _env("OLLAMA_MODEL", "gemma3:4b"))
-
     user_name: str = Field(default_factory=lambda: _env("JARVIS_NOME", "Senhor"))
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
 

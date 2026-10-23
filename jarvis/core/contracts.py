@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 
 class Route(StrEnum):
-    LOCAL = "local"  # resposta determinística ou Ollama, custo zero
+    LOCAL = "local"  # resposta por regra (sem IA), custo zero
     SIMPLE = "simples"  # Haiku 5.5, effort low
     MEDIUM = "media"  # Sonnet 5.5, effort medium
     COMPLEX = "complexa"  # Opus 5.5, effort high
@@ -19,7 +19,7 @@ class Route(StrEnum):
 class BudgetState(StrEnum):
     NORMAL = "normal"
     ECONOMY = "economia"  # >= 80% do teto: desce uma camada, effort low
-    LOCAL_ONLY = "local"  # >= 100%: só Ollama
+    CAP_REACHED = "teto"  # >= 100%: Claude pausado, só respostas por regra
 
 
 class Decision(BaseModel):
