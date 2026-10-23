@@ -653,3 +653,26 @@ body {
     height: 250px !important;
   }
 }
+
+/* ---- COSMIC CORE (corpo de luz do JARVIS) ---- */
+.cosmic-core {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.cosmic-fallback {
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffffff 0 4%, #4d7cff 10%, rgba(14, 165, 233, 0.25) 30%, transparent 60%);
+}
+
+/* painel de custo: números menores para caberem na coluna lateral */
+.cost-stats { gap: 6px; }
+.cost-stats .mem-item { min-width: 0; }
+.cost-stats .mem-num {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import CosmicCore from './CosmicCore.jsx'
 import './App.css'
 
 const API = import.meta.env.VITE_JARVIS_API || 'http://127.0.0.1:8000'
@@ -25,157 +26,6 @@ function authFetch(path, options = {}) {
 }
 
 // ===================== HOLOGRAPHIC ORB (Canvas) =====================
-function HoloOrb({ state, emotion }) {
-  const canvasRef = useRef(null)
-  const frameRef = useRef(0)
-  const phaseRef = useRef(0)
-  const rotationRef = useRef(0)
-  const particlesRef = useRef(
-    Array.from({ length: 40 }, () => ({
-      angle: Math.random() * Math.PI * 2,
-      dist: 60 + Math.random() * 100,
-      speed: 0.002 + Math.random() * 0.008,
-      size: 1 + Math.random() * 2,
-      opacity: 0.2 + Math.random() * 0.5,
-    }))
-  )
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    const dpr = window.devicePixelRatio || 1
-    canvas.width = 400 * dpr
-    canvas.height = 400 * dpr
-    ctx.scale(dpr, dpr)
-    canvas.style.width = '400px'
-    canvas.style.height = '400px'
-
-    const cx = 200, cy = 200
-
-    const stateConfig = {
-      idle:      { intensity: 5,  speed: 0.025, base: 70, glow: 25, ringSpeed: 0.008, color: '#00e5ff' },
-      listening: { intensity: 18, speed: 0.08,  base: 75, glow: 45, ringSpeed: 0.015, color: '#00ffcc' },
-      thinking:  { intensity: 10, speed: 0.14,  base: 72, glow: 35, ringSpeed: 0.025, color: '#4488ff' },
-      speaking:  { intensity: 22, speed: 0.10,  base: 78, glow: 55, ringSpeed: 0.012, color: '#00e5ff' },
-    }
-
-    function draw() {
-      ctx.clearRect(0, 0, 400, 400)
-      const cfg = stateConfig[state] || stateConfig.idle
-
-      // === OUTER GLOW ===
-      const outerGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 180)
-      outerGlow.addColorStop(0, `${cfg.color}15`)
-      outerGlow.addColorStop(0.5, `${cfg.color}08`)
-      outerGlow.addColorStop(1, 'transparent')
-      ctx.fillStyle = outerGlow
-      ctx.fillRect(0, 0, 400, 400)
-
-      // === ORBITAL RINGS ===
-      for (let i = 0; i < 4; i++) {
-        const ringR = cfg.base + 25 + i * 18
-        const startAngle = rotationRef.current * (i % 2 === 0 ? 1 : -1) + (i * Math.PI / 4)
-        const arcLen = Math.PI * (1.2 + Math.sin(phaseRef.current + i) * 0.3)
-
-        ctx.beginPath()
-        ctx.arc(cx, cy, ringR, startAngle, startAngle + arcLen)
-        ctx.strokeStyle = `${cfg.color}${(30 - i * 6).toString(16).padStart(2, '0')}`
-        ctx.lineWidth = 1.5 - i * 0.2
-        ctx.stroke()
-
-        // Ring dots at endpoints
-        const dotAngle = startAngle + arcLen
-        ctx.beginPath()
-        ctx.arc(cx + Math.cos(dotAngle) * ringR, cy + Math.sin(dotAngle) * ringR, 2, 0, Math.PI * 2)
-        ctx.fillStyle = `${cfg.color}60`
-        ctx.fill()
-      }
-
-      // === CORE ORB (organic shape) ===
-      ctx.beginPath()
-      for (let i = 0; i <= 360; i++) {
-        const angle = (i * Math.PI) / 180
-        const noise1 = Math.sin(angle * 6 + phaseRef.current) * cfg.intensity * 0.6
-        const noise2 = Math.sin(angle * 10 + phaseRef.current * 1.7) * cfg.intensity * 0.4
-        const r = cfg.base + noise1 + noise2
-        const x = cx + r * Math.cos(angle)
-        const y = cy + r * Math.sin(angle)
-        if (i === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
-      }
-      ctx.closePath()
-
-      // Core gradient fill
-      const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cfg.base + cfg.intensity)
-      coreGrad.addColorStop(0, `${cfg.color}30`)
-      coreGrad.addColorStop(0.6, `${cfg.color}12`)
-      coreGrad.addColorStop(1, 'transparent')
-      ctx.fillStyle = coreGrad
-      ctx.fill()
-
-      // Core stroke
-      const strokeGrad = ctx.createRadialGradient(cx, cy, 30, cx, cy, cfg.base + 20)
-      strokeGrad.addColorStop(0, cfg.color)
-      strokeGrad.addColorStop(1, `${cfg.color}40`)
-      ctx.strokeStyle = strokeGrad
-      ctx.lineWidth = 2
-      ctx.shadowBlur = cfg.glow
-      ctx.shadowColor = cfg.color
-      ctx.stroke()
-      ctx.shadowBlur = 0
-
-      // === INNER ENERGY CORE ===
-      const innerR = 15 + Math.sin(phaseRef.current * 2) * 5
-      const innerGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, innerR)
-      innerGrad.addColorStop(0, '#ffffff')
-      innerGrad.addColorStop(0.3, cfg.color)
-      innerGrad.addColorStop(1, 'transparent')
-      ctx.beginPath()
-      ctx.arc(cx, cy, innerR, 0, Math.PI * 2)
-      ctx.fillStyle = innerGrad
-      ctx.shadowBlur = 20
-      ctx.shadowColor = '#ffffff'
-      ctx.fill()
-      ctx.shadowBlur = 0
-
-      // === PARTICLES ===
-      particlesRef.current.forEach(p => {
-        p.angle += p.speed * (state === 'thinking' ? 3 : 1)
-        const x = cx + Math.cos(p.angle) * p.dist
-        const y = cy + Math.sin(p.angle) * p.dist
-        ctx.beginPath()
-        ctx.arc(x, y, p.size, 0, Math.PI * 2)
-        ctx.fillStyle = `${cfg.color}${Math.round(p.opacity * 255).toString(16).padStart(2, '0')}`
-        ctx.fill()
-      })
-
-      // === HEX GRID (subtle background pattern) ===
-      ctx.globalAlpha = 0.03
-      for (let x = 0; x < 400; x += 30) {
-        for (let y = 0; y < 400; y += 30) {
-          const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-          if (dist > 120 && dist < 190) {
-            ctx.strokeStyle = cfg.color
-            ctx.strokeRect(x, y, 4, 4)
-          }
-        }
-      }
-      ctx.globalAlpha = 1
-
-      phaseRef.current += cfg.speed
-      rotationRef.current += cfg.ringSpeed
-
-      frameRef.current = requestAnimationFrame(draw)
-    }
-
-    frameRef.current = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(frameRef.current)
-  }, [state])
-
-  return <canvas ref={canvasRef} className="holo-orb-canvas" />
-}
-
 // ===================== SYSTEM METRICS PANEL =====================
 function SystemPanel({ metrics }) {
   if (!metrics) return null
@@ -255,7 +105,7 @@ function CostPanel({ costs }) {
         </div>
         <span className="metric-value">{pct.toFixed(0)}%</span>
       </div>
-      <div className="memory-stats">
+      <div className="memory-stats cost-stats">
         <div className="mem-item">
           <span className="mem-num">${costs.hoje_usd.toFixed(2)}</span>
           <span className="mem-label">Hoje</span>
@@ -306,6 +156,8 @@ export default function App() {
   const [metrics, setMetrics] = useState(null)
   const [neural, setNeural] = useState(null)
   const [costs, setCosts] = useState(null)
+  const [alertFlash, setAlertFlash] = useState(false)
+  const energyRef = useRef(0)
   const [isListening, setIsListening] = useState(false)
   const [bootComplete, setBoot] = useState(false)
   const [scanLine, setScanLine] = useState(0)
@@ -382,6 +234,7 @@ export default function App() {
     utt.pitch = 0.85
     utt.rate = 1.05
     utt.onstart = () => setState('speaking')
+    utt.onboundary = () => { energyRef.current = 1 }  // cada palavra falada pulsa o núcleo
     utt.onend = () => setState('idle')
     window.speechSynthesis.speak(utt)
   }, [])
@@ -421,9 +274,12 @@ export default function App() {
           fullText += ev.data
           setStreamText(fullText)
           setState('speaking')
+          energyRef.current = Math.min(1, energyRef.current + 0.45)
         } else if (ev.type === 'usage') {
           setNeural(n => ({ ...n, modelo: ev.data.modelo, custo: ev.data.custo_usd }))
         } else if (ev.type === 'error') {
+          setAlertFlash(true)
+          setTimeout(() => setAlertFlash(false), 2500)
           fullText += `\n[${ev.data}]\n`
           setStreamText(fullText)
         }
@@ -509,7 +365,13 @@ export default function App() {
         {/* CENTER - ORB + CHAT */}
         <main className="hud-center">
           <div className="orb-container">
-            <HoloOrb state={state} emotion={emotion} />
+            <CosmicCore
+              state={state}
+              tier={{ local: 'regras', simples: 'simples', media: 'media', complexa: 'complexa' }[neural?.rota] || 'regras'}
+              alert={alertFlash || costs?.estado === 'teto'}
+              energyRef={energyRef}
+              size={400}
+            />
           </div>
 
           <div className="response-area">
