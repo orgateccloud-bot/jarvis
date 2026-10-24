@@ -36,6 +36,17 @@ class Settings(BaseModel):
     user_name: str = Field(default_factory=lambda: _env("JARVIS_NOME", "Senhor"))
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
 
+    def tool_roots(self) -> list[Path]:
+        """Pastas que as ferramentas podem ler: JARVIS_PASTAS (separadas por ;) ou as pastas pessoais."""
+        custom = _env("JARVIS_PASTAS", "")
+        if custom:
+            cands = [Path(c) for c in custom.split(";") if c.strip()]
+        else:
+            h = Path.home()
+            cands = [h / "Documents", h / "Documentos", h / "OneDrive" / "Documentos", h / "Downloads",
+                     h / "Desktop", h / "OneDrive" / "Desktop", h / "OneDrive" / "Área de Trabalho", ROOT]
+        return [c.resolve() for c in cands if c.exists()]
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "jarvis.db"

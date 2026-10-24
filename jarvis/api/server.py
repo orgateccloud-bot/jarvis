@@ -13,23 +13,32 @@ from loguru import logger
 
 from .. import __version__
 from ..config import Settings, get_settings
+from ..core.approvals import Approvals
 from ..core.audit import AuditChain
-from ..core.contracts import ChatRequest
+from ..core.contracts import ApprovalDecision, ChatRequest
 from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
+from ..proactive.reminders import ReminderStore
+from ..tools import ToolContext, registry
 
 
-def build_conversation(settings: Settings, claude_client=None) -> Conversation:
+def build_conversation(settings: Settings, claude_client=None, approval_timeout_s: float = 60.0) -> Conversation:
+    ledger = CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold)
+    salt = settings.salt()
+    reminders = ReminderStore(settings.db_path)
     return Conversation(
         claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client),
         rules=RuleResponder(settings.user_name),
-        ledger=CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold),
+        ledger=ledger,
         audit=AuditChain(settings.data_dir / "audit.jsonl"),
         store=SessionStore(settings.data_dir / "sessions"),
-        salt=settings.salt(),
+        salt=salt,
         tiers=Tiers(settings.model_simple, settings.model_medium, settings.model_complex),
+        tools=registry(),
+        tool_ctx=ToolContext(roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt),
+        approvals=Approvals(timeout_s=approval_timeout_s),
     )
 
 
@@ -73,6 +82,12 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
                 yield 'data: {"type":"done"}\n\n'
 
         return StreamingResponse(sse(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+    @app.post("/approvals/{approval_id}", dependencies=[Depends(require_token)])
+    async def decide_approval(approval_id: str, body: ApprovalDecision):
+        if not conv.approvals.resolve(approval_id, body.aprovar):
+            raise HTTPException(status_code=404, detail="aprovação inexistente ou já decidida")
+        return {"ok": True, "aprovado": body.aprovar}
 
     @app.get("/costs", dependencies=[Depends(require_token)])
     async def costs():

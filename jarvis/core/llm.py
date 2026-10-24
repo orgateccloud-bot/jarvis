@@ -25,10 +25,18 @@ Como responder:
 - Seja direto. Quando detectar risco ou algo que mereça atenção, avise proativamente.
 - Se não souber, diga; nunca invente fatos, números ou fontes.
 - Mensagens de sistema no meio da conversa trazem contexto atual (data, telemetria do PC); use quando relevante.
-- Dados pessoais aparecem mascarados (CPF/CNPJ com asteriscos, nomes como PESSOA_XXXX); mantenha-os assim."""
+- Dados pessoais aparecem mascarados (CPF/CNPJ com asteriscos, nomes como PESSOA_XXXX); mantenha-os assim.
+
+Ferramentas:
+- Você tem ferramentas para consultar o PC, processos, arquivos (pastas permitidas), custos e lembretes, e em alguns
+  modelos busca na web. Use-as quando a resposta depender de dados atuais em vez de supor.
+- Ações com efeito (abrir app, encerrar processo, criar ou cancelar lembrete) pedem a confirmação do usuário
+  automaticamente: chame a ferramenta direto, sem pedir permissão em texto antes.
+- Se uma ação for negada ou falhar, diga isso em uma frase e siga em frente."""
 
 BETA_COMPACTION = "compact-2026-01-12"
 BETA_FALLBACK = "server-side-fallback-2026-07-01"
+WEB_SEARCH_USD = 0.01  # busca na web cobrada à parte (US$ 10 por mil)
 
 
 @dataclass
@@ -43,11 +51,16 @@ class TurnOutcome:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    web_searches: int = 0
     cost_usd: float = 0.0
 
 
 class BrainUnavailable(Exception):
     """O Claude não respondeu (rede, sobrecarga, credencial); a sessão avisa o usuário."""
+
+
+class ToolInputUnparseable(Exception):
+    """Com eager_input_streaming o SDK levanta ValueError para JSON ilegível; a sessão reemite o pedido."""
 
 
 def telemetry_note() -> str:
@@ -68,7 +81,8 @@ class ClaudeBrain:
         self.system = SYSTEM_PROMPT.format(nome=user_name)
         self.client = client or anthropic.AsyncAnthropic()
 
-    def request(self, messages: list[dict], model: str, effort: str) -> dict[str, Any]:
+    def request(self, messages: list[dict], model: str, effort: str,
+                tools: list[dict] | None = None, tool_choice: dict | None = None) -> dict[str, Any]:
         params: dict[str, Any] = {
             "model": model,
             "max_tokens": self.max_tokens,
@@ -80,14 +94,20 @@ class ClaudeBrain:
             "context_management": {"edits": [{"type": "compact_20260112"}]},
             "betas": [BETA_COMPACTION],
         }
+        if tools:
+            params["tools"] = tools
+        if tool_choice:
+            params["tool_choice"] = tool_choice
         if model not in NO_SERVER_FALLBACK:
             params["fallbacks"] = "default"
             params["betas"] = [BETA_COMPACTION, BETA_FALLBACK]
         return params
 
-    async def stream(self, messages: list[dict], model: str, effort: str) -> AsyncIterator[StreamEvent | TurnOutcome]:
+    async def stream(self, messages: list[dict], model: str, effort: str, tools: list[dict] | None = None,
+                     tool_choice: dict | None = None) -> AsyncIterator[StreamEvent | TurnOutcome]:
+        params = self.request(messages, model, effort, tools, tool_choice)
         try:
-            async with self.client.beta.messages.stream(**self.request(messages, model, effort)) as stream:
+            async with self.client.beta.messages.stream(**params) as stream:
                 async for event in stream:
                     if event.type == "content_block_delta":
                         if event.delta.type == "thinking_delta" and event.delta.thinking:
@@ -99,6 +119,9 @@ class ClaudeBrain:
             raise BrainUnavailable(str(e)) from e
         except anthropic.AuthenticationError as e:
             raise BrainUnavailable("credencial da Anthropic inválida") from e
+        except ValueError as e:
+            # JSON de entrada de ferramenta ilegível (eager streaming): sem tool_use_id para responder
+            raise ToolInputUnparseable(str(e)) from e
         except TypeError as e:
             # o SDK levanta TypeError quando não há nenhuma credencial configurada
             if "authentication method" in str(e):
@@ -114,6 +137,7 @@ class ClaudeBrain:
         cache_read = u.cache_read_input_tokens or 0
         cache_write = u.cache_creation_input_tokens or 0
         served_by = final.model or model
+        searches = getattr(getattr(u, "server_tool_use", None), "web_search_requests", 0) or 0
         yield TurnOutcome(
             text=text,
             model=served_by,
@@ -123,7 +147,9 @@ class ClaudeBrain:
             output_tokens=u.output_tokens,
             cache_read_tokens=cache_read,
             cache_write_tokens=cache_write,
-            cost_usd=price_usage(served_by, u.input_tokens, u.output_tokens, cache_read, cache_write),
+            web_searches=searches,
+            cost_usd=round(price_usage(served_by, u.input_tokens, u.output_tokens, cache_read, cache_write)
+                           + searches * WEB_SEARCH_USD, 6),
         )
 
 

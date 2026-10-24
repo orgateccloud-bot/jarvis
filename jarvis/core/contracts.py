@@ -34,10 +34,14 @@ class ChatRequest(BaseModel):
     session_id: str = Field(default="default", pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
+class ApprovalDecision(BaseModel):
+    aprovar: bool
+
+
 class StreamEvent(BaseModel):
     """Evento enviado ao HUD por SSE."""
 
-    type: Literal["route", "thinking", "text", "usage", "error", "done"]
+    type: Literal["route", "thinking", "text", "tool", "approval", "usage", "error", "done"]
     data: Any = None
 
 

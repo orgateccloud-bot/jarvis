@@ -47,6 +47,8 @@ _LOCAL_PATTERNS = [
 _TASK_HINTS = [
     "analise", "analisa", "resuma", "resume", "explique", "explica", "calcule", "calcula", "traduza",
     "escreva", "redija", "codigo", "script", "programa", "funcao", "sql", "planilha", "revise", "corrija",
+    # busca na web (só Sonnet/Opus têm as ferramentas web)
+    "pesquise", "pesquisa", "noticia", "cotacao", "previsao do tempo", "procure na internet",
 ]
 
 # +2 cada: raciocínio profundo, várias etapas ou alto custo de erro.
