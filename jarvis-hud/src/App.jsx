@@ -66,6 +66,18 @@ export default function App() {
           muted={voice.muted} onToggleMute={voice.toggleMute}
           panelsOpen={panelsOpen} onTogglePanels={() => setPanelsOpen(o => !o)}
         />
+        {j.online === false && (
+          <div className="offline glass" role="alert">
+            <strong>Núcleo offline.</strong> A API do JARVIS não responde em 127.0.0.1:8000.
+            Rode <code>start-jarvis.bat</code> (ou <code>.venv\Scripts\python -m jarvis</code>) — o HUD reconecta sozinho.
+          </div>
+        )}
+        {j.online && !j.authOk && (
+          <div className="offline glass" role="alert">
+            <strong>Token recusado.</strong> O HUD não tem o token da API.
+            Reinicie o HUD pelo <code>start-jarvis.bat</code> — ele lê <code>dados/.token</code> sozinho.
+          </div>
+        )}
         <div className="stage">
           <div className={`panels ${panelsOpen ? 'open' : ''}`}>
             <aside className="side side-left" aria-label="Sistema e custos">

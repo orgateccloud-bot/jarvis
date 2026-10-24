@@ -16,6 +16,7 @@ export function useJarvis() {
   const [history, setHistory] = useState({ cpu: [], ram: [] })
   const [costs, setCosts] = useState(null)
   const [online, setOnline] = useState(null)
+  const [authOk, setAuthOk] = useState(true)
   const [toasts, setToasts] = useState([])
   const [alertFlash, setAlertFlash] = useState(false)
   const energyRef = useRef(0)
@@ -44,11 +45,14 @@ export function useJarvis() {
         if (alive) setOnline(false)
         return
       }
+      let unauthorized = false
+      const guard = e => { if (e.status === 401) unauthorized = true; return null }
       const [sys, cost] = await Promise.all([
-        getJson('/system/status').catch(() => null),
-        getJson('/costs').catch(() => null),
+        getJson('/system/status').catch(guard),
+        getJson('/costs').catch(guard),
       ])
       if (!alive) return
+      setAuthOk(!unauthorized)
       if (sys) {
         setVitals(sys)
         setHistory(h => ({
@@ -112,7 +116,7 @@ export function useJarvis() {
   }, [pushToast, flashAlert])
 
   return {
-    phase, setPhase, messages, busy, neural, vitals, history, costs, online,
+    phase, setPhase, messages, busy, neural, vitals, history, costs, online, authOk,
     toasts, dismissToast, alertFlash, energyRef, sendMessage,
   }
 }

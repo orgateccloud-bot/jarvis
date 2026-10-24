@@ -74,6 +74,18 @@
 .panels-btn { display: none; }
 .clock { color: var(--text-muted); font-size: 13px; margin-left: 4px; }
 
+/* ---------- aviso de núcleo offline ---------- */
+.offline {
+  position: fixed; z-index: 3; top: 64px; left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.offline strong { color: var(--danger); margin-right: 4px; }
+.offline code { font-family: var(--font-mono); font-size: 12px; background: rgba(255, 255, 255, 0.07); padding: 1px 6px; border-radius: 5px; }
+
 /* ---------- palco ---------- */
 .stage {
   display: grid;

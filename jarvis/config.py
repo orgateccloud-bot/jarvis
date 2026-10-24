@@ -22,7 +22,7 @@ class Settings(BaseModel):
     host: str = Field(default_factory=lambda: _env("JARVIS_HOST", "127.0.0.1"))
     port: int = Field(default_factory=lambda: int(_env("JARVIS_PORT", "8000")))
     cors_origins: list[str] = Field(
-        default_factory=lambda: _env("JARVIS_CORS", "http://localhost:5299").split(",")
+        default_factory=lambda: _env("JARVIS_CORS", "http://localhost:5299,http://127.0.0.1:5299").split(",")
     )
     data_dir: Path = Field(default_factory=lambda: Path(_env("JARVIS_DATA_DIR", str(ROOT / "dados"))))
 

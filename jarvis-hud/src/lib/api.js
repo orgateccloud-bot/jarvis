@@ -3,11 +3,15 @@ export const API = import.meta.env.VITE_JARVIS_API || 'http://127.0.0.1:8000'
 
 const TOKEN_KEY = 'jarvis-token'
 
-// Token da API local (dados/.token): VITE_JARVIS_TOKEN no .env.local ou pedido uma vez.
+let asked = false
+
+// Token da API local. Em dev o Vite injeta VITE_JARVIS_TOKEN (lido de dados/.token);
+// senão usa o salvo no navegador e, como último recurso, pede UMA vez por carregamento.
 export function getToken() {
   let token = import.meta.env.VITE_JARVIS_TOKEN || ''
   try { token = token || localStorage.getItem(TOKEN_KEY) || '' } catch { /* armazenamento indisponível */ }
-  if (!token) {
+  if (!token && !asked) {
+    asked = true
     token = (window.prompt('Token do JARVIS (arquivo dados/.token):') || '').trim()
     try { if (token) localStorage.setItem(TOKEN_KEY, token) } catch { /* armazenamento indisponível */ }
   }
@@ -27,9 +31,16 @@ export async function authFetch(path, options = {}) {
   return res
 }
 
+export class HttpError extends Error {
+  constructor(status) {
+    super(status === 401 ? 'token inválido' : `HTTP ${status}`)
+    this.status = status
+  }
+}
+
 export async function getJson(path, { auth = true } = {}) {
   const res = auth ? await authFetch(path) : await fetch(`${API}${path}`)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) throw new HttpError(res.status)
   return res.json()
 }
 
@@ -40,7 +51,7 @@ export async function* streamChat(message, sessionId = 'hud') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, session_id: sessionId }),
   })
-  if (!res.ok) throw new Error(res.status === 401 ? 'token inválido' : `HTTP ${res.status}`)
+  if (!res.ok) throw new HttpError(res.status)
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
