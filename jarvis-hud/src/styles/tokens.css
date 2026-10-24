@@ -1,0 +1,82 @@
+/* JARVIS — tokens de design (Aurora Blue + vidro cinematográfico) */
+:root {
+  --aurora-1: #0052ff;
+  --aurora-2: #4d7cff;
+  --aurora-3: #0ea5e9;
+  --aurora: linear-gradient(135deg, var(--aurora-1), var(--aurora-2) 55%, var(--aurora-3));
+
+  --space: #03040b;
+  --glass: rgba(8, 12, 26, 0.42);
+  --glass-strong: rgba(8, 12, 26, 0.62);
+  --glass-blur: blur(18px) saturate(140%);
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.16);
+
+  --text: #e6ecff;
+  --text-muted: #8a96b8;
+  --text-faint: #5b6585;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --danger: #ff4d4d;
+
+  --tier: #ffc861; /* sobrescrito em runtime pela camada ativa */
+
+  --font-brand: 'Calistoga', Georgia, serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+  --radius: 18px;
+  --radius-sm: 12px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --fast: 160ms;
+  --slow: 420ms;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--space);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button, input { font: inherit; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--aurora-2); outline-offset: 2px; }
+
+.cosmos {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  z-index: 0;
+}
+
+.cosmos-fallback {
+  background:
+    radial-gradient(circle at 50% 37%, #fff6d8 0 3%, #ffb347 6%, rgba(255, 120, 40, 0.35) 12%, transparent 30%),
+    radial-gradient(ellipse 60% 25% at 50% 37%, rgba(77, 124, 255, 0.25), transparent 70%),
+    var(--space);
+}
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
