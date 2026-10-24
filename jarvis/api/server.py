@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import hmac
 from datetime import datetime
 
 import psutil
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from loguru import logger
@@ -20,6 +22,8 @@ from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
+from ..proactive.bus import EventBus, event_source
+from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
 from ..tools import ToolContext, registry
 
@@ -42,13 +46,28 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
     )
 
 
-def create_app(settings: Settings | None = None, conversation: Conversation | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, conversation: Conversation | None = None,
+               monitor: Monitor | None = None, proactive: bool | None = None) -> FastAPI:
     settings = settings or get_settings()
     token = settings.api_token()
     conv = conversation or build_conversation(settings)
     logger.add(settings.data_dir.parent / "logs" / "jarvis.log", rotation="10 MB", retention="30 days")
+    bus = EventBus()
+    monitor = monitor or Monitor(conv.ledger, conv.tool_ctx.reminders, settings.user_name)
+    proactive = settings.proactive if proactive is None else proactive
 
-    app = FastAPI(title="JARVIS", version=__version__)
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        task = asyncio.create_task(run_monitor(monitor, bus)) if proactive else None
+        yield
+        if task:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    app = FastAPI(title="JARVIS", version=__version__, lifespan=lifespan)
+    app.state.bus = bus
+    app.state.monitor = monitor
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -82,6 +101,12 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
                 yield 'data: {"type":"done"}\n\n'
 
         return StreamingResponse(sse(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/events", dependencies=[Depends(require_token)])
+    async def events(saudacao: bool = Query(default=True, description="saudação ao conectar")):
+        greeting = await asyncio.to_thread(monitor.greeting) if saudacao else None
+        return StreamingResponse(event_source(bus, greeting), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache"})
 
     @app.post("/approvals/{approval_id}", dependencies=[Depends(require_token)])
     async def decide_approval(approval_id: str, body: ApprovalDecision):

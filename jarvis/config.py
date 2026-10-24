@@ -34,6 +34,7 @@ class Settings(BaseModel):
     economy_threshold: float = 0.8
 
     user_name: str = Field(default_factory=lambda: _env("JARVIS_NOME", "Senhor"))
+    proactive: bool = Field(default_factory=lambda: _env("JARVIS_PROATIVO", "1") != "0")
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
 
     def tool_roots(self) -> list[Path]:
