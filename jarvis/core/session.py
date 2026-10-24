@@ -268,11 +268,18 @@ class Conversation:
         resumo = tool.summary(params)
 
         if tool.needs_approval:
+            detalhes = None
+            if tool.details:
+                try:
+                    detalhes = await asyncio.to_thread(tool.details, params, self.tool_ctx)
+                except Exception:  # noqa: BLE001 — detalhes são informativos; nunca bloqueiam a aprovação
+                    logger.exception(f"detalhes de {name}")
             approval_id = self.approvals.create()
             try:
                 yield StreamEvent(type="approval", data={
                     "id": approval_id, "nome": name, "resumo": resumo,
                     "args": params.model_dump(mode="json"), "expira_s": int(self.approvals.timeout_s),
+                    "detalhes": detalhes,
                 })
                 approved = await self.approvals.wait(approval_id)
             finally:

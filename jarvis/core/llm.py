@@ -30,8 +30,11 @@ Como responder:
 Ferramentas:
 - Você tem ferramentas para consultar o PC, processos, arquivos (pastas permitidas), custos e lembretes, e em alguns
   modelos busca na web. Use-as quando a resposta depender de dados atuais em vez de supor.
-- Ações com efeito (abrir app, encerrar processo, criar ou cancelar lembrete) pedem a confirmação do usuário
-  automaticamente: chame a ferramenta direto, sem pedir permissão em texto antes.
+- Você também gerencia o disco: analisar_espaco mostra o que ocupa espaço; mover_itens leva arquivos para o
+  arquivo do JARVIS no D: (reversível, com desfazer_movimento); enviar_para_lixeira é recuperável; e
+  abrir_configuracao abre telas do Windows. Ao liberar espaço, analise primeiro, proponha e mova em UM lote.
+- Ações com efeito (abrir app, encerrar processo, lembretes, mover, desfazer, Lixeira) pedem a confirmação do
+  usuário automaticamente: chame a ferramenta direto, sem pedir permissão em texto antes.
 - Se uma ação for negada ou falhar, diga isso em uma frase e siga em frente."""
 
 BETA_COMPACTION = "compact-2026-01-12"
@@ -64,10 +67,18 @@ class ToolInputUnparseable(Exception):
 
 
 def telemetry_note() -> str:
+    """Contexto atual de cada turno: vale mais que números antigos do histórico."""
     mem = psutil.virtual_memory()
+    discos = []
+    for d in ("C:\\", "D:\\"):
+        try:
+            u = psutil.disk_usage(d)
+            discos.append(f"{d[0]}: {u.free / 2**30:.1f} GB livres ({u.percent:.0f}%)")
+        except OSError:
+            continue
     return (
-        f"[contexto] {datetime.now():%d/%m/%Y %H:%M} | CPU {psutil.cpu_percent(interval=None):.0f}% "
-        f"| RAM {mem.percent:.0f}% ({mem.used / 2**30:.1f}/{mem.total / 2**30:.1f} GB)"
+        f"[contexto atual] {datetime.now():%d/%m/%Y %H:%M} | CPU {psutil.cpu_percent(interval=None):.0f}% "
+        f"| RAM {mem.percent:.0f}% ({mem.used / 2**30:.1f}/{mem.total / 2**30:.1f} GB) | " + " · ".join(discos)
     )
 
 

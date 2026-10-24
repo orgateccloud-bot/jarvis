@@ -165,7 +165,7 @@ export function useJarvis(callbacks = {}) {
           const nid = uid()
           setMessages(m => [...m,
             { id: uid(), role: 'approval', approvalId: ev.data.id, nome: ev.data.nome, resumo: ev.data.resumo,
-              expiraEm: Date.now() + ev.data.expira_s * 1000, status: 'pendente' },
+              expiraEm: Date.now() + ev.data.expira_s * 1000, status: 'pendente', detalhes: ev.data.detalhes },
             { id: nid, role: 'jarvis', text: '', streaming: true, tools: [], tier }])
           jid = nid
           segment = ''

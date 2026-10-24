@@ -5,6 +5,15 @@ import { TIERS } from '../lib/tiers.js'
 
 const VISIBLE = 12
 
+// 1536 → "1,5 KB"; 3,2 GB → "3,2 GB"
+function tamanho(bytes) {
+  const u = ['bytes', 'KB', 'MB', 'GB', 'TB']
+  let v = bytes || 0
+  let i = 0
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++ }
+  return `${i ? v.toFixed(1).replace('.', ',') : v} ${u[i]}`
+}
+
 const STATUS = {
   aprovando: 'Aprovando…', negando: 'Negando…', aprovado: 'Aprovado ✓', negado: 'Negado', expirado: 'Expirou — negado',
 }
@@ -24,6 +33,15 @@ function ApprovalCard({ m, onDecide }) {
         <span className="approval-icon" aria-hidden="true">⚡</span>
         <span>Posso <strong>{m.resumo}</strong>?</span>
       </div>
+      {m.detalhes?.itens?.length > 0 && (
+        <div className="approval-lote">
+          <ul>{m.detalhes.itens.map((n, i) => <li key={i}>{n}</li>)}</ul>
+          <span className="mono">
+            {m.detalhes.outros > 0 && `e mais ${m.detalhes.outros} · `}
+            {tamanho(m.detalhes.total_bytes ?? m.detalhes.total_gb * 2 ** 30)} no total
+          </span>
+        </div>
+      )}
       {pendente ? (
         <div className="approval-actions">
           <button className="btn-yes" onClick={() => onDecide(m.approvalId, true)}>Aprovar</button>

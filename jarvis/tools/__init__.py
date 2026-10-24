@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +19,9 @@ class ToolContext:
     ledger: CostLedger
     reminders: ReminderStore
     salt: str = ""
+    archive: Path = field(default_factory=lambda: Path("D:/JARVIS-Arquivo"))  # destino dos movimentos
+    move_roots: list[Path] = field(default_factory=list)                      # de onde se pode mover
+    journal: Any = None                                                      # MoveJournal
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,7 @@ class Tool:
     run: Callable[[Any, ToolContext], str]
     summary: Callable[[Any], str]     # frase curta em pt-BR para o HUD e o pedido de aprovação
     needs_approval: bool = False
+    details: Callable[[Any, Any], dict] | None = None  # extra para o card de aprovação (ex.: itens e GB do lote)
 
     def definition(self) -> dict:
         schema = self.params.model_json_schema()
@@ -53,11 +57,13 @@ class ToolError(Exception):
 
 
 def registry() -> dict[str, Tool]:
+    from .disk import DISK_TOOLS
     from .files import FILE_TOOLS
+    from .settings import SETTINGS_TOOLS
     from .system import SYSTEM_TOOLS
     from .tasks import TASK_TOOLS
 
-    tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS]
+    tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS]
     return {t.name: t for t in tools}
 
 

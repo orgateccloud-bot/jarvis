@@ -89,7 +89,9 @@ class FakeAnthropic:
 def settings(tmp_path, monkeypatch):
     monkeypatch.setenv("JARVIS_TOKEN", "token-de-teste")
     monkeypatch.setenv("JARVIS_PASTAS", str(tmp_path / "pasta_permitida"))
+    monkeypatch.setenv("JARVIS_ARQUIVO", str(tmp_path / "arquivo"))
     (tmp_path / "pasta_permitida").mkdir()
+    (tmp_path / "arquivo").mkdir()
     s = Settings(data_dir=tmp_path / "dados", monthly_budget_usd=15.0, pii_salt="salt-teste")
     s.data_dir.mkdir(parents=True)
     return s

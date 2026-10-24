@@ -26,6 +26,7 @@ from ..proactive.bus import EventBus, event_source
 from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
 from ..tools import ToolContext, registry
+from ..tools.journal import MoveJournal
 
 
 def build_conversation(settings: Settings, claude_client=None, approval_timeout_s: float = 60.0) -> Conversation:
@@ -41,7 +42,10 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         salt=salt,
         tiers=Tiers(settings.model_simple, settings.model_medium, settings.model_complex),
         tools=registry(),
-        tool_ctx=ToolContext(roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt),
+        tool_ctx=ToolContext(
+            roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
+            archive=settings.archive_dir(), move_roots=settings.move_roots(), journal=MoveJournal(settings.db_path),
+        ),
         approvals=Approvals(timeout_s=approval_timeout_s),
     )
 

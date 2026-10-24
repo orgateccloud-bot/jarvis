@@ -8,8 +8,8 @@ const MODES = [
   { key: 'opus', label: 'Opus', tier: 'complexa', hint: 'Raciocínio profundo' },
 ]
 
-const SUGGESTIONS = ['Briefing do dia', 'Quais processos estão pesando?', 'Me lembra de beber água em 30 minutos',
-  'Que horas são?']
+const SUGGESTIONS = ['Briefing do dia', 'O que está ocupando espaço no C:?', 'Quais processos estão pesando?',
+  'Me lembra de beber água em 30 minutos']
 
 export default function CommandDock({ onSend, busy, mode, onMode, convMode, onToggleConversation, voiceSupported, showSuggestions }) {
   const [text, setText] = useState('')

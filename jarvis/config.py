@@ -46,7 +46,19 @@ class Settings(BaseModel):
             h = Path.home()
             cands = [h / "Documents", h / "Documentos", h / "OneDrive" / "Documentos", h / "Downloads",
                      h / "Desktop", h / "OneDrive" / "Desktop", h / "OneDrive" / "Área de Trabalho", ROOT]
+        archive = self.archive_dir()
+        if archive.exists():
+            cands.append(archive)
         return [c.resolve() for c in cands if c.exists()]
+
+    def archive_dir(self) -> Path:
+        """Destino dos movimentos (reversíveis) do JARVIS: JARVIS_ARQUIVO ou D:\\JARVIS-Arquivo."""
+        return Path(_env("JARVIS_ARQUIVO", "D:\\JARVIS-Arquivo"))
+
+    def move_roots(self) -> list[Path]:
+        """De onde o JARVIS pode mover/mandar para a Lixeira: pastas pessoais, nunca o projeto nem o arquivo."""
+        excluir = {ROOT.resolve(), self.archive_dir().resolve() if self.archive_dir().exists() else None}
+        return [r for r in self.tool_roots() if r not in excluir]
 
     @property
     def db_path(self) -> Path:
