@@ -17,9 +17,11 @@ const Icon = ({ d, label }) => (
     strokeLinecap="round" strokeLinejoin="round" aria-label={label} role="img">{d}</svg>
 )
 
-export default function TopBar({ phase, tier, online, muted, onToggleMute, panelsOpen, onTogglePanels }) {
+export default function TopBar({ phase, convMode, tier, online, muted, onToggleMute, wake, onToggleWake, voiceSupported,
+  panelsOpen, onTogglePanels }) {
   const now = useClock()
   const t = TIERS[tier] || TIERS.regras
+  const label = phase === 'idle' && convMode === 'wake' ? 'Aguardando “Jarvis”' : PHASE[phase] || phase
   return (
     <header className="topbar">
       <div className="brand">
@@ -30,7 +32,7 @@ export default function TopBar({ phase, tier, online, muted, onToggleMute, panel
 
       <div className={`status glass phase-${phase}`} aria-live="polite">
         <span className="status-dot" aria-hidden="true" />
-        <span className="status-phase">{PHASE[phase] || phase}</span>
+        <span className="status-phase">{label}</span>
         <span className="status-sep" aria-hidden="true" />
         <span className="status-model">{t.label}</span>
         <span className="status-class">{t.classe}</span>
@@ -42,6 +44,13 @@ export default function TopBar({ phase, tier, online, muted, onToggleMute, panel
           <span className="net-dot" aria-hidden="true" />
           <span className="net-label">{online ? 'online' : online === false ? 'offline' : '…'}</span>
         </span>
+        {voiceSupported && (
+          <button className={`icon-btn wake-btn ${wake ? 'on' : ''}`} onClick={onToggleWake} aria-pressed={wake}
+            title={wake ? 'Parar de ouvir “Jarvis” em segundo plano' : 'Ouvir a palavra “Jarvis” em segundo plano'}>
+            <Icon label="palavra de ativação" d={<><path d="M6 8.5a6 6 0 1 1 10.5 4c-1.2 1.4-2 2.3-2 4a3 3 0 0 1-5.5 1.6" />
+              <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-1.5 3.5" /></>} />
+          </button>
+        )}
         <button className="icon-btn" onClick={onToggleMute} aria-pressed={muted}
           title={muted ? 'Ativar voz do JARVIS' : 'Silenciar voz do JARVIS'}>
           {muted

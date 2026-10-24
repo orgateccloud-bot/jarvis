@@ -44,7 +44,30 @@ export async function getJson(path, { auth = true } = {}) {
   return res.json()
 }
 
-/** Envia uma mensagem e devolve os eventos SSE do turno (route, thinking, text, usage, error, done). */
+// Lê um corpo SSE e devolve cada evento "data:" já em JSON (ignora comentários de keepalive).
+async function* readSSE(res, signal) {
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (!signal?.aborted) {
+      const { done, value } = await reader.read()
+      if (done) break
+      // eventos podem chegar partidos entre pedaços: só processa linhas completas
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop()
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try { yield JSON.parse(line.slice(6)) } catch { /* linha SSE inválida: ignora */ }
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {})
+  }
+}
+
+/** Envia uma mensagem e devolve os eventos SSE do turno (route, thinking, text, tool, approval, usage, error, done). */
 export async function* streamChat(message, sessionId = 'hud') {
   const res = await authFetch('/chat/stream', {
     method: 'POST',
@@ -52,19 +75,22 @@ export async function* streamChat(message, sessionId = 'hud') {
     body: JSON.stringify({ message, session_id: sessionId }),
   })
   if (!res.ok) throw new HttpError(res.status)
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    // eventos podem chegar partidos entre pedaços: só processa linhas completas
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop()
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      try { yield JSON.parse(line.slice(6)) } catch { /* linha SSE inválida: ignora */ }
-    }
-  }
+  yield* readSSE(res)
+}
+
+/** Eventos proativos (saudação, alertas, lembretes). Fica aberto até o signal abortar. */
+export async function* streamEvents({ greeting = true, signal } = {}) {
+  const res = await authFetch(`/events?saudacao=${greeting ? 'true' : 'false'}`, { signal })
+  if (!res.ok) throw new HttpError(res.status)
+  yield* readSSE(res, signal)
+}
+
+/** Decide uma aprovação pendente (ação com efeito pedida pelo modelo). */
+export async function decideApproval(id, aprovar) {
+  const res = await authFetch(`/approvals/${encodeURIComponent(id)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ aprovar }),
+  })
+  return res.ok
 }

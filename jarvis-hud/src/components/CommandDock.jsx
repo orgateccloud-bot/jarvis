@@ -8,12 +8,13 @@ const MODES = [
   { key: 'opus', label: 'Opus', tier: 'complexa', hint: 'Raciocínio profundo' },
 ]
 
-const SUGGESTIONS = ['Como está o PC?', 'Que horas são?', 'Explique juros compostos', 'Me ajude a planejar meu dia']
+const SUGGESTIONS = ['Briefing do dia', 'Quais processos estão pesando?', 'Me lembra de beber água em 30 minutos',
+  'Que horas são?']
 
-export default function CommandDock({ onSend, busy, mode, onMode, listening, interim, onToggleListen, voiceSupported, showSuggestions }) {
+export default function CommandDock({ onSend, busy, mode, onMode, convMode, onToggleConversation, voiceSupported, showSuggestions }) {
   const [text, setText] = useState('')
   const inputRef = useRef(null)
-  const value = listening && interim ? interim : text
+  const listening = convMode === 'active'
 
   // Ctrl/⌘ + K foca o comando
   useEffect(() => {
@@ -57,15 +58,15 @@ export default function CommandDock({ onSend, busy, mode, onMode, listening, int
         <input
           ref={inputRef}
           className="dock-input"
-          value={value}
+          value={text}
           onChange={e => setText(e.target.value)}
-          placeholder={listening ? 'Ouvindo…' : 'Fale ou digite um comando…  (Ctrl+K)'}
+          placeholder={listening ? 'Conversa aberta — fale ou digite…' : 'Digite ou clique no sol para conversar…  (Ctrl+K)'}
           aria-label="Comando para o JARVIS"
           autoFocus
         />
         {voiceSupported && (
-          <button type="button" className={`mic ${listening ? 'on' : ''}`} onClick={onToggleListen}
-            aria-pressed={listening} title={listening ? 'Parar de ouvir' : 'Falar com o JARVIS'}>
+          <button type="button" className={`mic ${listening ? 'on' : ''}`} onClick={onToggleConversation}
+            aria-pressed={listening} title={listening ? 'Encerrar a conversa por voz' : 'Conversar por voz (mãos livres)'}>
             {listening
               ? <span className="wave" aria-hidden="true"><i /><i /><i /><i /></span>
               : <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">

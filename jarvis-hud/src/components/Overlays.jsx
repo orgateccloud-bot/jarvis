@@ -29,3 +29,31 @@ export function Toasts({ toasts, onDismiss }) {
     </div>
   )
 }
+
+/** Área clicável sobre o sol: abre/fecha a conversa por voz; enquanto ele fala, interrompe. */
+export function SunButton({ mode, speaking, onClick, disabled }) {
+  const label = speaking ? 'Interromper o JARVIS' : mode === 'active' ? 'Encerrar a conversa' : 'Conversar com o JARVIS'
+  return (
+    <button className={`sun-hit ${mode === 'active' ? 'active' : ''}`} onClick={onClick} disabled={disabled}
+      aria-label={label} title={disabled ? 'Este navegador não tem reconhecimento de voz (use Chrome ou Edge)' : label} />
+  )
+}
+
+const HINT = {
+  off: 'Clique no sol para conversar',
+  wake: 'Diga “Jarvis” para começar',
+}
+
+/** Legenda sob o sol: o que o usuário está dizendo, ou uma dica do que fazer. */
+export function Caption({ mode, phase, caption }) {
+  let text = caption
+  if (!text) {
+    if (phase === 'listening') text = 'Ouvindo…'
+    else if (phase === 'thinking') text = 'Pensando…'
+    else if (phase === 'idle') text = HINT[mode] || ''
+  }
+  if (!text) return null
+  return (
+    <div className={`caption ${caption ? 'live' : ''}`} aria-live="polite">{caption ? `“${caption}”` : text}</div>
+  )
+}

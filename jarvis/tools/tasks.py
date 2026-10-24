@@ -44,9 +44,9 @@ def criar_lembrete(p: LembreteParams, ctx: ToolContext) -> str:
 
 def _resumo_lembrete(p: LembreteParams) -> str:
     try:
-        return f"lembrete \"{p.texto}\" para {p.horario():%d/%m %H:%M}"
+        return f"criar o lembrete \"{p.texto}\" para {p.horario():%d/%m %H:%M}"
     except (TypeError, AttributeError):
-        return f"lembrete \"{p.texto}\""
+        return f"criar o lembrete \"{p.texto}\""
 
 
 def lembretes_listar(_: _Vazio, ctx: ToolContext) -> str:

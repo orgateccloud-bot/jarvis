@@ -376,3 +376,88 @@
   .modes { display: none; } /* no celular o modo fica no Auto; prefixos /opus etc. continuam valendo */
   .msg-user { max-width: 88%; }
 }
+
+/* ---------- conversa por voz: sol clicável e legenda ---------- */
+.sun-hit {
+  position: fixed; z-index: 2;
+  left: 50%; top: 37vh; width: 25vh; height: 25vh;
+  transform: translate(-50%, -50%);
+  border-radius: 50%; border: 0; background: transparent; cursor: pointer;
+  transition: box-shadow var(--slow) var(--ease);
+}
+.sun-hit:hover { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 60px 6px color-mix(in srgb, var(--tier) 25%, transparent); }
+.sun-hit.active { box-shadow: 0 0 0 1px color-mix(in srgb, var(--aurora-3) 45%, transparent); animation: halo 2.4s var(--ease) infinite; }
+.sun-hit:disabled { cursor: not-allowed; }
+.sun-hit:focus-visible { outline-offset: 6px; }
+
+.caption {
+  position: fixed; z-index: 2; pointer-events: none;
+  left: 50%; top: 51vh; transform: translateX(-50%);
+  max-width: min(640px, calc(100vw - 32px));
+  font-size: 13px; letter-spacing: 0.04em; color: rgba(230, 236, 255, 0.72);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  animation: rise var(--slow) var(--ease) both;
+}
+.caption.live {
+  font-size: 16px; color: #fff; padding: 6px 14px; border-radius: 999px;
+  background: var(--glass-strong); border: 1px solid var(--hairline);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+}
+@media (max-aspect-ratio: 85/100) {
+  .sun-hit { top: 33vh; width: 20vh; height: 20vh; }
+  .caption { top: 44vh; }
+}
+
+.wake-btn.on { color: var(--aurora-3); border-color: color-mix(in srgb, var(--aurora-3) 45%, transparent); }
+.wake-btn.on::after {
+  content: ''; position: absolute; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--danger); transform: translate(11px, -11px); box-shadow: 0 0 6px var(--danger);
+}
+.wake-btn { position: relative; }
+
+/* ---------- aprovação de ações ---------- */
+.msg-approval { align-self: stretch; }
+.approval {
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(8, 12, 26, 0.55));
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+}
+.approval-head { display: flex; gap: 8px; align-items: baseline; }
+.approval-head strong { color: #fff; }
+.approval-icon { color: var(--warn); }
+.approval-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.btn-yes, .btn-no {
+  border: 0; border-radius: 999px; padding: 7px 16px; font-weight: 600; cursor: pointer;
+  transition: transform var(--fast), filter var(--fast);
+}
+.btn-yes { background: var(--ok); color: #04130c; }
+.btn-no { background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid var(--hairline-strong); }
+.btn-yes:hover, .btn-no:hover { filter: brightness(1.1); }
+.btn-yes:active, .btn-no:active { transform: scale(0.95); }
+.approval-timer { font-size: 12px; color: var(--text-muted); }
+.approval-status { margin-top: 8px; font-size: 13px; color: var(--text-muted); }
+.approval-aprovado { border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: rgba(52, 211, 153, 0.08); }
+.approval-aprovado .approval-status { color: var(--ok); }
+.approval-negado, .approval-expirado { opacity: 0.7; border-color: var(--hairline-strong); background: rgba(255, 255, 255, 0.03); }
+
+/* ---------- ferramentas usadas ---------- */
+.tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+.tool {
+  font-size: 11.5px; padding: 2px 9px; border-radius: 999px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--hairline); color: var(--text-muted);
+}
+.tool.ok { color: #9be7c4; border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.tool.fail { color: #ffb1b1; border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.tool.run { color: var(--aurora-3); animation: pulse-soft 1.2s var(--ease) infinite; }
+
+/* ---------- avisos proativos ---------- */
+.msg-aviso { border-left-width: 3px; }
+.msg-aviso.nivel-aviso { --msg: var(--warn); }
+.msg-aviso.nivel-critico { --msg: var(--danger); background: linear-gradient(135deg, rgba(255, 77, 77, 0.1), var(--glass)); }
+
+@keyframes halo { 50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--aurora-3) 60%, transparent), 0 0 70px 10px rgba(14, 165, 233, 0.18); } }
+@keyframes pulse-soft { 50% { opacity: 0.55; } }
