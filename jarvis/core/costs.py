@@ -14,7 +14,7 @@ PRICES: dict[str, tuple[float, float, float, float]] = {
     "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
     "claude-opus-5": (5.00, 25.00, 0.50, 6.25),
     "claude-opus-4-8": (5.00, 25.00, 0.50, 6.25),
-    "claude-sonnet-5-5": (2.00, 10.00, 0.20, 2.50),
+    "claude-sonnet-5-5": (2.00, 10.00, 0.10, 2.50),
     "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125),
 }
 UNKNOWN_MODEL_PRICE = PRICES["claude-opus-5"]  # conservador: superestima em vez de subestimar
@@ -44,6 +44,20 @@ class CostLedger:
                     input_tokens INTEGER, output_tokens INTEGER,
                     cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost_usd REAL)"""
             )
+
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Migrações do ledger, versionadas por PRAGMA user_version (idempotentes)."""
+        with self._lock, self._conn() as c:
+            versao = c.execute("PRAGMA user_version").fetchone()[0]
+            if versao < 1:
+                # v1: a leitura de cache do Sonnet 5.5 era cobrada a US$ 0,20/MTok; o preço oficial é US$ 0,10
+                c.execute(
+                    "UPDATE usage SET cost_usd = ROUND(cost_usd - cache_read_tokens * 0.10 / 1000000, 6) "
+                    "WHERE model = 'claude-sonnet-5-5'"
+                )
+                c.execute("PRAGMA user_version = 1")
 
     def _conn(self) -> sqlite3.Connection:
         return sqlite3.connect(self.db_path)

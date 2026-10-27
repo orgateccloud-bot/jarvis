@@ -81,3 +81,14 @@ def definitions_for(model: str, tools: dict[str, Tool]) -> list[dict]:
     if model in WEB_CAPABLE:
         defs += WEB_TOOLS
     return defs
+
+
+def manifesto(tools: dict[str, Tool]) -> str:
+    """Lista curta do que o JARVIS consegue fazer, gerada das ferramentas reais (nunca desatualiza)."""
+    linhas = []
+    for name in sorted(tools):
+        t = tools[name]
+        frase = t.description.split(". ")[0].rstrip(".")
+        linhas.append(f"- {name}: {frase}" + (" (pede confirmação)" if t.needs_approval else ""))
+    linhas.append("- web_search / web_fetch: buscar e ler páginas da web (só nos modelos Sonnet e Opus)")
+    return "\n".join(linhas)

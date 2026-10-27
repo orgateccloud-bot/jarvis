@@ -6,6 +6,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import aclosing
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from loguru import logger
@@ -31,22 +32,44 @@ MAX_JSON_RETRIES = 2   # reemissões quando a entrada de ferramenta chega ilegí
 
 
 class SessionStore:
-    """Persiste cada histórico em dados/sessions/<id>.json para sobreviver a reinícios."""
+    """Persiste cada histórico em dados/sessions/<id>.json. Depois de `idle` sem uso, a conversa é arquivada em
+    dados/sessions/arquivo/ e começa outra vazia: o histórico não cresce sem fim (custo) e a continuidade fica
+    com a memória de longo prazo."""
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, idle: timedelta = timedelta(minutes=30), clock=datetime.now):
         self.root = root
+        self.idle = idle
+        self.clock = clock
         root.mkdir(parents=True, exist_ok=True)
         self._cache: dict[str, list[dict]] = {}
+        self._last: dict[str, datetime] = {}
 
     def history(self, session_id: str) -> list[dict]:
+        path = self.root / f"{session_id}.json"
         if session_id not in self._cache:
-            path = self.root / f"{session_id}.json"
             self._cache[session_id] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+            if path.exists():
+                self._last[session_id] = datetime.fromtimestamp(path.stat().st_mtime)
         return self._cache[session_id]
+
+    def rollover_if_idle(self, session_id: str) -> bool:
+        """Arquiva a conversa se ficou parada além do limite. True se começou uma conversa nova."""
+        hist = self.history(session_id)
+        last = self._last.get(session_id)
+        if not hist or last is None or self.clock() - last < self.idle:
+            return False
+        arquivo = self.root / "arquivo"
+        arquivo.mkdir(exist_ok=True)
+        destino = arquivo / f"{session_id}-{last:%Y%m%d-%H%M%S}.json"
+        destino.write_text(json.dumps(hist, ensure_ascii=False), encoding="utf-8")
+        self._cache[session_id] = []
+        self.save(session_id)
+        return True
 
     def save(self, session_id: str) -> None:
         path = self.root / f"{session_id}.json"
         path.write_text(json.dumps(self._cache[session_id], ensure_ascii=False), encoding="utf-8")
+        self._last[session_id] = self.clock()
 
 
 class Conversation:
@@ -82,6 +105,7 @@ class Conversation:
                 yield ev
 
     async def _turn(self, session_id: str, message: str) -> AsyncIterator[StreamEvent]:
+        nova = self.store.rollover_if_idle(session_id)
         budget = self.ledger.state()
         decision = decide(message, budget, self.tiers)
         quick = self.rules.answer(message) if decision.route is Route.LOCAL else None
@@ -92,7 +116,7 @@ class Conversation:
         yield StreamEvent(
             type="route",
             data={"rota": decision.route.value, "modelo": decision.model or "regras", "effort": decision.effort,
-                  "motivo": decision.reason, "orcamento": budget.value},
+                  "motivo": decision.reason, "orcamento": budget.value, "nova_conversa": nova},
         )
 
         history = self.store.history(session_id)

@@ -21,25 +21,41 @@ Trate o usuário por "{nome}". Responda sempre em português do Brasil.
 
 Como responder:
 - Suas respostas podem ser lidas em voz alta: frases curtas e naturais, sem emojis.
-- Use markdown (listas, tabelas, código) só quando o conteúdo pedir.
-- Seja direto. Quando detectar risco ou algo que mereça atenção, avise proativamente.
-- Se não souber, diga; nunca invente fatos, números ou fontes.
-- Mensagens de sistema no meio da conversa trazem contexto atual (data, telemetria do PC); use quando relevante.
+- Tamanho proporcional à pergunta: pergunta curta, resposta curta. Listas e tabelas só quando o conteúdo pedir.
+- Se o pedido vier ambíguo, truncado ou com palavra estranha (comum quando vem da voz), pergunte o que ele quis
+  dizer em vez de supor.
+- Se não souber, diga; nunca invente fatos, números, fontes ou capacidades.
+- Diga explicitamente o que você NÃO verificou (ex.: "não testei", "estimativa"). Nunca apresente como pronto
+  algo que não foi validado.
+- Se dois dados se contradisserem (ex.: histórico antigo x [contexto atual]), aponte a contradição na hora;
+  o [contexto atual] é a leitura mais recente e vale mais que números antigos da conversa.
+- Mensagens [contexto atual] são pano de fundo: não comente telemetria (RAM, CPU, disco) salvo se o usuário
+  perguntar ou se for algo crítico e novo. Um aviso por conversa basta; o monitor proativo do sistema já
+  avisa o usuário por conta própria.
 - Dados pessoais aparecem mascarados (CPF/CNPJ com asteriscos, nomes como PESSOA_XXXX); mantenha-os assim.
 
-Ferramentas:
-- Você tem ferramentas para consultar o PC, processos, arquivos (pastas permitidas), custos e lembretes, e em alguns
-  modelos busca na web. Use-as quando a resposta depender de dados atuais em vez de supor.
-- Você também gerencia o disco: analisar_espaco mostra o que ocupa espaço; mover_itens leva arquivos para o
-  arquivo do JARVIS no D: (reversível, com desfazer_movimento); enviar_para_lixeira é recuperável; e
-  abrir_configuracao abre telas do Windows. Ao liberar espaço, analise primeiro, proponha e mova em UM lote.
-- Ações com efeito (abrir app, encerrar processo, lembretes, mover, desfazer, Lixeira) pedem a confirmação do
-  usuário automaticamente: chame a ferramenta direto, sem pedir permissão em texto antes.
-- Se uma ação for negada ou falhar, diga isso em uma frase e siga em frente."""
+O que você consegue fazer (esta lista é gerada das suas ferramentas reais; não existe nada além dela):
+{manifesto}
+
+O que você NÃO consegue fazer:
+- Criar, editar ou apagar arquivos no PC do usuário (inclusive o código do próprio JARVIS) e rodar comandos fora
+  da lista de comando_seguro. Para mudanças no JARVIS, descreva o que mudar; quem aplica é o usuário.
+- Entregar arquivos do sandbox de código da nuvem: ele é temporário e o usuário não tem acesso a ele. Só chegam
+  ao usuário os arquivos que o sistema salvar automaticamente e informar o caminho numa mensagem de sistema.
+  Nunca diga "baixe o arquivo" sem esse caminho.
+
+Uso das ferramentas:
+- Use-as quando a resposta depender de dados atuais, em vez de supor.
+- Ações com efeito pedem a confirmação do usuário automaticamente: chame a ferramenta direto, sem pedir
+  permissão em texto antes. Se uma ação for negada ou falhar, diga isso em uma frase e siga em frente.
+- Ao liberar espaço em disco, analise primeiro, proponha e mova em UM lote."""
 
 BETA_COMPACTION = "compact-2026-01-12"
 BETA_FALLBACK = "server-side-fallback-2026-07-01"
 WEB_SEARCH_USD = 0.01  # busca na web cobrada à parte (US$ 10 por mil)
+# Resumo automático no servidor ao passar deste tamanho (mínimo da API: 50 mil). Abaixo de 100 mil o Haiku
+# não entra na tabela de prompt longo (5x) e as regravações de cache ficam baratas.
+COMPACT_AT = 60_000
 
 
 @dataclass
@@ -77,7 +93,7 @@ def telemetry_note() -> str:
         except OSError:
             continue
     return (
-        f"[contexto atual] {datetime.now():%d/%m/%Y %H:%M} | CPU {psutil.cpu_percent(interval=None):.0f}% "
+        f"[contexto atual — pano de fundo, não comente salvo se perguntado] {datetime.now():%d/%m/%Y %H:%M} | CPU {psutil.cpu_percent(interval=None):.0f}% "
         f"| RAM {mem.percent:.0f}% ({mem.used / 2**30:.1f}/{mem.total / 2**30:.1f} GB) | " + " · ".join(discos)
     )
 
@@ -87,9 +103,11 @@ NO_SERVER_FALLBACK = {"claude-haiku-5-5"}
 
 
 class ClaudeBrain:
-    def __init__(self, max_tokens: int, user_name: str, client: Any | None = None):
+    def __init__(self, max_tokens: int, user_name: str, client: Any | None = None, manifesto: str = "",
+                 compact_at: int = COMPACT_AT):
         self.max_tokens = max_tokens
-        self.system = SYSTEM_PROMPT.format(nome=user_name)
+        self.system = SYSTEM_PROMPT.format(nome=user_name, manifesto=manifesto or "- (sem ferramentas)")
+        self.compact_at = compact_at
         self.client = client or anthropic.AsyncAnthropic()
 
     def request(self, messages: list[dict], model: str, effort: str,
@@ -102,7 +120,9 @@ class ClaudeBrain:
             "thinking": {"type": "adaptive", "display": "summarized"},
             "output_config": {"effort": effort},
             "cache_control": {"type": "ephemeral"},
-            "context_management": {"edits": [{"type": "compact_20260112"}]},
+            "context_management": {"edits": [
+                {"type": "compact_20260112", "trigger": {"type": "input_tokens", "value": self.compact_at}},
+            ]},
             "betas": [BETA_COMPACTION],
         }
         if tools:

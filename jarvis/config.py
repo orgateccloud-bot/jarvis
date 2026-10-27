@@ -35,6 +35,7 @@ class Settings(BaseModel):
 
     user_name: str = Field(default_factory=lambda: _env("JARVIS_NOME", "Senhor"))
     proactive: bool = Field(default_factory=lambda: _env("JARVIS_PROATIVO", "1") != "0")
+    session_idle_min: int = Field(default_factory=lambda: int(_env("JARVIS_SESSAO_OCIOSA_MIN", "30")))
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
 
     def tool_roots(self) -> list[Path]:

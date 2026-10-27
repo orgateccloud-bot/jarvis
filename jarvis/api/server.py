@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hmac
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import psutil
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -25,7 +25,7 @@ from ..core.session import Conversation, SessionStore
 from ..proactive.bus import EventBus, event_source
 from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
-from ..tools import ToolContext, registry
+from ..tools import ToolContext, manifesto, registry
 from ..tools.journal import MoveJournal
 
 
@@ -33,15 +33,16 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
     ledger = CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold)
     salt = settings.salt()
     reminders = ReminderStore(settings.db_path)
+    tools = registry()
     return Conversation(
-        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client),
+        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools)),
         rules=RuleResponder(settings.user_name),
         ledger=ledger,
         audit=AuditChain(settings.data_dir / "audit.jsonl"),
-        store=SessionStore(settings.data_dir / "sessions"),
+        store=SessionStore(settings.data_dir / "sessions", idle=timedelta(minutes=settings.session_idle_min)),
         salt=salt,
         tiers=Tiers(settings.model_simple, settings.model_medium, settings.model_complex),
-        tools=registry(),
+        tools=tools,
         tool_ctx=ToolContext(
             roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
             archive=settings.archive_dir(), move_roots=settings.move_roots(), journal=MoveJournal(settings.db_path),

@@ -73,7 +73,7 @@ def test_economia_desce_uma_camada_e_teto_forca_local():
 def test_preco_por_camada_turno_tipico():
     # 800 entrada + 300 saída + 6000 cache read
     assert abs(price_usage("claude-opus-5-5", 800, 300, 6000, 0) - 0.0104) < 1e-6
-    assert abs(price_usage("claude-sonnet-5-5", 800, 300, 6000, 0) - 0.0058) < 1e-6
+    assert abs(price_usage("claude-sonnet-5-5", 800, 300, 6000, 0) - 0.0052) < 1e-6  # leitura de cache US$ 0,10
     assert abs(price_usage("claude-haiku-5-5", 800, 300, 6000, 0) - 0.00029) < 1e-6
 
 
