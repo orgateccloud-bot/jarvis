@@ -58,6 +58,19 @@ _COMPLEX_HINTS = [
     "laudo", "tributar", "fiscal", "juridic", "contrato", "otimize", "refatore", "demonstre", "prove",
 ]
 
+# Áreas do especialista (perfil multiárea: a área vem do assunto). Pergunta de área nunca fica no Haiku.
+_AREAS = {
+    "tributario": [r"\btribut", r"\bimposto", r"\breforma tributaria", r"\bfato gerador", r"\baliquota",
+                   r"\bbase de calculo", r"\bdecadencia", r"\bprescricao", r"\bsimples nacional", r"\blc ?123\b",
+                   r"\bexecucao fiscal", r"\breceita federal", r"\bcertidao negativa", r"\bmei\b",
+                   r"\b(icms|ipi|iss|issqn|pis|cofins|irpf|irpj|csll|ibs|cbs|ctn|itcmd|itcd|itbi|iptu|ipva|pgfn|darf)\b"],
+    "oab": [r"\boab\b", r"\badvoca", r"\badvogad", r"\bexame de ordem", r"\bcodigo de etica", r"\bhonorarios?\b",
+            r"\bsigilo profissional", r"\b8\.?906\b", r"\bestatuto da (advocacia|oab|ordem)"],
+    "contabil": [r"\bcontab", r"\bbalanco", r"\bbalancete", r"\bdre\b", r"\b(livro )?razao contabil|\blivro razao", r"\bconcilia", r"\bsped\b",
+                 r"\becd\b", r"\becf\b", r"\bescritura", r"\bdepreciac", r"\bnota fiscal", r"\bauditoria",
+                 r"\bpgdas", r"\bplano de contas"],
+}
+
 _FORCE = {"/haiku": Route.SIMPLE, "/sonnet": Route.MEDIUM, "/opus": Route.COMPLEX}
 _EFFORT = {Route.SIMPLE: "low", Route.MEDIUM: "medium", Route.COMPLEX: "high"}
 _DOWN = {Route.COMPLEX: Route.MEDIUM, Route.MEDIUM: Route.SIMPLE, Route.SIMPLE: Route.SIMPLE}
@@ -96,6 +109,13 @@ def escalate(route: Route) -> Route:
     return _UP[route]
 
 
+def area_for(t: str) -> str | None:
+    """Área especializada pelo assunto (texto já normalizado); empate fica com a ordem de _AREAS."""
+    contagem = {a: sum(bool(re.search(p, t)) for p in pats) for a, pats in _AREAS.items()}
+    melhor = max(contagem, key=contagem.get)
+    return melhor if contagem[melhor] else None
+
+
 def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Decision:
     t = _norm(text)
 
@@ -112,9 +132,14 @@ def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Deci
     score = complexity_score(t)
     route = forced or tier_for(score)
     reason = "forçado pelo usuário" if forced else f"complexidade {score}"
+    area = area_for(t)
 
     if budget is BudgetState.ECONOMY:
         route = route if forced else _DOWN[route]
+    if area and not forced and route is Route.SIMPLE:
+        route = Route.MEDIUM  # resposta jurídica/fiscal errada custa caro: no mínimo a camada intermediária
+        reason += f"; área {area}: no mínimo intermediário"
+    if budget is BudgetState.ECONOMY:
         return Decision(route=route, model=tiers.model(route), effort="low",
-                        reason=f"{reason}; modo economia (>=80% do teto)")
-    return Decision(route=route, model=tiers.model(route), effort=_EFFORT[route], reason=reason)
+                        reason=f"{reason}; modo economia (>=80% do teto)", area=area)
+    return Decision(route=route, model=tiers.model(route), effort=_EFFORT[route], reason=reason, area=area)

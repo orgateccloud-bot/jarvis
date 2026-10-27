@@ -12,6 +12,7 @@ dependencies = [
     "loguru>=0.7",
     "psutil>=6.0",
     "send2trash>=1.8",
+    "pypdf>=5",
     "winotify>=1.1; sys_platform == 'win32'",
 ]
 

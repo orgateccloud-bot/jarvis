@@ -27,6 +27,7 @@ class Decision(BaseModel):
     model: str | None = None
     effort: Literal["low", "medium", "high"] | None = None
     reason: str
+    area: str | None = None  # área especializada detectada (tributario, oab, contabil)
 
 
 class ChatRequest(BaseModel):

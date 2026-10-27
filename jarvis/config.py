@@ -56,6 +56,10 @@ class Settings(BaseModel):
         """Destino dos movimentos (reversíveis) do JARVIS: JARVIS_ARQUIVO ou D:\\JARVIS-Arquivo."""
         return Path(_env("JARVIS_ARQUIVO", "D:\\JARVIS-Arquivo"))
 
+    def knowledge_dir(self) -> Path:
+        """Base de conhecimento do especialista (leis e documentos): JARVIS_CONHECIMENTO ou D:\\JARVIS-Conhecimento."""
+        return Path(_env("JARVIS_CONHECIMENTO", "D:\\JARVIS-Conhecimento"))
+
     def move_roots(self) -> list[Path]:
         """De onde o JARVIS pode mover/mandar para a Lixeira: pastas pessoais, nunca o projeto nem o arquivo."""
         excluir = {ROOT.resolve(), self.archive_dir().resolve() if self.archive_dir().exists() else None}

@@ -22,6 +22,7 @@ from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
+from ..knowledge import KnowledgeBase
 from ..proactive.bus import EventBus, event_source
 from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
@@ -49,7 +50,7 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         tool_ctx=ToolContext(
             roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
             archive=settings.archive_dir(), move_roots=settings.move_roots(), journal=MoveJournal(settings.db_path),
-            memory=memory,
+            memory=memory, knowledge=KnowledgeBase(settings.knowledge_dir()),
         ),
         approvals=Approvals(timeout_s=approval_timeout_s),
     )

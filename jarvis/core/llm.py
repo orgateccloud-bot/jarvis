@@ -105,6 +105,18 @@ def telemetry_note() -> str:
     )
 
 
+_AREA_NOME = {"tributario": "Direito Tributário", "oab": "Estatuto e Ética da OAB", "contabil": "contabilidade e fiscal"}
+
+
+def area_note(area: str) -> str:
+    """Orientação do turno quando a pergunta é de uma área especializada (vai como mensagem de sistema)."""
+    return (
+        f"[área provável: {_AREA_NOME.get(area, area)}] Consulte buscar_conhecimento antes de responder e cite lei e "
+        "artigo do trecho encontrado; se a resposta não vier da base local, diga isso. Avise quando a norma puder ter "
+        "mudado (reforma tributária IBS/CBS, LC 214/2025)."
+    )
+
+
 # Modelos sem fallback de recusa no servidor: a sessão escala para a camada acima.
 NO_SERVER_FALLBACK = {"claude-haiku-5-5"}
 

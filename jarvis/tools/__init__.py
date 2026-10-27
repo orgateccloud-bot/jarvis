@@ -23,6 +23,7 @@ class ToolContext:
     move_roots: list[Path] = field(default_factory=list)                      # de onde se pode mover
     journal: Any = None                                                      # MoveJournal
     memory: Any = None                                                       # JarvisMemory
+    knowledge: Any = None                                                    # KnowledgeBase
 
 
 @dataclass(frozen=True)
@@ -63,12 +64,13 @@ class ToolError(Exception):
 def registry() -> dict[str, Tool]:
     from .disk import DISK_TOOLS
     from .files import FILE_TOOLS
+    from .knowledge import KNOWLEDGE_TOOLS
     from .memory import MEMORY_TOOLS
     from .settings import SETTINGS_TOOLS
     from .system import SYSTEM_TOOLS
     from .tasks import TASK_TOOLS
 
-    tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS]
+    tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS, *KNOWLEDGE_TOOLS]
     return {t.name: t for t in tools}
 
 

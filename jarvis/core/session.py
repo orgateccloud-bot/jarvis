@@ -22,6 +22,7 @@ from .llm import (
     RuleResponder,
     ToolInputUnparseable,
     TurnOutcome,
+    area_note,
     telemetry_note,
 )
 from .privacy import sanitizar
@@ -133,7 +134,8 @@ class Conversation:
                     "O Claude volta no próximo mês, ou antes se o teto (JARVIS_BUDGET_USD) for aumentado."
                 )
             else:
-                history.append({"role": "system", "content": telemetry_note()})
+                nota = telemetry_note() + (f"\n{area_note(decision.area)}" if decision.area else "")
+                history.append({"role": "system", "content": nota})
                 try:
                     loop = self._agent_loop(session_id, history, route, decision, texts, total)
                     async with aclosing(loop) as agen:
