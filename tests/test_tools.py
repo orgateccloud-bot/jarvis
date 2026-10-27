@@ -78,7 +78,8 @@ def test_web_so_nos_modelos_capazes():
     assert "web_search" not in names("claude-haiku-5-5")
     assert "web_search" in names("claude-sonnet-5-5")
     assert names("claude-haiku-5-5") == sorted(names("claude-haiku-5-5"))  # ordem fixa: cache estável
-    assert all(d.get("eager_input_streaming") for d in definitions_for("claude-haiku-5-5", reg))
+    # as nossas ferramentas fazem streaming da entrada; as definidas pela Anthropic (memória) não têm schema próprio
+    assert all(d.get("eager_input_streaming") for d in definitions_for("claude-haiku-5-5", reg) if "type" not in d)
 
 
 # ── loop agêntico ────────────────────────────────────────────

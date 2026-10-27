@@ -27,12 +27,15 @@ from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
 from ..tools import ToolContext, manifesto, registry
 from ..tools.journal import MoveJournal
+from ..tools.memory import JarvisMemory
 
 
 def build_conversation(settings: Settings, claude_client=None, approval_timeout_s: float = 60.0) -> Conversation:
     ledger = CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold)
     salt = settings.salt()
     reminders = ReminderStore(settings.db_path)
+    memory = JarvisMemory(settings.data_dir, salt=salt)
+    memory.semear(settings.user_name)
     tools = registry()
     return Conversation(
         claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools)),
@@ -46,6 +49,7 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         tool_ctx=ToolContext(
             roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
             archive=settings.archive_dir(), move_roots=settings.move_roots(), journal=MoveJournal(settings.db_path),
+            memory=memory,
         ),
         approvals=Approvals(timeout_s=approval_timeout_s),
     )
