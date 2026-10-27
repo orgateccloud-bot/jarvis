@@ -98,6 +98,7 @@ class Conversation:
         self.tool_ctx = tool_ctx
         self.approvals = approvals or Approvals()
         self._locks: dict[str, asyncio.Lock] = {}
+        self._avisos: dict[str, list[str]] = {}   # avisos do sistema ao modelo (ex.: arquivo salvo), por sessão
 
     async def turn(self, session_id: str, message: str) -> AsyncIterator[StreamEvent]:
         lock = self._locks.setdefault(session_id, asyncio.Lock())
@@ -135,6 +136,8 @@ class Conversation:
                 )
             else:
                 nota = telemetry_note() + (f"\n{area_note(decision.area)}" if decision.area else "")
+                if avisos := self._avisos.pop(session_id, None):
+                    nota += "\n[desde a última resposta] " + "; ".join(avisos) + "."
                 history.append({"role": "system", "content": nota})
                 try:
                     loop = self._agent_loop(session_id, history, route, decision, texts, total)
@@ -234,6 +237,9 @@ class Conversation:
             history.append({"role": "assistant", "content": outcome.content})
             if outcome.text:
                 texts.append(outcome.text)
+            async with aclosing(self._save_generated(session_id, outcome)) as agen:
+                async for ev in agen:
+                    yield ev
             for b in outcome.content:
                 if b.get("type") == "server_tool_use":
                     inp = b.get("input") or {}
@@ -271,7 +277,24 @@ class Conversation:
                     if block["id"] not in answered:
                         results.append({"type": "tool_result", "tool_use_id": block["id"], "is_error": True,
                                         "content": "Turno interrompido antes de executar a ferramenta."})
+                if avisos := self._avisos.pop(session_id, None):  # depois dos tool_result, como texto do sistema
+                    results.append({"type": "text", "text": "[sistema] " + "; ".join(avisos) + "."})
                 history.append({"role": "user", "content": results})
+
+    async def _save_generated(self, session_id: str, outcome: TurnOutcome):
+        """Baixa os arquivos que o sandbox deixou em $OUTPUT_DIR; o caminho vira chip no HUD e aviso ao modelo."""
+        from ..tools.generated import aviso, file_ids, salvar_gerados
+
+        ids = file_ids(outcome.content)
+        if not ids or self.tool_ctx is None:
+            return
+        for reg in await salvar_gerados(self.claude.client, ids, self.tool_ctx.archive):
+            texto = aviso(reg)
+            self._avisos.setdefault(session_id, []).append(texto)
+            ok = "caminho" in reg
+            yield StreamEvent(type="tool", data={"fase": "fim", "nome": "arquivo_gerado", "ok": ok,
+                                                 "resumo": f"salvo: {reg['caminho']}" if ok else texto})
+            self._seal_tool(session_id, "arquivo_gerado", texto)
 
     async def _run_tool(self, session_id: str, block: dict, results: list):
         name = block.get("name")

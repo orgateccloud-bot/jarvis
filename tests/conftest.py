@@ -65,6 +65,40 @@ class FakeStream:
         )
 
 
+class FakeFiles:
+    """Files API falsa: store[file_id] = (nome, bytes). Id ausente levanta OSError (falha de download)."""
+
+    def __init__(self):
+        self.store: dict[str, tuple[str, bytes]] = {}
+
+    async def retrieve_metadata(self, file_id):
+        if file_id not in self.store:
+            raise OSError(f"arquivo {file_id} indisponível")
+        nome, dados = self.store[file_id]
+        return SimpleNamespace(id=file_id, filename=nome, size_bytes=len(dados))
+
+    async def download(self, file_id):
+        async def read():
+            return self.store[file_id][1]
+
+        return SimpleNamespace(read=read)
+
+
+def sandbox_file_turn(file_ids, text="Pronto.", extra=None) -> dict:
+    """Resposta em que um comando bash do sandbox deixou arquivos em $OUTPUT_DIR."""
+    content = [
+        {"type": "server_tool_use", "id": "srvtoolu_1", "name": "bash_code_execution",
+         "input": {"command": 'cp /tmp/r.csv "$OUTPUT_DIR/"'}},
+        {"type": "bash_code_execution_tool_result", "tool_use_id": "srvtoolu_1",
+         "content": {"type": "bash_code_execution_result", "stdout": "r.csv\n", "stderr": "", "return_code": 0,
+                     "content": [{"type": "bash_code_execution_output", "file_id": f} for f in file_ids]}},
+        {"type": "text", "text": text},
+    ]
+    if extra:
+        content.append(extra)
+    return {"content": content, "stop_reason": "tool_use" if extra else "end_turn"}
+
+
 class FakeAnthropic:
     """reply_pieces/stop_reason: resposta simples. script: lista de turnos (text_turn/tool_turn) em sequência;
     o último se repete. stop_reason também aceita lista (um por chamada)."""
@@ -77,6 +111,7 @@ class FakeAnthropic:
         self.raise_exc = raise_exc
         self.calls: list[dict] = []
         self.beta = SimpleNamespace(messages=SimpleNamespace(stream=self._stream))
+        self.files = FakeFiles()
 
     def _stream(self, **kwargs):
         # cópia rasa da lista: o histórico real cresce depois da chamada

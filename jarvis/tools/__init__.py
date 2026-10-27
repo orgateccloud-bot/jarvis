@@ -98,4 +98,6 @@ def manifesto(tools: dict[str, Tool]) -> str:
         frase = t.description.split(". ")[0].rstrip(".")
         linhas.append(f"- {name}: {frase}" + (" (pede confirmação)" if t.needs_approval else ""))
     linhas.append("- web_search / web_fetch: buscar e ler páginas da web (só nos modelos Sonnet e Opus)")
+    linhas.append("- sandbox de código (junto com a web, Sonnet e Opus): gerar arquivos; os gravados em $OUTPUT_DIR "
+                  "são salvos no PC do usuário")
     return "\n".join(linhas)
