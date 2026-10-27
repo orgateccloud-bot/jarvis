@@ -42,6 +42,12 @@ function ApprovalCard({ m, onDecide }) {
           </span>
         </div>
       )}
+      {m.detalhes?.comando && (
+        <div className="approval-lote">
+          <span className="mono">{m.detalhes.comando}</span>
+          {m.detalhes.efeito && <span>{m.detalhes.efeito}</span>}
+        </div>
+      )}
       {pendente ? (
         <div className="approval-actions">
           <button className="btn-yes" onClick={() => onDecide(m.approvalId, true)}>Aprovar</button>

@@ -1,9 +1,12 @@
-"""Ferramentas do sistema: telemetria, processos, abrir apps (lista permitida) e encerrar processos."""
+"""Ferramentas do sistema: telemetria, hardware, processos, abrir apps (lista permitida), encerrar processos e
+comandos da lista fixa (sem shell)."""
 
 from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess  # nosec B404
 import time
 from datetime import datetime
 from typing import Literal
@@ -130,7 +133,102 @@ def encerrar_processo(p: EncerrarParams, ctx: ToolContext) -> str:
     return f"{encerrados} processo(s) {alvo} encerrado(s)."
 
 
+# ── hardware ─────────────────────────────────────────────────
+NVIDIA_SMI_ARGS = ("--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                   "--format=csv,noheader,nounits")
+
+
+def _numero(v: str):
+    return int(v) if v.isdigit() else v  # "[N/A]" fica como texto
+
+
+def _gpus():
+    exe = shutil.which("nvidia-smi")
+    if not exe:
+        return "nenhuma GPU NVIDIA encontrada (nvidia-smi ausente)"
+    try:
+        out = subprocess.run([exe, *NVIDIA_SMI_ARGS], capture_output=True, text=True, timeout=10,  # nosec B603
+                             check=True).stdout
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"nvidia-smi falhou: {type(e).__name__}"
+    gpus = []
+    for ln in out.strip().splitlines():
+        nome, uso, usada, total, temp = (c.strip() for c in ln.split(","))
+        gpus.append({"nome": nome, "uso_percent": _numero(uso), "vram_usada_mb": _numero(usada),
+                     "vram_total_mb": _numero(total), "temperatura_c": _numero(temp)})
+    return gpus
+
+
+def hardware_info(_: _Vazio, ctx: ToolContext) -> str:
+    freq = psutil.cpu_freq()
+    bat = psutil.sensors_battery() if hasattr(psutil, "sensors_battery") else None
+    return json.dumps({
+        "cpu": {
+            "nucleos_fisicos": psutil.cpu_count(logical=False), "nucleos_logicos": psutil.cpu_count(),
+            "frequencia_mhz": round(freq.current) if freq else None, "uso_percent": psutil.cpu_percent(interval=0.3),
+            "temperatura": "não disponível: o Windows não expõe a temperatura da CPU sem ferramenta do fabricante",
+        },
+        "gpu": _gpus(),
+        "bateria": {"percent": round(bat.percent), "na_tomada": bat.power_plugged} if bat else "sem bateria (desktop)",
+    }, ensure_ascii=False)
+
+
+# ── comandos da lista fixa ───────────────────────────────────
+# nome → (argumentos exatos, efeito explicado no card de aprovação). Nada fora daqui é executado.
+COMANDOS = {
+    "desligar_wsl": (("wsl", "--shutdown"),
+                     "desliga todas as distros do WSL e a VM (libera a RAM do Vmmem); o que roda no Linux é encerrado"),
+    "limpar_cache_dns": (("ipconfig", "/flushdns"), "limpa o cache de DNS do Windows"),
+}
+
+
+class ComandoParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    nome: Literal[tuple(COMANDOS)] = Field(description="Comando da lista permitida")  # type: ignore[valid-type]
+
+
+def _texto_saida(raw: bytes) -> str:
+    if b"\x00" in raw:  # wsl.exe escreve em UTF-16
+        return raw.decode("utf-16-le", errors="replace")
+    for enc in ("oem", "cp850"):  # ipconfig usa a página de código do console
+        try:
+            return raw.decode(enc)
+        except (LookupError, UnicodeDecodeError):
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def comando_seguro(p: ComandoParams, ctx: ToolContext) -> str:
+    argv = COMANDOS[p.nome][0]
+    exe = shutil.which(argv[0])
+    if not exe:
+        raise ToolError(f"{argv[0]} não encontrado neste PC")
+    try:
+        # argumentos só da lista fixa COMANDOS, sem shell; o código de saída é tratado abaixo
+        r = subprocess.run([exe, *argv[1:]], check=False, capture_output=True, timeout=120)  # nosec B603
+    except subprocess.TimeoutExpired as e:
+        raise ToolError(f"{' '.join(argv)} não terminou em 2 minutos") from e
+    saida = " ".join(_texto_saida(r.stdout + r.stderr).split())[:300]
+    if r.returncode != 0:
+        raise ToolError(f"{' '.join(argv)} falhou (código {r.returncode}): {saida}")
+    return f"{' '.join(argv)}: concluído. {saida}".strip()
+
+
 SYSTEM_TOOLS = [
+    Tool(
+        name="hardware_info",
+        description="Hardware do PC: GPU NVIDIA (uso, VRAM, temperatura), CPU (núcleos, frequência) e bateria. "
+                    "A temperatura da CPU não é legível no Windows.",
+        params=_Vazio, run=hardware_info, summary=lambda p: "consultou o hardware",
+    ),
+    Tool(
+        name="comando_seguro",
+        description="Executa um comando da lista fixa: desligar_wsl (wsl --shutdown, libera a RAM do WSL) ou "
+                    "limpar_cache_dns (ipconfig /flushdns). Chame direto; a confirmação é automática.",
+        params=ComandoParams, run=comando_seguro, needs_approval=True,
+        summary=lambda p: f"executar {' '.join(COMANDOS[p.nome][0])}",
+        details=lambda p, ctx: {"comando": " ".join(COMANDOS[p.nome][0]), "efeito": COMANDOS[p.nome][1]},
+    ),
     Tool(
         name="status_sistema",
         description="Telemetria atual do PC (CPU, RAM, disco C:, rede, tempo ligado). Use quando o usuário "
