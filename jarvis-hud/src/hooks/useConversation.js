@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createWebSpeechEngine } from '../lib/voice/webspeech.js'
 import { NO, STOP_WORDS, WAKE_WORD, YES, afterWakeWord, createSentenceSplitter } from '../lib/voice/sentences.js'
+import { corrigirTermos } from '../lib/voice/termos.js'
 
 const SILENCE_MS = 12000
 const WAKE_KEY = 'jarvis-ouvir-jarvis'
@@ -71,8 +72,9 @@ export function useConversation(deps) {
     })
   }, [say, armSilence])
 
-  const onResult = useCallback((text, isFinal) => {
-    if (!text) return
+  const onResult = useCallback((raw, isFinal) => {
+    if (!raw) return
+    const text = corrigirTermos(raw)  // "Graves, ..." → "Jarvis, ...", "c t n" → "CTN"
     const m = modeRef.current
     armSilence()
 
