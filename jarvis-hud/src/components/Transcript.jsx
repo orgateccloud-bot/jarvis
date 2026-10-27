@@ -44,8 +44,8 @@ function ApprovalCard({ m, onDecide }) {
       )}
       {m.detalhes?.comando && (
         <div className="approval-lote">
-          <span className="mono">{m.detalhes.comando}</span>
-          {m.detalhes.efeito && <span>{m.detalhes.efeito}</span>}
+          <code className="approval-cmd mono">{m.detalhes.comando}</code>
+          {m.detalhes.efeito && <p className="approval-efeito">{m.detalhes.efeito}</p>}
         </div>
       )}
       {pendente ? (

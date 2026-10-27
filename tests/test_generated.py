@@ -13,8 +13,13 @@ def test_file_ids_so_dos_arquivos_deixados_em_output_dir():
         {"type": "code_execution_tool_result",
          "content": {"type": "encrypted_code_execution_result", "content": [], "encrypted_stdout": "x"}},
         {"type": "bash_code_execution_tool_result", "content": {"type": "bash_code_execution_result", "content": []}},
+        # REPL Python da busca na web (formato real visto ao vivo em 26/10/2026)
+        {"type": "code_execution_tool_result", "tool_use_id": "srvtoolu_x",
+         "content": {"type": "code_execution_result", "return_code": 0, "stdout": "['dolar.csv']\n",
+                     "content": [{"type": "code_execution_output", "file_id": "file_repl"}]}},
+        {"type": "web_search_tool_result", "content": [{"type": "web_search_result", "file_id": "nao_e_arquivo"}]},
     ]
-    assert file_ids(content) == ["file_a", "file_b"]
+    assert file_ids(content) == ["file_a", "file_b", "file_repl"]
 
 
 def test_nome_seguro_tira_caminho_e_nomes_reservados():

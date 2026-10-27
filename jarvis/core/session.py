@@ -237,15 +237,15 @@ class Conversation:
             history.append({"role": "assistant", "content": outcome.content})
             if outcome.text:
                 texts.append(outcome.text)
-            async with aclosing(self._save_generated(session_id, outcome)) as agen:
-                async for ev in agen:
-                    yield ev
             for b in outcome.content:
                 if b.get("type") == "server_tool_use":
                     inp = b.get("input") or {}
                     alvo = inp.get("query") or inp.get("url") or ""
                     yield StreamEvent(type="tool", data={"fase": "fim", "nome": b.get("name"),
                                                          "resumo": f"{b.get('name')}: {alvo}"[:120], "ok": True})
+            async with aclosing(self._save_generated(session_id, outcome)) as agen:
+                async for ev in agen:
+                    yield ev
 
             uses = [b for b in outcome.content if b.get("type") == "tool_use"]
             if uses and outcome.stop_reason != "tool_use":

@@ -19,12 +19,17 @@ _PROIBIDOS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _RESERVADOS = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
 
 
+# Resultados do sandbox que trazem arquivos: o bash (bash_code_execution_output) e o REPL Python que a busca na web
+# usa por baixo (code_execution_output, inclusive com saída criptografada).
+_RESULTADOS = {"bash_code_execution_tool_result", "code_execution_tool_result"}
+
+
 def file_ids(content: list[dict]) -> list[str]:
-    """file_id de cada arquivo que um comando bash deixou em $OUTPUT_DIR nesta resposta."""
+    """file_id de cada arquivo que o sandbox deixou em $OUTPUT_DIR nesta resposta."""
     ids = []
     for b in content:
-        res = b.get("content") if b.get("type") == "bash_code_execution_tool_result" else None
-        if isinstance(res, dict) and res.get("type") == "bash_code_execution_result":
+        res = b.get("content") if b.get("type") in _RESULTADOS else None
+        if isinstance(res, dict):
             ids += [o["file_id"] for o in res.get("content") or [] if isinstance(o, dict) and o.get("file_id")]
     return ids
 
