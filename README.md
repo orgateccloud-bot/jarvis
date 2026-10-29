@@ -24,7 +24,7 @@ de uma base local.
 ## Arquitetura
 
 ```
-jarvis-hud/  (React, porta 5299)  ──SSE──►  jarvis/api  (FastAPI, 127.0.0.1:8000, token)
+jarvis-hud/dist  (React buildado)  ──SSE──►  jarvis/api  (FastAPI, 127.0.0.1:8000, token; serve o HUD)
                                               │
                          ┌────────────────────┼──────────────────────┐
                     core/router          core/session            proactive/
@@ -48,7 +48,7 @@ jarvis-hud/  (React, porta 5299)  ──SSE──►  jarvis/api  (FastAPI, 127.
 python -m venv .venv
 .venv\Scripts\pip install -e .[dev]
 copy .env.example .env
-cd jarvis-hud && npm ci && cd ..
+cd jarvis-hud && npm ci && npm run build && cd ..
 ```
 
 Edite o `.env` (ao menos a credencial da Anthropic). Opcional, para a base de leis:
@@ -63,8 +63,16 @@ Edite o `.env` (ao menos a credencial da Anthropic). Opcional, para a base de le
 start-jarvis.bat
 ```
 
-Sobe a API em `http://127.0.0.1:8000` e o HUD em `http://localhost:5299`. Em desenvolvimento o HUD lê o token
-sozinho de `dados\.token`.
+Sobe só a API, que também serve o HUD buildado: abra **`http://127.0.0.1:8000`**. Se ainda não houver build,
+o script roda `npm run build` antes. Não há servidor de desenvolvimento rodando, então o HUD não gasta RAM com o
+Vite. Depois de mudar o código do HUD, rode `npm run build` em `jarvis-hud` (a API pega o build novo sem
+reiniciar).
+
+O token da API é entregue na própria página, e só quando ela é aberta por um endereço local (`127.0.0.1`,
+`localhost`); o build em disco nunca contém o token.
+
+Para desenvolver o HUD com recarga automática, rode `npm run dev` em `jarvis-hud` (porta 5299, com a API rodando
+à parte); nesse modo o Vite lê o token de `dados\.token`.
 
 | Endpoint | Função |
 |---|---|
@@ -107,7 +115,7 @@ jarvis/            núcleo Python (api, core, tools, proactive, knowledge)
 jarvis-hud/        interface React + WebGL2 e voz
 tests/             testes do núcleo (Claude simulado)
 _legado/           versões 1 a 3, arquivadas com plano de volta (LEIA-ME.md)
-start-jarvis.bat   sobe API e HUD
+start-jarvis.bat   sobe a API, que serve o HUD buildado
 ```
 
 Dados locais (`dados/`: conversas, memória, ledger, auditoria, token) e o `.env` nunca vão para o git.

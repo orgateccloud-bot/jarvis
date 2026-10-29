@@ -5,16 +5,24 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hmac
+import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import psutil
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from .. import __version__
-from ..config import Settings, get_settings
+from ..config import ROOT, Settings, get_settings
+
+HUD_DIST = ROOT / "jarvis-hud" / "dist"
+# Só quem abre o HUD por um nome local recebe o token: um site que aponte o próprio domínio para 127.0.0.1
+# (DNS rebinding) chega com outro Host e recebe a página sem ele.
+HOSTS_LOCAIS = {"127.0.0.1", "localhost", "[::1]"}
 from ..core.approvals import Approvals
 from ..core.audit import AuditChain
 from ..core.contracts import ApprovalDecision, ChatRequest
@@ -57,7 +65,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
 
 
 def create_app(settings: Settings | None = None, conversation: Conversation | None = None,
-               monitor: Monitor | None = None, proactive: bool | None = None) -> FastAPI:
+               monitor: Monitor | None = None, proactive: bool | None = None,
+               hud_dir: Path = HUD_DIST) -> FastAPI:
     settings = settings or get_settings()
     token = settings.api_token()
     conv = conversation or build_conversation(settings)
@@ -143,5 +152,22 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     @app.get("/audit/verify", dependencies=[Depends(require_token)])
     async def audit_verify():
         return {"integra": conv.audit.verify()}
+
+    # HUD buildado (npm run build) servido pela própria API: sem servidor de desenvolvimento.
+    # Montado por último, então as rotas acima têm prioridade.
+    index = hud_dir / "index.html"
+    if index.exists():
+        @app.get("/", include_in_schema=False)
+        def hud(request: Request) -> HTMLResponse:
+            # lido a cada acesso: um build novo vale sem reiniciar a API
+            page = index.read_text(encoding="utf-8")
+            host = (request.headers.get("host") or "").rsplit(":", 1)[0].lower()
+            if host in HOSTS_LOCAIS:  # o build em disco nunca tem o token; ele entra só na resposta
+                page = page.replace("</head>", f"<script>window.__JARVIS_TOKEN__={json.dumps(token)}</script></head>", 1)
+            return HTMLResponse(page, headers={"Cache-Control": "no-store"})
+
+        app.mount("/", StaticFiles(directory=hud_dir), name="hud")
+    else:
+        logger.warning(f"HUD não buildado ({index} ausente): rode `npm run build` em jarvis-hud")
 
     return app

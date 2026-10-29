@@ -84,7 +84,7 @@ export default function App() {
         {j.online && !j.authOk && (
           <div className="offline glass" role="alert">
             <strong>Token recusado.</strong> O HUD não tem o token da API.
-            Reinicie o HUD pelo <code>start-jarvis.bat</code> — ele lê <code>dados/.token</code> sozinho.
+            Abra o HUD pelo endereço da API (<code>http://127.0.0.1:8000</code>), que entrega o token sozinho.
           </div>
         )}
         <div className="stage">

@@ -5,14 +5,16 @@ com o modelo em uso) e voz pelo navegador (Web Speech: mãos livres, palavra de 
 
 ```bash
 npm ci
-npm run dev      # http://localhost:5299 (a 5173 fica livre para outros projetos)
+npm run build    # gera dist/, que a API serve em http://127.0.0.1:8000
+npm run dev      # desenvolvimento com recarga: http://localhost:5299
 npm run lint
 npm test         # divisor de frases da fala e correção de termos da voz
 npm run build
 ```
 
-Em desenvolvimento o Vite injeta o token da API lido de `../dados/.token`. A API (`python -m jarvis`) precisa estar
-rodando em `127.0.0.1:8000`.
+No uso normal o HUD é buildado (`npm run build`) e servido pela própria API em `http://127.0.0.1:8000`, que
+entrega o token na página. Com `npm run dev`, o Vite injeta o token lido de `../dados/.token`, e a API
+(`python -m jarvis`) precisa estar rodando em `127.0.0.1:8000`.
 
 - `src/cosmos/`: cena WebGL2 (`cosmic.html` é a bancada visual; em dev, `window.__cosmosStill({t})` desenha um
   quadro estático).

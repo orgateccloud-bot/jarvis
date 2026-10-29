@@ -1,14 +1,16 @@
 // Acesso à API local do JARVIS (127.0.0.1, token obrigatório).
-export const API = import.meta.env.VITE_JARVIS_API || 'http://127.0.0.1:8000'
+// Buildado, o HUD é servido pela própria API (mesma origem); no `npm run dev` (porta 5299) a API fica na 8000.
+export const API = import.meta.env.VITE_JARVIS_API ?? (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
 
 const TOKEN_KEY = 'jarvis-token'
 
 let asked = false
 
-// Token da API local. Em dev o Vite injeta VITE_JARVIS_TOKEN (lido de dados/.token);
-// senão usa o salvo no navegador e, como último recurso, pede UMA vez por carregamento.
+// Token da API local. Servido pela API, ele vem injetado na página (window.__JARVIS_TOKEN__); em dev o Vite
+// injeta VITE_JARVIS_TOKEN (lido de dados/.token); senão usa o salvo no navegador e, como último recurso,
+// pede UMA vez por carregamento.
 export function getToken() {
-  let token = import.meta.env.VITE_JARVIS_TOKEN || ''
+  let token = window.__JARVIS_TOKEN__ || import.meta.env.VITE_JARVIS_TOKEN || ''
   try { token = token || localStorage.getItem(TOKEN_KEY) || '' } catch { /* armazenamento indisponível */ }
   if (!token && !asked) {
     asked = true
