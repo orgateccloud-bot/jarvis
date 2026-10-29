@@ -128,9 +128,27 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 | `JARVIS_BUDGET_USD` | `15` | Teto mensal com o Claude |
 | `JARVIS_MODELO_SIMPLES/MEDIO/COMPLEXO` | Haiku/Sonnet/Opus 5.5 | Modelos de cada camada |
 | `JARVIS_SESSAO_OCIOSA_MIN` | `30` | Minutos parados até começar uma conversa nova |
-| `JARVIS_PASTAS` | pastas pessoais | O que as ferramentas de arquivo podem ler |
+| `JARVIS_PASTAS` | pastas pessoais | O que as ferramentas de arquivo podem ler e de onde podem mover (**substitui** o padrão; veja abaixo) |
 | `JARVIS_ARQUIVO` | `D:\JARVIS-Arquivo` | Destino reversível dos movimentos e dos arquivos gerados |
 | `JARVIS_CONHECIMENTO` | `D:\JARVIS-Conhecimento` | Base de leis e documentos (uma subpasta por área) |
+
+> **Atenção: `JARVIS_PASTAS` substitui a lista padrão, não soma a ela.**
+>
+> - **Vazia:** o JARVIS usa `Documents`, `OneDrive\Documentos`, `Downloads`, `Desktop`, `OneDrive\Desktop`,
+>   `OneDrive\Área de Trabalho` (as que existirem na sua pasta de usuário) e a pasta do projeto.
+> - **Definida:** vale **só** o que estiver listado. Toda pasta padrão que você não repetir, inclusive o Desktop e
+>   a pasta do projeto, deixa de ser lida e de poder ter arquivos movidos.
+> - **Pasta inexistente:** é ignorada sem aviso.
+> - **`JARVIS_ARQUIVO`:** continua sendo somado automaticamente para leitura, mas nunca como origem de movimentos.
+>
+> Para manter Documentos e Downloads e trocar o Desktop por `D:\Projetos`:
+>
+> ```ini
+> JARVIS_PASTAS=C:\Users\Veloso\Documents;C:\Users\Veloso\Downloads;D:\Projetos
+> ```
+>
+> Caminhos relativos pedidos ao JARVIS (ex.: "Downloads") partem da sua pasta de usuário. Ainda assim, só são
+> aceitos se caírem dentro de uma das pastas permitidas.
 
 ## Testes e qualidade
 
