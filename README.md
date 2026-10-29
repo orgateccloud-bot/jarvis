@@ -74,6 +74,42 @@ O token da API é entregue na própria página, e só quando ela é aberta por u
 Para desenvolver o HUD com recarga automática, rode `npm run dev` em `jarvis-hud` (porta 5299, com a API rodando
 à parte); nesse modo o Vite lê o token de `dados\.token`.
 
+### Iniciar no logon (opcional)
+
+O script [`scripts/registrar-jarvis-logon.ps1`](scripts/registrar-jarvis-logon.ps1) cria no Agendador do
+Windows a tarefa **JARVIS**:
+- roda `.venv\Scripts\pythonw.exe -m jarvis` sem janela, 30 s depois do seu logon;
+- usa o seu usuário, sem administrador, sem limite de tempo, e reinicia até 3 vezes se cair;
+- grava a saída em `logs\api-console.log`.
+
+O HUD fica em `http://127.0.0.1:8000`. Rode no PowerShell, na pasta do projeto:
+
+```powershell
+# 1. ver o que será registrado (não altera nada)
+powershell -ExecutionPolicy Bypass -File .\scripts\registrar-jarvis-logon.ps1 -DryRun
+# 2. registrar
+powershell -ExecutionPolicy Bypass -File .\scripts\registrar-jarvis-logon.ps1
+# iniciar agora, sem sair da conta
+Start-ScheduledTask -TaskName JARVIS
+```
+
+Equivalente com `schtasks`, sem o atraso de 30 s nem o reinício automático. Pode exigir um terminal de
+administrador:
+
+```bat
+schtasks /Create /TN "JARVIS" /SC ONLOGON /RL LIMITED /F /TR "\"D:\01_Projetos_Ativos\jarvis\.venv\Scripts\pythonw.exe\" -m jarvis"
+```
+
+**Para remover:** só a tarefa sai do Agendador; nenhum arquivo do JARVIS é apagado.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\registrar-jarvis-logon.ps1 -Remover
+# ou: schtasks /Delete /TN "JARVIS" /F
+```
+
+Com a tarefa ativa, não rode o `start-jarvis.bat` ao mesmo tempo, porque a porta 8000 já estará em uso. Para
+parar a instância em execução: `Stop-ScheduledTask -TaskName JARVIS`.
+
 | Endpoint | Função |
 |---|---|
 | `GET /health` | Estado e modelos |
@@ -116,6 +152,7 @@ jarvis-hud/        interface React + WebGL2 e voz
 tests/             testes do núcleo (Claude simulado)
 _legado/           versões 1 a 3, arquivadas com plano de volta (LEIA-ME.md)
 start-jarvis.bat   sobe a API, que serve o HUD buildado
+scripts/           registrar-jarvis-logon.ps1 (iniciar no logon pelo Agendador)
 ```
 
 Dados locais (`dados/`: conversas, memória, ledger, auditoria, token) e o `.env` nunca vão para o git.

@@ -1,6 +1,7 @@
 # Texto com LF no repositório; o checkout no Windows converte conforme core.autocrlf
 * text=auto
 *.bat text eol=crlf
+*.ps1 text eol=crlf
 *.png binary
 *.jpg binary
 *.jpeg binary
