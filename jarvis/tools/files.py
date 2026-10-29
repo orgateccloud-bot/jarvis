@@ -16,21 +16,39 @@ MAX_ITENS = 200
 MAX_ACHADOS = 100
 
 
+def _permitido(c: Path, ctx: ToolContext) -> Path | None:
+    """Caminho resolvido (inclusive links simbólicos) se existir e ficar dentro de uma pasta permitida."""
+    alvo = c.resolve()
+    if alvo.exists() and any(alvo.is_relative_to(root.resolve()) for root in ctx.roots):
+        return alvo
+    return None
+
+
 def confinar(caminho: str, ctx: ToolContext) -> Path:
-    """Resolve o caminho (inclusive links simbólicos) e recusa tudo que sair das pastas permitidas."""
+    """Resolve o caminho e recusa tudo que sair das pastas permitidas.
+
+    Relativo: tenta primeiro a pasta do usuário ("Downloads" → C:\\Users\\<nome>\\Downloads); senão, cada raiz
+    permitida. Se o nome existir em mais de uma raiz, exige caminho absoluto em vez de escolher uma."""
     bruto = Path(caminho.strip().strip('"')).expanduser()
-    candidatos = [bruto] if bruto.is_absolute() else [root / bruto for root in ctx.roots]
-    for c in candidatos:
-        alvo = c.resolve()
-        if any(alvo.is_relative_to(root.resolve()) for root in ctx.roots) and alvo.exists():
-            return alvo
+    if bruto.is_absolute():
+        achados = [a for a in [_permitido(bruto, ctx)] if a]
+    elif alvo := _permitido(ctx.home / bruto, ctx):
+        return alvo
+    else:
+        achados = list(dict.fromkeys(a for a in (_permitido(root / bruto, ctx) for root in ctx.roots) if a))
+    if len(achados) == 1:
+        return achados[0]
+    if len(achados) > 1:
+        opcoes = "; ".join(str(a) for a in achados)
+        raise ToolError(f"'{caminho}' é ambíguo: existe em mais de uma pasta permitida ({opcoes}). "
+                        "Informe o caminho absoluto.")
     permitidas = ", ".join(str(r) for r in ctx.roots)
     raise ToolError(f"caminho fora das pastas permitidas ou inexistente: {caminho}. Permitidas: {permitidas}")
 
 
 class CaminhoParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    caminho: str = Field(min_length=1, max_length=400, description="Caminho absoluto ou relativo a uma pasta permitida")
+    caminho: str = Field(min_length=1, max_length=400, description="Caminho absoluto, ou relativo à pasta do usuário (ex.: Downloads)")
 
 
 def listar_pasta(p: CaminhoParams, ctx: ToolContext) -> str:

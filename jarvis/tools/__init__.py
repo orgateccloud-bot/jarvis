@@ -24,6 +24,7 @@ class ToolContext:
     journal: Any = None                                                      # MoveJournal
     memory: Any = None                                                       # JarvisMemory
     knowledge: Any = None                                                    # KnowledgeBase
+    home: Path = field(default_factory=Path.home)  # ponto de partida dos caminhos relativos (não é raiz)
 
 
 @dataclass(frozen=True)
