@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { FRAG, VERT } from './shaders.js'
+import { fpsAlvo, proximoQuadro } from './pacing.js'
 import { TIERS, hexToRgb } from '../lib/tiers.js'
 
 function shader(gl, type, src) {
@@ -116,6 +117,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
     }
     let raf = 0
     let last = performance.now()
+    let marca = last // cadência do limite de quadros (pacing.js)
     let acc = 0
     let frames = 0
 
@@ -144,10 +146,18 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       if (!ready) {
         if (failed) return
         if (!parallel || gl.getProgramParameter(prog, parallel.COMPLETION_STATUS_KHR)) finishLink()
-        last = now
+        last = marca = now
         raf = requestAnimationFrame(frame)
         return
       }
+      // limite de quadros: 30 fps em repouso e escutando, 60 fps pensando ou falando
+      const fps = fpsAlvo(target.current.state)
+      const prox = proximoQuadro(now, marca, fps)
+      if (prox === null) {
+        raf = requestAnimationFrame(frame)
+        return
+      }
+      marca = prox
       const realDt = (now - last) / 1000
       const dt = Math.min(0.05, realDt) * (reduce ? 0.3 : 1)
       last = now
@@ -157,9 +167,10 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       frames += 1
       if (acc > 1) {
         const ms = (acc / frames) * 1000
-        // limiares folgados: navegadores que limitam a 30 fps (aba em 2º plano, economia) não derrubam a resolução
+        // limiares folgados: navegadores que limitam a 30 fps (aba em 2º plano, economia) não derrubam a resolução;
+        // a subida compara com o alvo do limite, senão a 30 fps a resolução nunca voltaria a 1
         if (ms > 45 && scale > 0.5) scale = Math.max(0.5, scale - 0.1)
-        else if (ms < 20 && scale < 1) scale = Math.min(1, scale + 0.05)
+        else if (ms < (1000 / fps) * 1.2 && scale < 1) scale = Math.min(1, scale + 0.05)
         resize()
         if (statsRef) statsRef.current = { fps: Math.round(frames / acc), scale }
         acc = 0
