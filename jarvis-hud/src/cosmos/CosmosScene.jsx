@@ -55,27 +55,45 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       canvas.classList.add('cosmos-fallback')
       return
     }
-    canvas.classList.add('cosmos-fallback') // gradiente enquanto o shader compila
-    const vs = shader(gl, gl.VERTEX_SHADER, VERT)
-    const fs = shader(gl, gl.FRAGMENT_SHADER, FRAG)
-    const prog = gl.createProgram()
-    gl.attachShader(prog, vs)
-    gl.attachShader(prog, fs)
-    gl.bindAttribLocation(prog, 0, 'p') // posição fixa: consultar o atributo antes do link pronto bloquearia
-    // compilação paralela: sem a extensão, a primeira leitura de status bloquearia a página por segundos
-    const parallel = gl.getExtension('KHR_parallel_shader_compile')
-    gl.linkProgram(prog)
-    const buf = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
-    gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
-    const tex = noiseTexture(gl)
     const names = ['uRes', 'uTime', 'uExpand', 'uSpin', 'uListen', 'uThink', 'uSpeak', 'uEnergy',
       'uAlert', 'uBoot', 'uTemp', 'uGiant', 'uTint', 'uSun', 'uSunR']
+    // recursos de GPU: criados na montagem e recriados do zero no webglcontextrestored
+    let vs, fs, prog, buf, tex, parallel
     let U = null
     let ready = false
     let failed = false
+    let lost = false
+    const createResources = () => {
+      canvas.classList.add('cosmos-fallback') // gradiente enquanto o shader compila
+      vs = shader(gl, gl.VERTEX_SHADER, VERT)
+      fs = shader(gl, gl.FRAGMENT_SHADER, FRAG)
+      prog = gl.createProgram()
+      gl.attachShader(prog, vs)
+      gl.attachShader(prog, fs)
+      gl.bindAttribLocation(prog, 0, 'p') // posição fixa: consultar o atributo antes do link pronto bloquearia
+      // compilação paralela: sem a extensão, a primeira leitura de status bloquearia a página por segundos
+      // (extensões também se perdem com o contexto: pedir de novo a cada criação)
+      parallel = gl.getExtension('KHR_parallel_shader_compile')
+      gl.linkProgram(prog)
+      buf = gl.createBuffer()
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf)
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
+      gl.enableVertexAttribArray(0)
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
+      tex = noiseTexture(gl)
+      gl.viewport(0, 0, canvas.width, canvas.height)
+      U = null
+      ready = false
+      failed = false
+    }
+    const deleteResources = () => {
+      gl.deleteBuffer(buf)
+      gl.deleteTexture(tex)
+      gl.deleteProgram(prog)
+      gl.deleteShader(vs)
+      gl.deleteShader(fs)
+    }
+    createResources()
     const finishLink = () => {
       if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
         console.error('CosmosScene: shader', gl.getShaderInfoLog(fs) || gl.getProgramInfoLog(prog))
@@ -143,12 +161,15 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
     }
 
     const frame = now => {
-      if (document.hidden) { // segurança: um callback já agendado não reagenda com a aba oculta
+      if (document.hidden || lost) { // segurança: um callback já agendado não reagenda oculto ou sem contexto
         raf = 0
         return
       }
       if (!ready) {
-        if (failed) return
+        if (failed) {
+          raf = 0
+          return
+        }
         if (!parallel || gl.getProgramParameter(prog, parallel.COMPLETION_STATUS_KHR)) finishLink()
         last = marca = now
         raf = requestAnimationFrame(frame)
@@ -207,7 +228,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       raf = requestAnimationFrame(frame)
     }
     const start = () => {
-      if (raf || document.hidden) return
+      if (raf || document.hidden || lost) return
       // retoma do instante atual: sem salto de tempo e sem rajada de quadros acumulados
       last = marca = performance.now()
       acc = 0
@@ -221,10 +242,27 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       raf = 0
     }
     document.addEventListener('visibilitychange', onVisibility)
+    // perda de contexto (driver reiniciado, GPU disputada): nada é desenhado até o navegador devolver o contexto;
+    // na volta, shaders, programa, buffer, textura e uniforms são recriados e a animação segue do estado atual
+    const onLost = e => {
+      e.preventDefault() // sem isso o navegador não restaura o contexto
+      lost = true
+      cancelAnimationFrame(raf)
+      raf = 0
+      canvas.classList.add('cosmos-fallback')
+    }
+    const onRestored = () => {
+      lost = false
+      createResources()
+      start()
+    }
+    canvas.addEventListener('webglcontextlost', onLost)
+    canvas.addEventListener('webglcontextrestored', onRestored)
     start()
 
     if (statsRef) {
       window.__cosmosStill = ({ t = 8, energy = 0.8 } = {}) => {
+        if (lost) return false
         if (!ready) finishLink()
         if (!ready) return false
         const tg = target.current
@@ -245,11 +283,9 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       document.removeEventListener('visibilitychange', onVisibility)
       if (statsRef) delete window.__cosmosStill
       window.removeEventListener('resize', resize)
-      gl.deleteBuffer(buf)
-      gl.deleteTexture(tex)
-      gl.deleteProgram(prog)
-      gl.deleteShader(vs)
-      gl.deleteShader(fs)
+      canvas.removeEventListener('webglcontextlost', onLost)
+      canvas.removeEventListener('webglcontextrestored', onRestored)
+      deleteResources()
     }
   }, [energyRef, statsRef])
 
