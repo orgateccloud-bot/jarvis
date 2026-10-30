@@ -51,3 +51,10 @@ test('1920x945: os seis painéis aparecem', () => {
   const a = arranjoRepouso({ W: 1920, H: 945, sol: { ...SOL, r: 0.2 } })
   assert.deepEqual(Object.keys(a).filter(k => a[k]).sort(), ['cpu', 'custo', 'deco', 'modelos', 'neural', 'turno'])
 })
+
+test('sol grande: as chamas continuam calculadas na mesma área absoluta do sol de 0,105', async () => {
+  const { CHAMAS_AREA, limiteChamas } = await import('../src/cosmos/sol.js')
+  assert.equal(limiteChamas(0.105), 4.5)
+  assert.equal(limiteChamas(0.085), 4.5) // sol menor não passa de 4,5 raios
+  assert.ok(Math.abs(limiteChamas(0.2) * 0.2 - CHAMAS_AREA) < 1e-12)
+})

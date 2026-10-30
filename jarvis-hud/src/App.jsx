@@ -11,7 +11,7 @@ import { useViewport } from './hooks/useViewport.js'
 import { ROUTE_TO_TIER, TIERS } from './lib/tiers.js'
 import HoloLayer from './holo/HoloLayer.jsx'
 import { holoAtivo } from './holo/arranjo.js'
-import { SOL } from './cosmos/sol.js'
+import { SOL, SOL_HOLO, solPx } from './cosmos/sol.js'
 
 const REST_AFTER_MS = 30000 // depois de 30 s em espera, o sol volta a ser o Sol (G2V)
 
@@ -68,15 +68,18 @@ export default function App() {
   // telas largas: os cards viram painéis de vidro em volta do sol; nas demais fica o layout plano
   const view = useViewport()
   const holo = holoAtivo(view.W, view.H)
+  // no vidro o sol fica grande, como no vídeo; a área clicável e a legenda seguem o disco
+  const sol = holo ? SOL_HOLO : SOL
+  const solPos = holo ? solPx(sol, view.W, view.H) : undefined
   // respostas concluídas (inclui avisos do núcleo): cada uma faz um brilho varrer o vidro
   const respostas = j.messages.reduce((n, m) => n + (m.role === 'jarvis' && !m.streaming ? 1 : 0), 0)
 
   return (
     <>
-      <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef}
+      <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef} sol={sol}
         statsRef={import.meta.env.DEV ? devStats : undefined} />
-      <SunButton mode={conv.mode} speaking={conv.speaking} onClick={conv.toggle} disabled={!conv.supported.listen} />
-      <Caption mode={conv.mode} phase={phase} caption={conv.caption} />
+      <SunButton mode={conv.mode} speaking={conv.speaking} onClick={conv.toggle} disabled={!conv.supported.listen} pos={solPos} />
+      <Caption mode={conv.mode} phase={phase} caption={conv.caption} pos={solPos} />
       <BootIgnition />
       <div className={`app ${holo ? 'holo-on' : ''}`} style={{ '--tier': TIERS[uiTier].ui }}>
         <TopBar
@@ -121,7 +124,7 @@ export default function App() {
         </div>
       </div>
       {holo && (
-        <HoloLayer view={view} sol={SOL} vitals={j.vitals} history={j.history} costs={j.costs}
+        <HoloLayer view={view} sol={sol} vitals={j.vitals} history={j.history} costs={j.costs}
           neural={j.neural} mode={mode} respostas={respostas} />
       )}
       <Toasts toasts={j.toasts} onDismiss={j.dismissToast} />
