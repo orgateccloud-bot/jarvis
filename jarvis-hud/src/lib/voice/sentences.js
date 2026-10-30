@@ -1,7 +1,19 @@
 // Corta o texto que chega em streaming em frases faláveis, para a voz começar antes da resposta terminar.
-// Pula blocos de código e tabelas; remove marcações de markdown; junta frases muito curtas.
+// Pula blocos de código e tabelas; remove marcações de markdown; junta frases curtas e quebra as longas.
+// Corta só em . ! ? … e quebra de linha: ":" e ";" no meio da frase picotavam a voz em utterances curtos.
 
-const MIN_CHARS = 28
+const MIN_CHARS = 80
+const MAX_CHARS = 220
+
+// ponto de corte de um trecho longo: a vírgula mais próxima do teto; sem vírgula, o último espaço
+function cutPoint(text) {
+  const comma = text.lastIndexOf(', ', MAX_CHARS)
+  if (comma >= MIN_CHARS / 2) return comma + 1
+  const after = text.indexOf(', ', MAX_CHARS)
+  if (after >= 0 && after < MAX_CHARS * 1.5) return after + 1
+  const space = text.lastIndexOf(' ', MAX_CHARS)
+  return space > 0 ? space : MAX_CHARS
+}
 
 function clean(text) {
   return text
@@ -22,6 +34,11 @@ export function createSentenceSplitter(emit) {
     if (!c) return
     // ao juntar trechos curtos, garante uma pausa entre eles (itens de lista não têm ponto final)
     pending = pending ? `${pending}${/[.!?…;:,]$/.test(pending) ? '' : '.'} ${c}` : c
+    while (pending.length > MAX_CHARS) {
+      const i = cutPoint(pending)
+      emit(pending.slice(0, i).trim())
+      pending = pending.slice(i).trim()
+    }
     if (force || pending.length >= MIN_CHARS) {
       emit(pending)
       pending = ''
@@ -45,9 +62,15 @@ export function createSentenceSplitter(emit) {
       if (inCode || /^\s*(```|\|)/.test(buf)) return
       // frases completas na linha corrente: pontuação seguida de espaço e mais texto
       let m
-      while ((m = /^([\s\S]*?[.!?…;:])\s+(?=\S)/.exec(buf))) {
+      while ((m = /^([\s\S]*?[.!?…])\s+(?=\S)/.exec(buf))) {
         out(m[1])
         buf = buf.slice(m[0].length)
+      }
+      // frase longa sem ponto ainda chegando: fala até a vírgula para a voz não esperar o fim
+      while (buf.length > MAX_CHARS * 1.5) {
+        const i = cutPoint(buf)
+        out(buf.slice(0, i))
+        buf = buf.slice(i).replace(/^\s+/, '')
       }
     },
     flush() {
