@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import CosmosScene from './cosmos/CosmosScene.jsx'
+import HoloSpike from './spike/HoloSpike.jsx'
+import { SPIKE } from './spike/params.js'
+import { alvoSol } from './spike/arranjo.js'
+import './spike/spike.css'
 import TopBar from './components/TopBar.jsx'
 import { CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
 import Transcript from './components/Transcript.jsx'
@@ -22,6 +26,29 @@ export default function App() {
   const [panelsOpen, setPanelsOpen] = useState(false)
   const [resting, setResting] = useState(true)
   const devStats = useRef(null) // só em dev: expõe window.__cosmosStill para capturas determinísticas
+
+  // SPIKE: modo palco (tecla P ou window.__spikePalco) e tamanho da tela para posicionar sol e painel
+  const [palco, setPalco] = useState(false)
+  const [view, setView] = useState(() => ({ W: window.innerWidth, H: window.innerHeight }))
+  useEffect(() => {
+    document.documentElement.classList.toggle('holo-on', SPIKE.holo)
+    const onResize = () => setView({ W: window.innerWidth, H: window.innerHeight })
+    const onKey = e => {
+      if (SPIKE.holo && (e.key === 'p' || e.key === 'P') && !e.target.closest?.('input, textarea')) setPalco(v => !v)
+    }
+    window.__spikePalco = v => setPalco(Boolean(v))
+    window.addEventListener('resize', onResize)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      delete window.__spikePalco
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [])
+  const sun = useMemo(
+    () => alvoSol({ palco: SPIKE.holo && palco, W: view.W, H: view.H, r: SPIKE.sunR, y: SPIKE.sunY }),
+    [palco, view],
+  )
 
   const send = useCallback((text, opts = {}) => {
     const msg = mode === 'auto' ? text : `/${mode} ${text}`
@@ -63,12 +90,12 @@ export default function App() {
 
   return (
     <>
-      <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef}
+      <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef} sun={sun}
         statsRef={import.meta.env.DEV ? devStats : undefined} />
       <SunButton mode={conv.mode} speaking={conv.speaking} onClick={conv.toggle} disabled={!conv.supported.listen} />
       <Caption mode={conv.mode} phase={phase} caption={conv.caption} />
       <BootIgnition />
-      <div className="app" style={{ '--tier': TIERS[uiTier].ui }}>
+      <div className={`app ${SPIKE.holo ? 'holo' : ''}`} style={{ '--tier': TIERS[uiTier].ui }}>
         <TopBar
           phase={phase} convMode={conv.mode} tier={uiTier} online={j.online}
           muted={conv.muted} onToggleMute={conv.toggleMute}
@@ -108,6 +135,7 @@ export default function App() {
           </main>
         </div>
       </div>
+      {SPIKE.holo && <HoloSpike vitals={j.vitals} history={j.history} palco={palco} view={view} />}
       <Toasts toasts={j.toasts} onDismiss={j.dismissToast} />
     </>
   )

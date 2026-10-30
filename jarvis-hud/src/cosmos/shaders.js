@@ -18,6 +18,7 @@ uniform float uGiant;    // 0..1 — estrela gigante (Opus)
 uniform vec3  uTint;     // tonalidade da galáxia
 uniform vec2  uSun;      // centro do sol (uv)
 uniform float uSunR;     // raio do sol (uv)
+uniform float uFlameLim; // SPIKE: limite da região das chamas, em raios (4,5 = como no main)
 // limites de laço vindos de uniforms: impedem o desenrolamento e deixam a compilação (ANGLE/D3D) muito mais rápida
 uniform int   uOct;      // oitavas do fbm (5)
 uniform int   uLayers;   // camadas do campo profundo (4)
@@ -159,7 +160,7 @@ vec3 sunColor(vec2 g, out float occl){
   }
 
   float h = sr - 1.0;
-  if (sr < 4.5){
+  if (sr < uFlameLim){
     float a = atan(sv.y, sv.x);
     vec2 dir = sv / max(sr, 1e-4);
     // chamas: fluxo radial com duas fases cruzadas (sem distorção acumulada)
@@ -180,7 +181,7 @@ vec3 sunColor(vec2 g, out float occl){
     vec3 ember = flame * vec3(1.0, 0.62, 0.38);                                       // base mais rubra
     vec3 outer = mix(ember, flame, flames) * (flames * 3.4 + tongues * 2.2 + prom * 1.8)
                + mix(flame, star, 0.5) * (corona * 0.5 + rays);
-    col += outer * step(0.0, h) * smoothstep(4.5, 2.6, sr);   // some antes do limite do cálculo
+    col += outer * step(0.0, h) * smoothstep(uFlameLim, uFlameLim * 0.5777778, sr);   // some antes do limite do cálculo (4,5 → 2,6)
     // ejeção de massa coronal (alerta)
     float cz = fract(uTime * 0.35);
     float cme = exp(-abs(sr - (1.0 + cz * 3.4)) * 7.0) * (1.0 - cz) * fbm3(sv * 3.0 + uTime * 0.2);
