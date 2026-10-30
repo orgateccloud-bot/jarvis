@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import CosmosScene from './cosmos/CosmosScene.jsx'
 import TopBar from './components/TopBar.jsx'
 import { CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
@@ -7,12 +7,7 @@ import CommandDock from './components/CommandDock.jsx'
 import { BootIgnition, Caption, SunButton, Toasts } from './components/Overlays.jsx'
 import { useJarvis } from './hooks/useJarvis.js'
 import { useConversation } from './hooks/useConversation.js'
-import { useViewport } from './hooks/useViewport.js'
 import { ROUTE_TO_TIER, TIERS } from './lib/tiers.js'
-import HoloLayer from './holo/HoloLayer.jsx'
-import { alvoSolPalco, holoAtivo } from './holo/arranjo.js'
-import { PALCO_INICIAL, comandoPalco, palcoReducer } from './holo/palco.js'
-import { SOL, SOL_HOLO, solPx } from './cosmos/sol.js'
 
 const REST_AFTER_MS = 30000 // depois de 30 s em espera, o sol volta a ser o Sol (G2V)
 
@@ -28,24 +23,7 @@ export default function App() {
   const [resting, setResting] = useState(true)
   const devStats = useRef(null) // só em dev: expõe window.__cosmosStill para capturas determinísticas
 
-  // telas largas: os cards viram painéis de vidro em volta do sol; nas demais fica o layout plano
-  const view = useViewport()
-  const holo = holoAtivo(view.W, view.H)
-  const holoRef = useRef(holo)
-  useEffect(() => { holoRef.current = holo }, [holo])
-  // palco holográfico (só no modo vidro): categoria aberta e item selecionado
-  const [palco, dispatchPalco] = useReducer(palcoReducer, PALCO_INICIAL)
-
   const send = useCallback((text, opts = {}) => {
-    // "mostra os projetos", "/holo projetos", "fecha o palco": resolvidos aqui, sem ir ao núcleo;
-    // a confirmação curta passa pela fala (onText/onDone), e a conversa por voz segue normalmente
-    const acao = holoRef.current ? comandoPalco(text) : null
-    if (acao) {
-      dispatchPalco(acao)
-      opts.onText?.(acao.fala)
-      opts.onDone?.(acao.fala)
-      return Promise.resolve()
-    }
     const msg = mode === 'auto' ? text : `/${mode} ${text}`
     setResting(false)
     return sendMessage(msg, { display: text, mode: mode === 'auto' ? null : mode, ...opts })
@@ -58,15 +36,9 @@ export default function App() {
   // texto digitado segue o mesmo caminho da voz (e é falado se a voz estiver ligada)
   const decide = useCallback((id, ok) => { clearApproval(); approve(id, ok) }, [clearApproval, approve])
 
-  // Esc interrompe a fala e fecha o palco; com o palco aberto, ← e → trocam a categoria
+  // Esc interrompe a fala
   useEffect(() => {
-    const onKey = e => {
-      if (e.key === 'Escape') { stop(); dispatchPalco({ type: 'fechar' }) }
-      const digitando = e.target.closest?.('input, textarea, [contenteditable="true"]')
-      if (!digitando && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
-        dispatchPalco({ type: 'passo', dir: e.key === 'ArrowRight' ? 1 : -1 })
-      }
-    }
+    const onKey = e => { if (e.key === 'Escape') stop() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [stop])
@@ -89,21 +61,14 @@ export default function App() {
   const alert = j.alertFlash || j.costs?.estado === 'teto'
   const uiTier = alert ? 'alerta' : activeTier
 
-  // no vidro o sol fica grande, como no vídeo; com o palco aberto ele vai para a esquerda e encolhe;
-  // a área clicável e a legenda seguem o disco
-  const sol = !holo ? SOL : palco.aberto ? alvoSolPalco(SOL_HOLO, view.W, view.H) : SOL_HOLO
-  const solPos = holo ? solPx(sol, view.W, view.H) : undefined
-  // respostas concluídas (inclui avisos do núcleo): cada uma faz um brilho varrer o vidro
-  const respostas = j.messages.reduce((n, m) => n + (m.role === 'jarvis' && !m.streaming ? 1 : 0), 0)
-
   return (
     <>
-      <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef} sol={sol}
+      <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef}
         statsRef={import.meta.env.DEV ? devStats : undefined} />
-      <SunButton mode={conv.mode} speaking={conv.speaking} onClick={conv.toggle} disabled={!conv.supported.listen} pos={solPos} />
-      <Caption mode={conv.mode} phase={phase} caption={conv.caption} pos={solPos} />
+      <SunButton mode={conv.mode} speaking={conv.speaking} onClick={conv.toggle} disabled={!conv.supported.listen} />
+      <Caption mode={conv.mode} phase={phase} caption={conv.caption} />
       <BootIgnition />
-      <div className={`app ${holo ? 'holo-on' : ''}`} style={{ '--tier': TIERS[uiTier].ui }}>
+      <div className="app" style={{ '--tier': TIERS[uiTier].ui }}>
         <TopBar
           phase={phase} convMode={conv.mode} tier={uiTier} online={j.online}
           muted={conv.muted} onToggleMute={conv.toggleMute}
@@ -124,17 +89,15 @@ export default function App() {
           </div>
         )}
         <div className="stage">
-          {!holo && (
-            <div className={`panels ${panelsOpen ? 'open' : ''}`}>
-              <aside className="side side-left" aria-label="Sistema e custos">
-                <VitalsCard vitals={j.vitals} history={j.history} />
-                <CostCard costs={j.costs} />
-              </aside>
-              <aside className="side side-right" aria-label="Estado neural">
-                <NeuralCard neural={j.neural} />
-              </aside>
-            </div>
-          )}
+          <div className={`panels ${panelsOpen ? 'open' : ''}`}>
+            <aside className="side side-left" aria-label="Sistema e custos">
+              <VitalsCard vitals={j.vitals} history={j.history} />
+              <CostCard costs={j.costs} />
+            </aside>
+            <aside className="side side-right" aria-label="Estado neural">
+              <NeuralCard neural={j.neural} />
+            </aside>
+          </div>
           <main className="center">
             <Transcript messages={j.messages} onDecide={decide} />
             <CommandDock
@@ -145,10 +108,6 @@ export default function App() {
           </main>
         </div>
       </div>
-      {holo && (
-        <HoloLayer view={view} sol={SOL_HOLO} vitals={j.vitals} history={j.history} costs={j.costs}
-          neural={j.neural} mode={mode} respostas={respostas} palco={palco} onPalco={dispatchPalco} />
-      )}
       <Toasts toasts={j.toasts} onDismiss={j.dismissToast} />
     </>
   )

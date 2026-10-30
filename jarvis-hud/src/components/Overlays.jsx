@@ -30,16 +30,11 @@ export function Toasts({ toasts, onDismiss }) {
   )
 }
 
-/**
- * Área clicável sobre o sol: abre/fecha a conversa por voz; enquanto ele fala, interrompe.
- * pos: { cx, cy, rp } em px quando o sol sai da posição padrão do CSS (modo vidro): cobre só o disco,
- * para não roubar o clique dos painéis que encostam na borda.
- */
-export function SunButton({ mode, speaking, onClick, disabled, pos }) {
+/** Área clicável sobre o sol: abre/fecha a conversa por voz; enquanto ele fala, interrompe. */
+export function SunButton({ mode, speaking, onClick, disabled }) {
   const label = speaking ? 'Interromper o JARVIS' : mode === 'active' ? 'Encerrar a conversa' : 'Conversar com o JARVIS'
-  const style = pos ? { left: pos.cx, top: pos.cy, width: pos.rp * 1.9, height: pos.rp * 1.9 } : undefined
   return (
-    <button className={`sun-hit ${mode === 'active' ? 'active' : ''}`} onClick={onClick} disabled={disabled} style={style}
+    <button className={`sun-hit ${mode === 'active' ? 'active' : ''}`} onClick={onClick} disabled={disabled}
       aria-label={label} title={disabled ? 'Este navegador não tem reconhecimento de voz (use Chrome ou Edge)' : label} />
   )
 }
@@ -49,8 +44,8 @@ const HINT = {
   wake: 'Diga “Jarvis” para começar',
 }
 
-/** Legenda sob o sol: o que o usuário está dizendo, ou uma dica do que fazer. pos: como no SunButton. */
-export function Caption({ mode, phase, caption, pos }) {
+/** Legenda sob o sol: o que o usuário está dizendo, ou uma dica do que fazer. */
+export function Caption({ mode, phase, caption }) {
   let text = caption
   if (!text) {
     if (phase === 'listening') text = 'Ouvindo…'
@@ -59,9 +54,6 @@ export function Caption({ mode, phase, caption, pos }) {
   }
   if (!text) return null
   return (
-    <div className={`caption ${caption ? 'live' : ''}`} aria-live="polite"
-      style={pos ? { left: pos.cx, top: pos.cy + pos.rp + 14 } : undefined}>
-      {caption ? `“${caption}”` : text}
-    </div>
+    <div className={`caption ${caption ? 'live' : ''}`} aria-live="polite">{caption ? `“${caption}”` : text}</div>
   )
 }

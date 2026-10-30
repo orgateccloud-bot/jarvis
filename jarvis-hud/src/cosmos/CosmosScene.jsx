@@ -2,9 +2,6 @@ import { useEffect, useRef } from 'react'
 import { FRAG, VERT } from './shaders.js'
 import { fpsAlvo, proximoQuadro } from './pacing.js'
 import { TIERS, hexToRgb } from '../lib/tiers.js'
-import { SOL, SOL_MOBILE, TRANSICAO_MS, limiteChamas } from './sol.js'
-
-const easeInOutCubic = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
 
 function shader(gl, type, src) {
   const s = gl.createShader(type)
@@ -45,12 +42,11 @@ function noiseTexture(gl) {
  * alert: tinge de classe M e dispara a ejeção de massa coronal
  * energyRef: ref 0..1 "chutado" a cada trecho/palavra; decai sozinho
  * statsRef: opcional, recebe { fps, scale } para diagnóstico
- * sol: alvo { x, y, r } em uv (cosmos/sol.js); ao mudar, o sol anda até ele em TRANSICAO_MS, a 60 fps
  */
-export default function CosmosScene({ state = 'idle', tier = 'regras', alert = false, energyRef, statsRef, sol = SOL }) {
+export default function CosmosScene({ state = 'idle', tier = 'regras', alert = false, energyRef, statsRef }) {
   const canvasRef = useRef(null)
-  const target = useRef({ state, tier, alert, sol })
-  target.current = { state, tier, alert, sol }
+  const target = useRef({ state, tier, alert })
+  target.current = { state, tier, alert }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -60,7 +56,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       return
     }
     const names = ['uRes', 'uTime', 'uExpand', 'uSpin', 'uListen', 'uThink', 'uSpeak', 'uEnergy',
-      'uAlert', 'uBoot', 'uTemp', 'uGiant', 'uTint', 'uSun', 'uSunR', 'uFlameLim', 'uWave']
+      'uAlert', 'uBoot', 'uTemp', 'uGiant', 'uTint', 'uSun', 'uSunR']
     // recursos de GPU: criados na montagem e recriados do zero no webglcontextrestored
     let vs, fs, prog, buf, tex, parallel
     let U = null
@@ -137,24 +133,6 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       temp: t0.temp, giant: t0.giant, tint: hexToRgb(t0.galaxy),
       expand: 0, spin: 0, clock: 0,
     }
-    // o sol anda até um novo alvo (troca entre layout plano e vidro, modo palco) por interpolação no tempo
-    const sol = { ...target.current.sol, de: null, para: target.current.sol, t0: 0 }
-    const moverSol = now => {
-      const alvo = target.current.sol
-      if (alvo !== sol.para) {
-        const igual = alvo.x === sol.para.x && alvo.y === sol.para.y && alvo.r === sol.para.r
-        sol.para = alvo
-        if (!igual) Object.assign(sol, { de: { x: sol.x, y: sol.y, r: sol.r }, t0: now })
-      }
-      if (!sol.de) return false
-      const p = Math.min(1, (now - sol.t0) / (reduce ? 1 : TRANSICAO_MS))
-      const e = easeInOutCubic(p)
-      sol.x = lerp(sol.de.x, sol.para.x, e)
-      sol.y = lerp(sol.de.y, sol.para.y, e)
-      sol.r = lerp(sol.de.r, sol.para.r, e)
-      if (p >= 1) sol.de = null
-      return p < 1
-    }
     let raf = 0
     let last = performance.now()
     let marca = last // cadência do limite de quadros (pacing.js)
@@ -177,12 +155,8 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       gl.uniform1f(U.uTemp, cur.temp)
       gl.uniform1f(U.uGiant, cur.giant)
       gl.uniform3fv(U.uTint, cur.tint)
-      const s = mobile ? SOL_MOBILE : sol
-      gl.uniform2f(U.uSun, s.x, s.y)
-      gl.uniform1f(U.uSunR, s.r)
-      gl.uniform1f(U.uFlameLim, limiteChamas(s.r))
-      // onda de voz: aparece falando e pulsa com a energia de cada trecho
-      gl.uniform1f(U.uWave, cur.speak * (0.25 + 0.75 * cur.energy))
+      gl.uniform2f(U.uSun, 0, mobile ? 0.17 : 0.13)
+      gl.uniform1f(U.uSunR, mobile ? 0.085 : 0.105)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
 
@@ -201,8 +175,8 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
         raf = requestAnimationFrame(frame)
         return
       }
-      // limite de quadros: 30 fps em repouso e escutando, 60 fps pensando, falando ou com o sol em movimento
-      const fps = moverSol(now) ? 60 : fpsAlvo(target.current.state)
+      // limite de quadros: 30 fps em repouso e escutando, 60 fps pensando ou falando
+      const fps = fpsAlvo(target.current.state)
       const prox = proximoQuadro(now, marca, fps)
       if (prox === null) {
         raf = requestAnimationFrame(frame)
