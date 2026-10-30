@@ -45,14 +45,23 @@ export function VitalsCard({ vitals, history }) {
   )
 }
 
-export function CostCard({ costs }) {
-  const pct = costs?.uso_pct ?? 0
-  const color = costs?.estado === 'teto' ? 'var(--danger)' : costs?.estado === 'economia' ? 'var(--warn)' : 'var(--aurora-2)'
-  const estado = { normal: 'Normal', economia: 'Economia', teto: 'Teto atingido' }[costs?.estado] || '—'
+const costState = costs => ({
+  pct: costs?.uso_pct ?? 0,
+  color: costs?.estado === 'teto' ? 'var(--danger)' : costs?.estado === 'economia' ? 'var(--warn)' : 'var(--aurora-2)',
+  estado: { normal: 'Normal', economia: 'Economia', teto: 'Teto atingido' }[costs?.estado] || '—',
+})
+
+export const CostBadge = ({ costs }) => (
+  <span className={`badge badge-${costs?.estado || 'normal'}`}>{costState(costs).estado}</span>
+)
+
+/** Conteúdo do custo (anel do teto, valores do mês e telemetria por modelo): usado no card e no painel de vidro. */
+export function CostBody({ costs, ring = 92 }) {
+  const { pct, color } = costState(costs)
   return (
-    <Card title="Custo Claude" aside={<span className={`badge badge-${costs?.estado || 'normal'}`}>{estado}</span>}>
+    <>
       <div className="cost">
-        <Ring value={pct} size={92} stroke={6} color={color} label="Uso do teto mensal">
+        <Ring value={pct} size={ring} stroke={6} color={color} label="Uso do teto mensal">
           <span className="mono ring-big">{Math.round(pct)}%</span>
           <span className="ring-sub">do teto</span>
         </Ring>
@@ -65,6 +74,14 @@ export function CostCard({ costs }) {
       </div>
       <p className="muted small">{costs ? `${costs.turnos_claude_mes} turnos com o Claude neste mês` : 'Aguardando o núcleo…'}</p>
       <Telemetria t={costs?.telemetria} teto={costs?.teto_usd} />
+    </>
+  )
+}
+
+export function CostCard({ costs }) {
+  return (
+    <Card title="Custo Claude" aside={<CostBadge costs={costs} />}>
+      <CostBody costs={costs} />
     </Card>
   )
 }
@@ -105,36 +122,51 @@ function Telemetria({ t, teto }) {
   )
 }
 
-export function NeuralCard({ neural }) {
-  const tierKey = ROUTE_TO_TIER[neural?.rota] || 'regras'
-  const t = TIERS[tierKey]
-  const uso = neural?.uso
+const neuralTier = neural => TIERS[ROUTE_TO_TIER[neural?.rota] || 'regras']
+
+export const NeuralChip = ({ neural }) => {
+  const t = neuralTier(neural)
+  return neural ? <span className="chip" style={{ '--chip': t.ui }}>{t.label}</span> : null
+}
+
+/** Custo, tokens, cache e hash de auditoria do último turno. */
+export function TurnLine({ uso }) {
   return (
-    <Card title="Neural" className="neural" aside={neural && <span className="chip" style={{ '--chip': t.ui }}>{t.label}</span>}>
-      {neural ? (
-        <>
-          <dl className="kv kv-wide">
-            <div><dt>Camada</dt><dd>{ROUTE_LABEL[neural.rota] || '—'}</dd></div>
-            <div><dt>Modelo</dt><dd className="mono">{uso?.modelo || neural.modelo}</dd></div>
-            <div><dt>Estrela</dt><dd>{t.classe} · <span className="mono">{t.temp.toLocaleString('pt-BR')} K</span></dd></div>
-            {neural.effort && <div><dt>Esforço</dt><dd className="mono">{neural.effort}</dd></div>}
-          </dl>
-          <div className="thought" aria-label="Pensamento do modelo">
-            <span className="thought-label">pensamento</span>
-            <p>{neural.thinking ? neural.thinking.slice(-360) : <span className="muted">{neural.motivo}</span>}</p>
-          </div>
-          {uso && (
-            <div className="turn mono">
-              <span>US$ {(uso.custo_usd ?? 0).toFixed(4).replace('.', ',')}</span>
-              <span>{uso.entrada}↑ {uso.saida}↓</span>
-              <span>cache {uso.cache_read}</span>
-              <span title={uso.audit_hash}>#{uso.audit_hash?.slice(0, 8)}</span>
-            </div>
-          )}
-        </>
-      ) : (
-        <p className="muted">Nenhum turno ainda. A camada, o modelo e o pensamento aparecem aqui em tempo real.</p>
-      )}
+    <div className="turn mono">
+      <span>US$ {(uso.custo_usd ?? 0).toFixed(4).replace('.', ',')}</span>
+      <span>{uso.entrada}↑ {uso.saida}↓</span>
+      <span>cache {uso.cache_read}</span>
+      <span title={uso.audit_hash}>#{uso.audit_hash?.slice(0, 8)}</span>
+    </div>
+  )
+}
+
+/** Conteúdo neural (camada, modelo, estrela e pensamento); semTurno: o turno aparece em outro painel. */
+export function NeuralBody({ neural, semTurno = false }) {
+  const t = neuralTier(neural)
+  const uso = neural?.uso
+  if (!neural) return <p className="muted">Nenhum turno ainda. A camada, o modelo e o pensamento aparecem aqui em tempo real.</p>
+  return (
+    <>
+      <dl className="kv kv-wide">
+        <div><dt>Camada</dt><dd>{ROUTE_LABEL[neural.rota] || '—'}</dd></div>
+        <div><dt>Modelo</dt><dd className="mono">{uso?.modelo || neural.modelo}</dd></div>
+        <div><dt>Estrela</dt><dd>{t.classe} · <span className="mono">{t.temp.toLocaleString('pt-BR')} K</span></dd></div>
+        {neural.effort && <div><dt>Esforço</dt><dd className="mono">{neural.effort}</dd></div>}
+      </dl>
+      <div className="thought" aria-label="Pensamento do modelo">
+        <span className="thought-label">pensamento</span>
+        <p>{neural.thinking ? neural.thinking.slice(-360) : <span className="muted">{neural.motivo}</span>}</p>
+      </div>
+      {uso && !semTurno && <TurnLine uso={uso} />}
+    </>
+  )
+}
+
+export function NeuralCard({ neural }) {
+  return (
+    <Card title="Neural" className="neural" aside={<NeuralChip neural={neural} />}>
+      <NeuralBody neural={neural} />
     </Card>
   )
 }

@@ -7,7 +7,11 @@ import CommandDock from './components/CommandDock.jsx'
 import { BootIgnition, Caption, SunButton, Toasts } from './components/Overlays.jsx'
 import { useJarvis } from './hooks/useJarvis.js'
 import { useConversation } from './hooks/useConversation.js'
+import { useViewport } from './hooks/useViewport.js'
 import { ROUTE_TO_TIER, TIERS } from './lib/tiers.js'
+import HoloLayer from './holo/HoloLayer.jsx'
+import { holoAtivo } from './holo/arranjo.js'
+import { SOL } from './cosmos/sol.js'
 
 const REST_AFTER_MS = 30000 // depois de 30 s em espera, o sol volta a ser o Sol (G2V)
 
@@ -61,6 +65,12 @@ export default function App() {
   const alert = j.alertFlash || j.costs?.estado === 'teto'
   const uiTier = alert ? 'alerta' : activeTier
 
+  // telas largas: os cards viram painéis de vidro em volta do sol; nas demais fica o layout plano
+  const view = useViewport()
+  const holo = holoAtivo(view.W, view.H)
+  // respostas concluídas (inclui avisos do núcleo): cada uma faz um brilho varrer o vidro
+  const respostas = j.messages.reduce((n, m) => n + (m.role === 'jarvis' && !m.streaming ? 1 : 0), 0)
+
   return (
     <>
       <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef}
@@ -68,7 +78,7 @@ export default function App() {
       <SunButton mode={conv.mode} speaking={conv.speaking} onClick={conv.toggle} disabled={!conv.supported.listen} />
       <Caption mode={conv.mode} phase={phase} caption={conv.caption} />
       <BootIgnition />
-      <div className="app" style={{ '--tier': TIERS[uiTier].ui }}>
+      <div className={`app ${holo ? 'holo-on' : ''}`} style={{ '--tier': TIERS[uiTier].ui }}>
         <TopBar
           phase={phase} convMode={conv.mode} tier={uiTier} online={j.online}
           muted={conv.muted} onToggleMute={conv.toggleMute}
@@ -89,15 +99,17 @@ export default function App() {
           </div>
         )}
         <div className="stage">
-          <div className={`panels ${panelsOpen ? 'open' : ''}`}>
-            <aside className="side side-left" aria-label="Sistema e custos">
-              <VitalsCard vitals={j.vitals} history={j.history} />
-              <CostCard costs={j.costs} />
-            </aside>
-            <aside className="side side-right" aria-label="Estado neural">
-              <NeuralCard neural={j.neural} />
-            </aside>
-          </div>
+          {!holo && (
+            <div className={`panels ${panelsOpen ? 'open' : ''}`}>
+              <aside className="side side-left" aria-label="Sistema e custos">
+                <VitalsCard vitals={j.vitals} history={j.history} />
+                <CostCard costs={j.costs} />
+              </aside>
+              <aside className="side side-right" aria-label="Estado neural">
+                <NeuralCard neural={j.neural} />
+              </aside>
+            </div>
+          )}
           <main className="center">
             <Transcript messages={j.messages} onDecide={decide} />
             <CommandDock
@@ -108,6 +120,10 @@ export default function App() {
           </main>
         </div>
       </div>
+      {holo && (
+        <HoloLayer view={view} sol={SOL} vitals={j.vitals} history={j.history} costs={j.costs}
+          neural={j.neural} mode={mode} respostas={respostas} />
+      )}
       <Toasts toasts={j.toasts} onDismiss={j.dismissToast} />
     </>
   )

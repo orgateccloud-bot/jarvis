@@ -1,0 +1,133 @@
+/* JARVIS — painéis de vidro em volta do sol (telas largas; posições em src/holo/arranjo.js).
+   Sem backdrop-filter: o vidro é só translúcido, como no vídeo de referência, e o sol aparece através dele. */
+
+/* no modo vidro a conversa ocupa uma coluna central única, mais baixa, sob o sol */
+.app.holo-on .stage { grid-template-columns: minmax(0, 1fr); }
+.app.holo-on .center { grid-column: 1; }
+.app.holo-on .transcript, .app.holo-on .dock-wrap { width: min(780px, 52vw); }
+.app.holo-on .transcript { max-height: 28vh; }
+
+.holo-layer {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  perspective: 1600px; perspective-origin: 50% 40%;
+}
+
+.holo {
+  position: absolute; left: 0; top: 0;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 20px 18px;
+  overflow: hidden;
+  pointer-events: auto;
+  color: var(--text);
+  background: linear-gradient(160deg, rgba(22, 34, 62, 0.74), rgba(8, 14, 30, 0.62));
+  border: 1px solid rgba(170, 210, 255, 0.34);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 0 48px rgba(77, 124, 255, 0.1), 0 30px 60px rgba(0, 0, 0, 0.35);
+  container-type: size;
+  /* entra depois da ignição, de cima para baixo, um painel por vez */
+  animation: holo-surge 700ms var(--ease) both;
+  animation-delay: calc(3.1s + var(--i, 0) * 90ms);
+}
+/* colchetes nos cantos */
+.holo::before, .holo::after {
+  content: ''; position: absolute; width: 18px; height: 18px; pointer-events: none;
+  border: 0 solid rgba(200, 230, 255, 0.8);
+}
+.holo::before { top: 6px; right: 6px; border-width: 2px 2px 0 0; border-top-right-radius: 4px; }
+.holo::after { bottom: 6px; left: 6px; border-width: 0 0 2px 2px; border-bottom-left-radius: 4px; }
+
+/* brilho que varre o vidro uma vez a cada evento (só transform e opacity: fica no compositor) */
+.holo-glare {
+  position: absolute; inset: 0 -50%; z-index: 1; pointer-events: none;
+  background: linear-gradient(105deg, transparent 44%, rgba(255, 255, 255, 0.16) 50%, transparent 56%);
+  animation: holo-glare 1100ms var(--ease) both;
+}
+
+.holo-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 28px; }
+.holo-head h2 {
+  font-size: 22px; font-weight: 600; letter-spacing: 0.02em; color: #fff;
+  text-shadow: 0 0 18px rgba(120, 180, 255, 0.35);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.holo-tag {
+  font-size: 12px; color: #ffb25c; white-space: nowrap;
+  padding: 3px 10px; border-radius: 999px;
+  border: 1px solid rgba(255, 178, 92, 0.55); background: rgba(255, 140, 40, 0.08);
+}
+.holo-x {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--hairline-strong); background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted); font-size: 16px; line-height: 1;
+}
+.holo-x:hover { color: #fff; border-color: rgba(200, 230, 255, 0.6); }
+
+/* CPU e RAM */
+.holo-rings { display: flex; gap: 18px; }
+.holo-rings .ring-center { display: flex; flex-direction: column; align-items: center; line-height: 1.05; }
+.holo-num { font-size: 22px; color: #fff; }
+.holo-ring-label { font-size: 12px; color: var(--text-muted); }
+.holo-sub { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; color: #dfe9ff; margin-top: 2px; }
+.holo .spark { height: 40px; flex-shrink: 0; }
+.holo-bars { flex: 1; min-height: 36px; display: flex; align-items: flex-end; gap: 4px; }
+.holo-bars span {
+  flex: 1; border-radius: 2px 2px 0 0;
+  background: linear-gradient(180deg, rgba(150, 210, 255, 0.95), rgba(77, 124, 255, 0.3));
+}
+
+/* custo e neural: o conteúdo rola dentro do vidro se não couber */
+.holo-custo, .holo-neural { overflow-y: auto; scrollbar-width: none; }
+.holo-custo::-webkit-scrollbar, .holo-neural::-webkit-scrollbar { display: none; }
+.holo-custo .cost { margin-bottom: 4px; }
+.holo-neural .thought { max-height: none; flex: 1; min-height: 90px; }
+
+/* modelos: lista com a camada do último turno em destaque */
+.holo-list { list-style: none; display: grid; gap: 6px; }
+.holo-list li {
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0 8px;
+  padding: 7px 12px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  animation: holo-row 380ms var(--ease) both;
+  animation-delay: calc(var(--k, 0) * 60ms);
+}
+.holo-li-nome { font-size: 17px; font-weight: 600; }
+.holo-li-fixo { font-size: 12px; color: #ffb25c; }
+.holo-li-m { grid-column: 1 / -1; font-size: 12px; color: var(--text-muted); opacity: 0.85; }
+.holo-list li.on {
+  color: #fff;
+  border-color: color-mix(in srgb, var(--c) 60%, transparent);
+  background: color-mix(in srgb, var(--c) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--c);
+}
+.holo-list li.on .holo-li-m { color: var(--text-muted); }
+.holo-nota { margin-top: auto; font-size: 12px; color: var(--text-muted); }
+
+/* último turno */
+.holo-turno .turn { margin-top: 0; font-size: 13px; gap: 6px 16px; }
+
+/* decorativo: sem texto, muito inclinado */
+.holo-deco { padding: 12px; }
+.holo-deco-svg { width: 100%; height: 100%; }
+.holo-deco-svg line { stroke: rgba(170, 210, 255, 0.18); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.holo-deco-svg polyline { fill: none; stroke: rgba(14, 165, 233, 0.8); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+
+/* painéis baixos: some o que é secundário, nada de texto abaixo de 12 px */
+@container (max-height: 380px) {
+  .holo-li-m { display: none; }
+  .holo-list li { padding: 6px 12px; }
+}
+@container (max-height: 300px) {
+  .holo-sub, .holo .spark { display: none; }
+}
+
+@keyframes holo-surge {
+  from { opacity: 0; clip-path: inset(0 0 100% 0 round 14px); }
+  to { opacity: 1; clip-path: inset(0 0 0 0 round 14px); }
+}
+@keyframes holo-glare {
+  from { transform: translateX(-55%); opacity: 1; }
+  85% { opacity: 1; }
+  to { transform: translateX(55%); opacity: 0; }
+}
+@keyframes holo-row { from { opacity: 0; transform: translateX(-8px); } }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { FRAG, VERT } from './shaders.js'
 import { fpsAlvo, proximoQuadro } from './pacing.js'
 import { TIERS, hexToRgb } from '../lib/tiers.js'
+import { SOL, SOL_MOBILE } from './sol.js'
 
 function shader(gl, type, src) {
   const s = gl.createShader(type)
@@ -155,8 +156,9 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       gl.uniform1f(U.uTemp, cur.temp)
       gl.uniform1f(U.uGiant, cur.giant)
       gl.uniform3fv(U.uTint, cur.tint)
-      gl.uniform2f(U.uSun, 0, mobile ? 0.17 : 0.13)
-      gl.uniform1f(U.uSunR, mobile ? 0.085 : 0.105)
+      const sol = mobile ? SOL_MOBILE : SOL
+      gl.uniform2f(U.uSun, sol.x, sol.y)
+      gl.uniform1f(U.uSunR, sol.r)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
 
