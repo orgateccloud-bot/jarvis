@@ -3,6 +3,7 @@
 
 export const CATEGORIAS = [
   { id: 'projetos', nome: 'Projetos', fala: 'os projetos' },
+  { id: 'custos', nome: 'Custos', fala: 'os custos por modelo' },
 ]
 
 export const PALCO_INICIAL = { aberto: false, categoria: null, selecionado: null }
@@ -32,7 +33,7 @@ export function palcoReducer(s, a) {
 }
 
 // sinônimos falados de cada categoria
-const NOMES = { projetos: 'projetos', projeto: 'projetos' }
+const NOMES = { projetos: 'projetos', projeto: 'projetos', custos: 'custos', custo: 'custos', gastos: 'custos' }
 
 const normaliza = t => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[.!?,;:]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -58,7 +59,7 @@ export function comandoPalco(texto) {
     const cat = NOMES[abrir[1]]
     return { type: 'abrir', categoria: cat, fala: `Abrindo ${CATEGORIAS.find(c => c.id === cat).fala}.` }
   }
-  if (/^(?:fech[ae]|fechar|esconde|esconder|sai[ar]? d[oa])(?: (?:o|a|os|as))? (?:palco|holograma|hologramas|projetos)$/.test(t)) {
+  if (/^(?:fech[ae]|fechar|esconde|esconder|sai[ar]? d[oa])(?: (?:o|a|os|as))? (?:palco|holograma|hologramas|projetos|custos|gastos)$/.test(t)) {
     return { type: 'fechar', fala: 'Fechando o palco.' }
   }
   return null

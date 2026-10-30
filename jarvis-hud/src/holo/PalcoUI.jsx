@@ -11,22 +11,28 @@ const usd = v => `US$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits
 const data = d => new Date(`${d}T12:00:00`).toLocaleDateString('pt-BR')
 
 export function Trilho({ rect, palco, onPalco }) {
+  // no repouso, um botão só (o vão entre os painéis é estreito); no palco, as categorias e o fechar
+  if (!palco.aberto) {
+    return (
+      <nav className="holo-trilho" aria-label="Palco holográfico" style={{ width: rect.w, transform: `translate(${rect.x}px, ${rect.y}px)` }}>
+        <button onClick={() => onPalco({ type: 'alternar' })} title="Abrir o palco holográfico (projetos e custos)">
+          <span className="holo-trilho-ico" aria-hidden="true">◈</span>Palco
+        </button>
+      </nav>
+    )
+  }
   return (
-    <nav className={`holo-trilho ${palco.aberto ? 'on' : ''}`} aria-label="Palco holográfico"
-      style={{ width: rect.w, transform: `translate(${rect.x}px, ${rect.y}px)` }}>
+    <nav className="holo-trilho on" aria-label="Palco holográfico" style={{ width: rect.w, transform: `translate(${rect.x}px, ${rect.y}px)` }}>
       {CATEGORIAS.map(c => {
-        const ativa = palco.aberto && palco.categoria === c.id
+        const ativa = palco.categoria === c.id
         return (
-          <button key={c.id} className={ativa ? 'ativa' : ''} aria-pressed={ativa}
-            title={ativa ? 'Fechar o palco' : `Mostrar ${c.fala} no palco`}
-            onClick={() => onPalco(ativa ? { type: 'fechar' } : { type: 'abrir', categoria: c.id })}>
+          <button key={c.id} className={ativa ? 'ativa' : ''} aria-pressed={ativa} title={`Mostrar ${c.fala} no palco`}
+            onClick={() => onPalco({ type: 'abrir', categoria: c.id })}>
             <span className="holo-trilho-ico" aria-hidden="true">◈</span>{c.nome}
           </button>
         )
       })}
-      {palco.aberto && (
-        <button className="holo-x" onClick={() => onPalco({ type: 'fechar' })} aria-label="Fechar o palco" title="Fechar (Esc)">×</button>
-      )}
+      <button className="holo-x" onClick={() => onPalco({ type: 'fechar' })} aria-label="Fechar o palco" title="Fechar (Esc)">×</button>
     </nav>
   )
 }
@@ -65,7 +71,8 @@ export const Blocos = memo(function Blocos({ ap, vitals, costs, neural }) {
 })
 
 /** Detalhes do item selecionado no palco; sem seleção, a legenda da categoria. */
-export function Detalhes({ rect, dados, selecionado }) {
+export function Detalhes({ rect, categoria, dados, selecionado }) {
+  if (categoria === 'custos') return <DetalhesCustos rect={rect} dados={dados} selecionado={selecionado} />
   const it = dados.itens.find(x => x.id === selecionado)
   const g = it && dados.grupos[it.grupo]
   if (!it) {
@@ -105,3 +112,34 @@ export function Detalhes({ rect, dados, selecionado }) {
   )
 }
 
+
+function DetalhesCustos({ rect, dados, selecionado }) {
+  const total = dados.itens.reduce((n, it) => n + it.valor, 0)
+  return (
+    <HoloPanel id="detalhes" rect={rect} i={3} title="Custos do mês" label="Custos do mês por modelo">
+      {dados.itens.length === 0 ? (
+        <p className="holo-det-resumo">Ainda não há custo por modelo neste mês.</p>
+      ) : (
+        <>
+          <p className="holo-det-resumo">Altura da barra: custo do mês por modelo, a partir de zero. Clique numa barra para destacá-la.</p>
+          <ul className="holo-det-custos">
+            {dados.itens.map(it => (
+              <li key={it.id} className={it.id === selecionado ? 'on' : ''} style={{ '--c': it.cor }}>
+                <span className="holo-det-ponto" />
+                <b>{it.nome}</b>
+                <span className="mono">{usd(it.valor)}</span>
+                <span className="mono holo-det-sub">{(it.fatia ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% · {it.requisicoes} chamadas</span>
+              </li>
+            ))}
+          </ul>
+          <dl className="kv">
+            <div><dt>Soma dos modelos</dt><dd className="mono">{usd(total)}</dd></div>
+            {dados.projecao != null && <div><dt>Projeção do mês</dt><dd className="mono">{usd(dados.projecao)}</dd></div>}
+            {dados.teto != null && <div><dt>Teto mensal</dt><dd className="mono">{usd(dados.teto)}</dd></div>}
+          </dl>
+        </>
+      )}
+      <p className="holo-det-fonte">Fonte: telemetria de custos do núcleo (/costs), atualizada a cada resposta.</p>
+    </HoloPanel>
+  )
+}

@@ -197,6 +197,13 @@
 .holo-det-stack li { font-size: 12px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--hairline-strong); color: #dfe9ff; }
 .holo-det-lig { list-style: none; display: grid; gap: 4px; font-size: 13px; color: var(--text-muted); }
 .holo-det-lig b { color: #fff; font-weight: 600; }
+.holo-det-custos { list-style: none; display: grid; gap: 8px; }
+.holo-det-custos li {
+  display: grid; grid-template-columns: 12px 1fr auto; align-items: center; gap: 2px 8px;
+  padding: 6px 10px; border-radius: 8px; border: 1px solid transparent; font-size: 13px;
+}
+.holo-det-custos li.on { border-color: color-mix(in srgb, var(--c) 60%, transparent); background: color-mix(in srgb, var(--c) 12%, transparent); }
+.holo-det-custos .holo-det-sub { grid-column: 2 / -1; font-size: 12px; color: var(--text-muted); }
 .holo-det-fonte { margin-top: auto; font-size: 12px; line-height: 1.45; color: var(--text-muted); }
 
 /* painéis baixos: some o que é secundário, nada de texto abaixo de 12 px */

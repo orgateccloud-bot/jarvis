@@ -2,11 +2,12 @@
 // neural, último turno e um painel decorativo. O conteúdo vem dos mesmos dados dos cards planos.
 // Com o palco aberto, a câmera recua: os painéis dão lugar a blocos compactos ao lado do sol, o palco
 // 3D ocupa o centro e os detalhes ficam à direita.
-import { Suspense, lazy, memo, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react'
 import HoloPanel from './HoloPanel.jsx'
 import { Blocos, Detalhes, Trilho } from './PalcoUI.jsx'
 import { arranjoPalco, arranjoRepouso, trilho } from './arranjo.js'
 import projetos from './conteudo/projetos.json'
+import { chaveCustos, dadosCustos } from './conteudo/custos.js'
 import SafeBoundary from '../components/SafeBoundary.jsx'
 import { TRANSICAO_MS } from '../cosmos/sol.js'
 import { CostBadge, CostBody, NeuralBody, NeuralChip, TurnLine } from '../components/Cards.jsx'
@@ -15,7 +16,6 @@ import { MODEL_TO_TIER, ROUTE_LABEL, ROUTE_TO_TIER, TIERS } from '../lib/tiers.j
 
 const carregarPalco = () => import('./PalcoCena.jsx')
 const PalcoCena = lazy(carregarPalco)
-const DADOS = { projetos }
 
 const level = v => (v >= 90 ? 'var(--danger)' : v >= 75 ? 'var(--warn)' : 'var(--aurora-3)')
 const ORDEM = ['regras', 'simples', 'media', 'complexa', 'fable']
@@ -86,6 +86,9 @@ const Deco = memo(function Deco({ ram }) {
 export default function HoloLayer({ view, sol, vitals, history, costs, neural, mode, respostas, palco, onPalco }) {
   const a = arranjoRepouso({ W: view.W, H: view.H, sol })
   const ap = arranjoPalco({ W: view.W, H: view.H, sol })
+  const chave = chaveCustos(costs)
+  const custos = useMemo(() => dadosCustos(chave), [chave])
+  const DADOS = { projetos, custos }
   const [turnoOculto, setTurnoOculto] = useState(null)
   // categoria em cena: fica montada até o fim do fade de saída, para o holograma se dissolver
   const [exibida, setExibida] = useState(palco.categoria)
@@ -138,7 +141,7 @@ export default function HoloLayer({ view, sol, vitals, history, costs, neural, m
         aria-hidden={!palco.aberto || undefined}>
         {/* blocos e detalhes ficam montados (ocultos): abrir o palco só troca a classe, sem montar nada pesado */}
         <Blocos ap={ap} vitals={vitals} costs={costs} neural={neural} />
-        <Detalhes rect={ap.detalhes} dados={DADOS[exibida || 'projetos']} selecionado={palco.selecionado} />
+        <Detalhes rect={ap.detalhes} categoria={exibida || 'projetos'} dados={DADOS[exibida || 'projetos']} selecionado={palco.selecionado} />
         <section className="holo-palco" aria-label="Palco holográfico"
           style={{ width: ap.palco.w, height: ap.palco.h, transform: `translate(${ap.palco.x}px, ${ap.palco.y}px)` }}>
           {exibida && (

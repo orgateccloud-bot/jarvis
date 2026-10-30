@@ -4,10 +4,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { PerspectiveCamera, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from 'three'
 import { criarProjetos, posicoes } from './cena/projetos.js'
+import { criarCustos, ordemCustos } from './cena/custos.js'
 import { proximoQuadro } from '../cosmos/pacing.js'
 import { TRANSICAO_MS } from '../cosmos/sol.js'
 
-const CENAS = { projetos: criarProjetos }
+// cada cena: criar(dados) → { grupo, nos, ids, local, selecionar, atualizar, descartar }; ordem(dados) → itens dos rótulos
+const CENAS = {
+  projetos: { criar: criarProjetos, ordem: d => posicoes(d.itens, d.grupos).map(p => d.itens.find(it => it.id === p.id)) },
+  custos: { criar: criarCustos, ordem: ordemCustos },
+}
 const REVEAL_S = 0.42
 
 export default function PalcoCena({ categoria, dados, w, h, aberto, selecionado, onSelecionar, onSaiu }) {
@@ -20,7 +25,7 @@ export default function PalcoCena({ categoria, dados, w, h, aberto, selecionado,
   const selecionadoInicial = useRef(selecionado)
   const [geracao, setGeracao] = useState(0) // sobe quando o contexto WebGL volta: canvas e cena novos
   const [sobre, setSobre] = useState(null)
-  const itens = posicoes(dados.itens, dados.grupos).map(p => dados.itens.find(it => it.id === p.id))
+  const itens = CENAS[categoria].ordem(dados)
 
   useEffect(() => { vivo.current = { aberto, onSelecionar, onSaiu } })
 
@@ -46,7 +51,7 @@ export default function PalcoCena({ categoria, dados, w, h, aberto, selecionado,
       const camera = new PerspectiveCamera(38, 1, 0.1, 100)
       camera.position.set(0, 1.4, 10.5)
       camera.lookAt(0, -0.2, 0)
-      const cena = CENAS[categoria](dados)
+      const cena = CENAS[categoria].criar(dados)
       cenaRef.current = cena
       cena.selecionar(selecionadoInicial.current)
       scene.add(cena.grupo)
@@ -167,11 +172,11 @@ export default function PalcoCena({ categoria, dados, w, h, aberto, selecionado,
             key={it.id}
             ref={el => { rotulos.current[i] = el }}
             className={`holo-rotulo ${it.id === selecionado ? 'on' : ''} ${it.id === sobre ? 'sobre' : ''}`}
-            style={{ '--c': dados.grupos[it.grupo]?.cor }}
+            style={{ '--c': it.cor || dados.grupos?.[it.grupo]?.cor }}
             onClick={() => onSelecionar(it.id)}
             aria-pressed={it.id === selecionado}
           >
-            {it.nome}
+            {it.rotulo || it.nome}
           </button>
         ))}
       </div>

@@ -90,7 +90,7 @@ export function arranjoPalco({ W, H, sol }) {
 }
 
 // trilho de categorias: no repouso, no alto entre os painéis; no palco, sobre a borda de cima do palco
-export const TRILHO = { w: 160, wPalco: 220, h: 34 }
+export const TRILHO = { w: 120, wPalco: 300, h: 34 }
 export function trilho({ W, palco }) {
   if (palco) return ret(palco.x + palco.w / 2 - TRILHO.wPalco / 2, palco.y + 10, TRILHO.wPalco, TRILHO.h, 0)
   return ret(W / 2 - TRILHO.w / 2, TOPO - 4, TRILHO.w, TRILHO.h, 0)

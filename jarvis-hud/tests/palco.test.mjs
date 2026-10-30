@@ -43,3 +43,40 @@ test('perguntas sobre projetos seguem para o núcleo', () => {
     assert.equal(comandoPalco(t), null, t)
   }
 })
+
+test('custos: comandos e troca de categoria com as setas', () => {
+  for (const t of ['/holo custos', 'mostra os custos', 'me mostra os gastos', 'abre os custos no palco']) {
+    assert.equal(comandoPalco(t)?.categoria, 'custos', t)
+  }
+  assert.equal(comandoPalco('fecha os custos')?.type, 'fechar')
+  assert.equal(comandoPalco('quanto gastei com o Opus?'), null)
+  let s = palcoReducer(PALCO_INICIAL, { type: 'abrir', categoria: 'projetos' })
+  s = palcoReducer(s, { type: 'passo', dir: 1 })
+  assert.equal(s.categoria, 'custos')
+  s = palcoReducer(s, { type: 'passo', dir: 1 })
+  assert.equal(s.categoria, 'projetos')
+  assert.equal(palcoReducer(s, { type: 'passo', dir: -1 }).categoria, 'custos')
+})
+
+test('custos: barras do maior para o menor, rótulo com o valor e lista vazia sem erro', async () => {
+  const { chaveCustos, dadosCustos } = await import('../src/holo/conteudo/custos.js')
+  const costs = {
+    teto_usd: 15, mes_usd: 14.11,
+    telemetria: {
+      projecao_mes_usd: 14.59,
+      por_modelo: [
+        { modelo: 'claude-sonnet-5-5', custo_usd: 2.15, requisicoes: 40, fatia_custo_pct: 15.3, media_usd: 0.05 },
+        { modelo: 'claude-opus-5-5', custo_usd: 10.27, requisicoes: 90, fatia_custo_pct: 72.7, media_usd: 0.11 },
+        { modelo: 'modelo-desconhecido', custo_usd: 0.25, requisicoes: 3, fatia_custo_pct: 1.8, media_usd: 0.08 },
+      ],
+    },
+  }
+  const d = dadosCustos(chaveCustos(costs))
+  assert.deepEqual(d.itens.map(i => i.id), ['claude-opus-5-5', 'claude-sonnet-5-5', 'modelo-desconhecido'])
+  assert.equal(d.itens[0].nome, 'Opus')
+  assert.match(d.itens[0].rotulo, /^Opus · US\$ 10,27$/)
+  assert.equal(d.itens[2].nome, 'modelo-desconhecido') // sem camada conhecida: mostra o id
+  assert.equal(d.projecao, 14.59)
+  assert.equal(chaveCustos(costs), chaveCustos({ ...costs })) // mesma chave entre consultas iguais
+  assert.deepEqual(dadosCustos(chaveCustos(null)).itens, [])
+})
