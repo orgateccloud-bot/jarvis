@@ -1,7 +1,7 @@
 // Testes do divisor de frases (voz em streaming) e dos gatilhos de voz. Rode: npm test
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { NO, YES, afterWakeWord, createSentenceSplitter, isStopCommand } from '../src/lib/voice/sentences.js'
+import { NO, YES, afterWakeWord, createSentenceSplitter, isStopCommand, paraFala } from '../src/lib/voice/sentences.js'
 
 function run(chunks) {
   const out = []
@@ -49,4 +49,19 @@ test('palavra de ativação e respostas sim/não', () => {
   assert.equal(afterWakeWord('olá mundo'), null)
   assert.ok(isStopCommand('Jarvis, pare') && !isStopCommand('Jarvis para'))
   assert.ok(YES.test('sim pode abrir') && NO.test('não, cancela') && !YES.test('não'))
+})
+
+test('sentences: "Caminho: C:\\a\\b\\c.txt; veja." sai em uma frase limpa', () => {
+  assert.deepEqual(run([...'Caminho: C:\\a\\b\\c.txt; veja.']), ['Caminho: c.txt; veja.'])
+})
+
+test('texto falável: caminhos, URLs, sublinhado, aspas de código, R$ e %', () => {
+  assert.equal(paraFala('O log está em D:\\JARVIS-Arquivo\\Gerados\\2026-10-30\\prompt_voz_eco.md.'),
+    'O log está em prompt voz eco.md.')
+  assert.equal(paraFala('Veja https://www.receita.fazenda.gov.br/consulta?id=1 hoje'), 'Veja receita.fazenda.gov.br hoje')
+  assert.equal(paraFala('o arquivo ~/projetos/jarvis/config.json'), 'o arquivo config.json')
+  assert.equal(paraFala('rode "npm test" e `npm run build`'), 'rode npm test e npm run build')
+  assert.equal(paraFala('saldo de R$ 15.000,00 e R$ 2 mil'), 'saldo de 15.000,00 reais e 2 mil reais')
+  assert.equal(paraFala('alta de 3,5% no mês e 12 %'), 'alta de 3,5 por cento no mês e 12 por cento')
+  assert.equal(paraFala('e/ou 1/2 de 30/10/2026'), 'e/ou 1/2 de 30/10/2026')
 })

@@ -15,11 +15,33 @@ function cutPoint(text) {
   return space > 0 ? space : MAX_CHARS
 }
 
-function clean(text) {
+// último segmento de um caminho, sem a pontuação da frase que vem colada ("c.txt;" → "c.txt")
+const lastSegment = path => {
+  const [, body, tail] = /^(.*?)([.,;:!?)]*)$/.exec(path)
+  return (body.split(/[\\/]/).filter(Boolean).pop() || 'o caminho') + tail
+}
+
+/**
+ * Deixa o texto falável: caminhos e URLs lidos letra a letra viram o nome final e o domínio;
+ * "_" vira espaço; aspas de código saem; "R$" e "%" vão por extenso.
+ */
+export function paraFala(text) {
   return text
+    .replace(/\bhttps?:\/\/(?:www\.)?([^\s/?#)]+)[^\s)]*/gi, '$1')   // URL → domínio
+    .replace(/\bwww\.([^\s/?#)]+)[^\s)]*/gi, '$1')
+    .replace(/(?:\b[A-Za-z]:\\|\\\\)[^\s"'`<>|*?]*/g, m => lastSegment(m))   // C:\..., \\servidor\...
+    .replace(/(?:^|(?<=\s))(?:~|\.{1,2})?\/[\w.-]+(?:\/[\w.-]*)+/g, m => lastSegment(m))   // /home/..., ~/...
+    .replace(/R\$\s?(\d[\d.]*(?:,\d{1,2})?)(\s(?:mil|milh(?:ão|ões)|bilh(?:ão|ões)))?/g, '$1$2 reais')
+    .replace(/(\d(?:[\d.,]*\d)?)\s?%/g, '$1 por cento')
+    .replace(/_/g, ' ')
+    .replace(/["“”`]/g, '')
+}
+
+function clean(text) {
+  return paraFala(text
     .replace(/^\s*([-*•]|\d+[.)])\s+/, '')   // marcador de lista
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1') // links/imagens → só o texto
-    .replace(/[#*_`~>|]/g, '')
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')) // links/imagens → só o texto
+    .replace(/[#*~>|]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
