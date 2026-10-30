@@ -29,6 +29,9 @@ include = ["jarvis*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# o teste de fumaça real (Menu Iniciar, registro e janelas desta máquina) só roda com: pytest -m windows_real
+addopts = "-m 'not windows_real'"
+markers = ["windows_real: lê o Windows de verdade; fora da execução padrão"]
 
 [tool.ruff]
 line-length = 110

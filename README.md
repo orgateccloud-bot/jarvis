@@ -13,7 +13,7 @@ de uma base local.
 |---|---|
 | **Roteamento de modelos** | Classificador determinístico (sem LLM): Haiku 5.5 para o simples, Sonnet 5.5 para o intermediário, Opus 5.5 para o complexo. Respostas por regra (hora, data, status) custam zero. Prefixos `/haiku`, `/sonnet`, `/opus` forçam a camada. |
 | **Custo controlado** | Teto mensal (padrão US$ 15): a 80% entra em modo economia, a 100% o Claude pausa. Cache de prompt, resumo automático (compaction) a partir de 60 mil tokens e conversa nova após 30 min parada. Ledger em SQLite com preço oficial por modelo. |
-| **Ferramentas com aprovação** | Status e hardware do PC, processos, abrir apps (lista fixa), encerrar processos, ler/buscar arquivos, lembretes (únicos e recorrentes), gestão de disco (analisar, mover reversível, Lixeira), telas do Windows e comandos de lista fixa (`wsl --shutdown`, `ipconfig /flushdns`). Toda ação com efeito mostra um card no HUD e espera "sim". |
+| **Ferramentas com aprovação** | Status e hardware do PC, processos, abrir programas (lista em `config/apps.json`, editores numa pasta), listar programas instalados e janelas abertas, encerrar processos, ler/buscar arquivos, lembretes (únicos e recorrentes), gestão de disco (analisar, mover reversível, Lixeira), telas do Windows e comandos de lista fixa (`wsl --shutdown`, `ipconfig /flushdns`). Toda ação com efeito mostra um card no HUD e espera "sim". |
 | **Memória** | Ferramenta `memory_20250818` com back-end local (`dados/memories/`): perfil, preferências e decisões sobrevivem entre conversas. CPF/CNPJ mascarados antes de gravar; apagar vai para `.lixeira/`. |
 | **Especialista multiárea** | Base local de leis (CTN, LC 123/2006, Estatuto da OAB, baixadas do Planalto sem trechos revogados) e documentos do usuário, cortados por artigo, com busca BM25 em Python puro. Perguntas tributárias, de OAB ou contábeis sobem no mínimo para o Sonnet e citam lei e artigo. |
 | **Web e arquivos gerados** | Busca e leitura de páginas (Sonnet/Opus). Arquivos que o sandbox de código gera (CSV, PDF, gráficos) são baixados pela Files API para `JARVIS-Arquivo\Gerados\<data>\`. |
@@ -150,6 +150,37 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 > Caminhos relativos pedidos ao JARVIS (ex.: "Downloads") partem da sua pasta de usuário. Ainda assim, só são
 > aceitos se caírem dentro de uma das pastas permitidas.
 
+## Programas
+
+| Ferramenta | O que faz | Aprovação |
+|---|---|---|
+| `abrir_app` | Abre um programa da lista permitida. Editores aceitam `pasta`, que precisa estar numa pasta permitida (`confinar`). | sim |
+| `listar_apps` | Lista os programas instalados (atalhos do Menu Iniciar do usuário e de todos os usuários, e chaves `Uninstall` do registro), com caminho e se já estão na lista. Aceita `filtro`; mostra até 300. **Só informa:** não adiciona nada à lista. | não |
+| `apps_abertos` | Lista as janelas visíveis: título (CPF/CNPJ mascarados), processo, PID e memória. Não lê a linha de comando dos processos. | não |
+
+A lista permitida mora só em [`config/apps.json`](config/apps.json). Dela saem os nomes que `abrir_app` aceita e a
+linha do system prompt; não há outra cópia no código. Para adicionar um programa:
+
+```json
+"meu app": { "tipo": "app", "exe": "C:\\Program Files\\MeuApp\\MeuApp.exe", "aliases": ["meuapp"] }
+```
+
+| Campo | Uso |
+|---|---|
+| `tipo` | `"app"` ou `"editor"`. Só editor aceita `pasta`. |
+| `abrir` | Alvo do `os.startfile`, como um nome com App Paths (`chrome.exe`) ou um protocolo (`spotify:`). |
+| `exe` | Caminho de um **`.exe`**, chamado com lista de argumentos e sem shell. `.cmd` e `.bat` são recusados, porque passam pelo `cmd.exe`. `%VARIAVEIS%` são expandidas. |
+| `terminal` | `true` abre o `exe` no Windows Terminal, na pasta. É usado pelo Claude Code. |
+| `pasta_padrao` | Pasta usada quando nenhuma é pedida. |
+| `aliases` | Outros nomes aceitos. |
+| `ativo` | `false` desliga a entrada sem apagá-la. JSON não aceita comentários, por isso é um campo. |
+
+Uma entrada com `exe` inexistente ou com erro fica inativa e gera um aviso no log. Um `apps.json` inválido não
+derruba a API: `abrir_app` responde com o erro (arquivo, linha e coluna). **Reinicie a API depois de editar.**
+
+Pasta pedida ao Claude Code (ou a outro editor) precisa estar numa pasta permitida. Para abrir em outros projetos de
+`D:\01_Projetos_Ativos`, inclua essa pasta no `JARVIS_PASTAS`, lembrando que ele substitui a lista padrão.
+
 ## Testes e qualidade
 
 ```bat
@@ -159,7 +190,9 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 cd jarvis-hud && npm run lint && npm test && npm run build
 ```
 
-Os testes usam um Claude simulado: nenhum chama a API real nem gasta dinheiro. O CI do GitHub roda tudo isso a
+Os testes usam um Claude simulado: nenhum chama a API real nem gasta dinheiro. O teste de fumaça que lê o Windows
+de verdade (Menu Iniciar, registro e janelas) fica fora da execução padrão. Para rodá-lo:
+`.venv\Scripts\python -m pytest -m windows_real -v`. O CI do GitHub roda tudo isso a
 cada push.
 
 ## Estrutura

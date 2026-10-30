@@ -62,7 +62,9 @@ class ToolError(Exception):
     """Erro esperado de ferramenta (vira tool_result com is_error, sem stack trace)."""
 
 
-def registry() -> dict[str, Tool]:
+def registry(apps_json: Path | None = None) -> dict[str, Tool]:
+    """Todas as ferramentas. A lista de programas de abrir_app vem de config/apps.json (ou de apps_json)."""
+    from .apps import CATALOGO_PADRAO, app_tools, carregar_catalogo
     from .disk import DISK_TOOLS
     from .files import FILE_TOOLS
     from .knowledge import KNOWLEDGE_TOOLS
@@ -71,7 +73,9 @@ def registry() -> dict[str, Tool]:
     from .system import SYSTEM_TOOLS
     from .tasks import TASK_TOOLS
 
-    tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS, *KNOWLEDGE_TOOLS]
+    apps = app_tools(carregar_catalogo(apps_json or CATALOGO_PADRAO))
+    tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS, *KNOWLEDGE_TOOLS,
+             *apps]
     return {t.name: t for t in tools}
 
 

@@ -1,0 +1,26 @@
+{
+  "_leia": "Programas que o JARVIS pode abrir (abrir_app). Campos: tipo 'app' ou 'editor' (só editor aceita pasta); 'abrir' = alvo do os.startfile, como antes; 'exe' = executável .exe chamado com lista de argumentos, sem shell; 'terminal': true abre o exe no Windows Terminal na pasta; 'pasta_padrao' = pasta quando nenhuma é pedida; 'aliases' opcionais; 'ativo': false desliga a entrada sem apagá-la. %VARIAVEIS% são expandidas. Reinicie a API depois de editar.",
+  "apps": {
+    "chrome": {"tipo": "app", "abrir": "chrome.exe"},
+    "edge": {"tipo": "app", "abrir": "msedge.exe"},
+    "firefox": {"tipo": "app", "abrir": "firefox.exe"},
+    "bloco de notas": {"tipo": "app", "abrir": "notepad.exe"},
+    "calculadora": {"tipo": "app", "abrir": "calc.exe"},
+    "paint": {"tipo": "app", "abrir": "mspaint.exe"},
+    "explorador de arquivos": {"tipo": "app", "abrir": "explorer.exe"},
+    "terminal": {"tipo": "app", "abrir": "wt.exe"},
+    "vscode": {"tipo": "app", "abrir": "code"},
+    "word": {"tipo": "app", "abrir": "winword.exe"},
+    "excel": {"tipo": "app", "abrir": "excel.exe"},
+    "gerenciador de tarefas": {"tipo": "app", "abrir": "taskmgr.exe"},
+    "spotify": {"tipo": "app", "abrir": "spotify:"},
+    "discord": {"tipo": "app", "abrir": "discord:"},
+    "cursor": {"tipo": "app", "exe": "C:\\Program Files\\cursor\\Cursor.exe"},
+    "antigravity ide": {"tipo": "editor", "exe": "%LOCALAPPDATA%\\Programs\\Antigravity IDE\\Antigravity IDE.exe"},
+    "antigravity": {"tipo": "app", "exe": "%LOCALAPPDATA%\\Programs\\antigravity\\Antigravity.exe"},
+    "claude code": {
+      "tipo": "editor", "terminal": true, "pasta_padrao": "D:\\01_Projetos_Ativos",
+      "exe": "%APPDATA%\\npm\\node_modules\\@anthropic-ai\\claude-code\\bin\\claude.exe"
+    }
+  }
+}

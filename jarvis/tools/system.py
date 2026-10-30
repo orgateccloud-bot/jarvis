@@ -1,4 +1,4 @@
-"""Ferramentas do sistema: telemetria, hardware, processos, abrir apps (lista permitida), encerrar processos e
+"""Ferramentas do sistema: telemetria, hardware, processos, encerrar processos e
 comandos da lista fixa (sem shell)."""
 
 from __future__ import annotations
@@ -69,32 +69,6 @@ def processos_pesados(p: ProcessosParams, ctx: ToolContext) -> str:
     key = "memoria_mb" if p.ordenar_por == "memoria" else "cpu_percent"
     rows.sort(key=lambda r: r[key], reverse=True)
     return json.dumps(rows[: p.top], ensure_ascii=False)
-
-
-# Apps permitidos → alvo do ShellExecute (os.startfile). Nada fora desta lista é aberto.
-APPS = {
-    "chrome": "chrome.exe", "edge": "msedge.exe", "firefox": "firefox.exe",
-    "bloco de notas": "notepad.exe", "calculadora": "calc.exe", "paint": "mspaint.exe",
-    "explorador de arquivos": "explorer.exe", "terminal": "wt.exe", "vscode": "code",
-    "word": "winword.exe", "excel": "excel.exe", "gerenciador de tarefas": "taskmgr.exe",
-    "spotify": "spotify:", "discord": "discord:",
-}
-
-
-class AbrirAppParams(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    nome: Literal[tuple(APPS)] = Field(description="Aplicativo da lista permitida")  # type: ignore[valid-type]
-
-
-def abrir_app(p: AbrirAppParams, ctx: ToolContext) -> str:
-    if not hasattr(os, "startfile"):
-        raise ToolError("abrir aplicativos só é suportado no Windows")
-    try:
-        # alvo vem só da lista fixa APPS (validada pelo Literal), sem shell
-        os.startfile(APPS[p.nome])  # nosec B606
-    except OSError as e:
-        raise ToolError(f"não consegui abrir {p.nome}: {e.strerror or e}") from e
-    return f"{p.nome} aberto."
 
 
 # Processos que nunca podem ser encerrados (sistema, sessão e o próprio JARVIS)
@@ -241,12 +215,6 @@ SYSTEM_TOOLS = [
                     "antes de sugerir encerrar algo.",
         params=ProcessosParams, run=processos_pesados,
         summary=lambda p: f"listou os {p.top} processos mais pesados ({p.ordenar_por})",
-    ),
-    Tool(
-        name="abrir_app",
-        description="Abre um aplicativo da lista permitida. Chame direto quando o usuário pedir para abrir; "
-                    "o sistema pede a confirmação dele automaticamente.",
-        params=AbrirAppParams, run=abrir_app, summary=lambda p: f"abrir {p.nome}", needs_approval=True,
     ),
     Tool(
         name="encerrar_processo",
