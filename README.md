@@ -11,7 +11,7 @@ de uma base local.
 
 | Área | O que faz |
 |---|---|
-| **Roteamento de modelos** | Classificador determinístico (sem LLM): Haiku 5.5 para o simples, Sonnet 5.5 para o intermediário, Opus 5.5 para o complexo. Respostas por regra (hora, data, status) custam zero. Prefixos `/haiku`, `/sonnet`, `/opus` forçam a camada. |
+| **Roteamento de modelos** | Classificador determinístico (sem LLM): Haiku 5.5 para o simples (esforço `low`), Sonnet 5.5 para o intermediário (`high`), Opus 5.5 para o complexo (`xhigh`) e Fable 5.1 só para o topo da complexidade (`high`, calibrado em ~5% das perguntas). Respostas por regra (hora, data, status) custam zero. Prefixos `/haiku`, `/sonnet`, `/opus`, `/fable` forçam a camada. |
 | **Custo controlado** | Teto mensal (padrão US$ 15): a 80% entra em modo economia, a 100% o Claude pausa. Cache de prompt, resumo automático (compaction) a partir de 60 mil tokens e conversa nova após 30 min parada. Ledger em SQLite com preço oficial por modelo. |
 | **Ferramentas com aprovação** | Status e hardware do PC, processos, abrir programas (lista em `config/apps.json`, editores numa pasta), listar programas instalados e janelas abertas, encerrar processos, ler/buscar arquivos, lembretes (únicos e recorrentes), gestão de disco (analisar, mover reversível, Lixeira), telas do Windows e comandos de lista fixa (`wsl --shutdown`, `ipconfig /flushdns`). Toda ação com efeito mostra um card no HUD e espera "sim". |
 | **Memória** | Ferramenta `memory_20250818` com back-end local (`dados/memories/`): perfil, preferências e decisões sobrevivem entre conversas. CPF/CNPJ mascarados antes de gravar; apagar vai para `.lixeira/`. |

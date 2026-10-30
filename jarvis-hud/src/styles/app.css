@@ -140,6 +140,14 @@
 .kv dt { color: var(--text-muted); }
 .kv dd { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kv-wide { margin-bottom: 12px; }
+.tele { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); display: grid; gap: 10px; }
+.tele-modelos { list-style: none; display: grid; gap: 6px; }
+.tele-modelos li { display: grid; grid-template-columns: 52px 1fr auto 40px; align-items: center; gap: 8px; font-size: 12px; }
+.tele-nome { color: var(--text-muted); }
+.tele-barra { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.tele-barra span { display: block; height: 100%; border-radius: inherit; }
+.tele-valor { text-align: right; }
+.tele-pct { text-align: right; color: var(--text-muted); }
 
 .badge {
   font-size: 11px; padding: 2px 8px; border-radius: 999px;

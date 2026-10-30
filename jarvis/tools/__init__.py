@@ -84,7 +84,7 @@ WEB_TOOLS = [
     {"type": "web_search_20260209", "name": "web_search", "max_uses": 3},
     {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3},
 ]
-WEB_CAPABLE = {"claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-5", "claude-opus-4-8"}
+WEB_CAPABLE = {"claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-5", "claude-opus-4-8"}
 
 
 def definitions_for(model: str, tools: dict[str, Tool]) -> list[dict]:
@@ -102,7 +102,7 @@ def manifesto(tools: dict[str, Tool]) -> str:
         t = tools[name]
         frase = t.description.split(". ")[0].rstrip(".")
         linhas.append(f"- {name}: {frase}" + (" (pede confirmação)" if t.needs_approval else ""))
-    linhas.append("- web_search / web_fetch: buscar e ler páginas da web (só nos modelos Sonnet e Opus)")
-    linhas.append("- sandbox de código (junto com a web, Sonnet e Opus): gerar arquivos; os gravados em $OUTPUT_DIR "
+    linhas.append("- web_search / web_fetch: buscar e ler páginas da web (só nos modelos Sonnet, Opus e Fable)")
+    linhas.append("- sandbox de código (junto com a web, Sonnet, Opus e Fable): gerar arquivos; os gravados em $OUTPUT_DIR "
                   "são salvos no PC do usuário")
     return "\n".join(linhas)

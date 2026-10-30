@@ -6,6 +6,7 @@ const MODES = [
   { key: 'haiku', label: 'Haiku', tier: 'simples', hint: 'Rápido e econômico' },
   { key: 'sonnet', label: 'Sonnet', tier: 'media', hint: 'Equilíbrio' },
   { key: 'opus', label: 'Opus', tier: 'complexa', hint: 'Raciocínio profundo' },
+  { key: 'fable', label: 'Fable', tier: 'fable', hint: 'O mais capaz (2,5x o custo do Opus)' },
 ]
 
 const SUGGESTIONS = ['Briefing do dia', 'O que está ocupando espaço no C:?', 'Quais processos estão pesando?',

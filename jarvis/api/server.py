@@ -53,7 +53,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         audit=AuditChain(settings.data_dir / "audit.jsonl"),
         store=SessionStore(settings.data_dir / "sessions", idle=timedelta(minutes=settings.session_idle_min)),
         salt=salt,
-        tiers=Tiers(settings.model_simple, settings.model_medium, settings.model_complex),
+        tiers=Tiers(settings.model_simple, settings.model_medium, settings.model_complex, settings.model_fable,
+                    settings.fable_pontos),
         tools=tools,
         tool_ctx=ToolContext(
             roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
@@ -104,7 +105,7 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
         return {
             "status": "online",
             "versao": __version__,
-            "modelos": [settings.model_simple, settings.model_medium, settings.model_complex],
+            "modelos": [settings.model_simple, settings.model_medium, settings.model_complex, settings.model_fable],
             "hora": datetime.now().isoformat(),
         }
 

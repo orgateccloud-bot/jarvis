@@ -1,10 +1,11 @@
-"""Roteador determinístico (sem LLM, sem custo): regras | Haiku | Sonnet | Opus conforme a complexidade.
+"""Roteador determinístico (sem LLM, sem custo): regras | Haiku | Sonnet | Opus | Fable conforme a complexidade.
 
 Pontuação de complexidade:
   0     → simples       → Haiku 5.5,  effort low
-  1-2   → intermediário → Sonnet 5.5, effort medium
-  >= 3  → complexo      → Opus 5.5,   effort high
-Prefixos /haiku, /sonnet, /opus (ou "pense bem") forçam a camada.
+  1-2   → intermediário → Sonnet 5.5, effort high
+  3     → complexo      → Opus 5.5,   effort xhigh
+  >= 4  → topo          → Fable 5.1,  effort high  (calibrado em ~3,5% das perguntas reais; JARVIS_FABLE_PONTOS)
+Prefixos /haiku, /sonnet, /opus, /fable (ou "pense bem", que vai ao Opus) forçam a camada.
 No modo economia (>= 80% do teto) tudo desce uma camada com effort low; no teto, o Claude pausa.
 """
 
@@ -22,9 +23,12 @@ class Tiers:
     simple: str = "claude-haiku-5-5"
     medium: str = "claude-sonnet-5-5"
     complex: str = "claude-opus-5-5"
+    fable: str = "claude-fable-5-1"
+    fable_pontos: int = 4  # pontuação mínima para o Fable (o Opus fica com a faixa de 3 até aqui)
 
     def model(self, route: Route) -> str:
-        return {Route.SIMPLE: self.simple, Route.MEDIUM: self.medium, Route.COMPLEX: self.complex}[route]
+        return {Route.SIMPLE: self.simple, Route.MEDIUM: self.medium, Route.COMPLEX: self.complex,
+                Route.FABLE: self.fable}[route]
 
 
 DEFAULT_TIERS = Tiers()
@@ -47,7 +51,7 @@ _LOCAL_PATTERNS = [
 _TASK_HINTS = [
     "analise", "analisa", "resuma", "resume", "explique", "explica", "calcule", "calcula", "traduza",
     "escreva", "redija", "codigo", "script", "programa", "funcao", "sql", "planilha", "revise", "corrija",
-    # busca na web (só Sonnet/Opus têm as ferramentas web)
+    # busca na web (só Sonnet/Opus/Fable têm as ferramentas web)
     "pesquise", "pesquisa", "noticia", "cotacao", "previsao do tempo", "procure na internet",
 ]
 
@@ -71,15 +75,17 @@ _AREAS = {
                  r"\bpgdas", r"\bplano de contas"],
 }
 
-_FORCE = {"/haiku": Route.SIMPLE, "/sonnet": Route.MEDIUM, "/opus": Route.COMPLEX}
-_EFFORT = {Route.SIMPLE: "low", Route.MEDIUM: "medium", Route.COMPLEX: "high"}
-_DOWN = {Route.COMPLEX: Route.MEDIUM, Route.MEDIUM: Route.SIMPLE, Route.SIMPLE: Route.SIMPLE}
-_UP = {Route.SIMPLE: Route.MEDIUM, Route.MEDIUM: Route.COMPLEX, Route.COMPLEX: Route.COMPLEX}
+_FORCE = {"/haiku": Route.SIMPLE, "/sonnet": Route.MEDIUM, "/opus": Route.COMPLEX, "/fable": Route.FABLE}
+_EFFORT = {Route.SIMPLE: "low", Route.MEDIUM: "high", Route.COMPLEX: "xhigh", Route.FABLE: "high"}
+_DOWN = {Route.FABLE: Route.COMPLEX, Route.COMPLEX: Route.MEDIUM, Route.MEDIUM: Route.SIMPLE,
+         Route.SIMPLE: Route.SIMPLE}
+_UP = {Route.SIMPLE: Route.MEDIUM, Route.MEDIUM: Route.COMPLEX, Route.COMPLEX: Route.COMPLEX,
+       Route.FABLE: Route.FABLE}
 
 
 def strip_force(text: str) -> str:
     """Remove o prefixo de camada (/opus etc.) antes de enviar a mensagem ao modelo."""
-    return re.sub(r"^\s*/(haiku|sonnet|opus)\b\s*", "", text, flags=re.IGNORECASE) or text
+    return re.sub(r"^\s*/(haiku|sonnet|opus|fable)\b\s*", "", text, flags=re.IGNORECASE) or text
 
 
 def complexity_score(t: str) -> int:
@@ -97,7 +103,9 @@ def complexity_score(t: str) -> int:
     return score
 
 
-def tier_for(score: int) -> Route:
+def tier_for(score: int, fable_pontos: int = DEFAULT_TIERS.fable_pontos) -> Route:
+    if score >= fable_pontos:
+        return Route.FABLE
     if score >= 3:
         return Route.COMPLEX
     if score >= 1:
@@ -130,7 +138,7 @@ def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Deci
         return Decision(route=Route.LOCAL, reason="pedido trivial resolvido localmente")
 
     score = complexity_score(t)
-    route = forced or tier_for(score)
+    route = forced or tier_for(score, tiers.fable_pontos)
     reason = "forçado pelo usuário" if forced else f"complexidade {score}"
     area = area_for(t)
 

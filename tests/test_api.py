@@ -98,8 +98,8 @@ def test_opus_e_sonnet_usam_fallback_do_servidor(settings, fake_claude):
     client.post("/chat/stream", headers=AUTH, json={"message": "resuma este parágrafo"})
     client.post("/chat/stream", headers=AUTH, json={"message": "/opus planeje a estratégia"})
     sonnet, opus = fake_claude.calls
-    assert sonnet["model"] == "claude-sonnet-5-5" and sonnet["output_config"] == {"effort": "medium"}
-    assert opus["model"] == "claude-opus-5-5" and opus["output_config"] == {"effort": "high"}
+    assert sonnet["model"] == "claude-sonnet-5-5" and sonnet["output_config"] == {"effort": "high"}
+    assert opus["model"] == "claude-opus-5-5" and opus["output_config"] == {"effort": "xhigh"}
     assert opus["fallbacks"] == "default" and "server-side-fallback-2026-07-01" in opus["betas"]
     assert opus["messages"][-2]["content"] == "planeje a estratégia"  # prefixo /opus removido
 
@@ -127,3 +127,14 @@ def test_sem_nenhum_modelo_alem_do_claude():
 
     assert importlib.util.find_spec("ollama") is None  # dependência removida do ambiente
     assert not any("ollama" in f for f in cfg.Settings.model_fields)
+
+
+def test_fable_usa_fallback_e_web(settings, fake_claude):
+    client, _ = _client(settings, fake_claude)
+    client.post("/chat/stream", headers=AUTH, json={"message": "/fable revise este plano"})
+    fable = fake_claude.calls[0]
+    assert fable["model"] == "claude-fable-5-1" and fable["output_config"] == {"effort": "high"}
+    assert fable["thinking"]["type"] == "adaptive"                     # Fable 5.1 recusa disabled/budget_tokens
+    assert fable["fallbacks"] == "default" and "server-side-fallback-2026-07-01" in fable["betas"]
+    assert any(t.get("name") == "web_search" for t in fable["tools"])
+    assert fable["messages"][-2]["content"] == "revise este plano"     # prefixo /fable removido

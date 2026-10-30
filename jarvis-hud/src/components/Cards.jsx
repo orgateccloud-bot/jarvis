@@ -1,8 +1,9 @@
 import { Ring, Sparkline } from './Gauges.jsx'
-import { ROUTE_LABEL, ROUTE_TO_TIER, TIERS } from '../lib/tiers.js'
+import { MODEL_TO_TIER, ROUTE_LABEL, ROUTE_TO_TIER, TIERS } from '../lib/tiers.js'
 
 const level = v => (v >= 90 ? 'var(--danger)' : v >= 75 ? 'var(--warn)' : 'var(--aurora-3)')
 const usd = v => `US$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const pct = v => `${(v ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 
 function Card({ title, aside, children, className = '' }) {
   return (
@@ -63,7 +64,44 @@ export function CostCard({ costs }) {
         </dl>
       </div>
       <p className="muted small">{costs ? `${costs.turnos_claude_mes} turnos com o Claude neste mês` : 'Aguardando o núcleo…'}</p>
+      <Telemetria t={costs?.telemetria} teto={costs?.teto_usd} />
     </Card>
+  )
+}
+
+// Custo do mês por modelo, projeção para o fim do mês e a fatia real do Fable contra a meta.
+function Telemetria({ t, teto }) {
+  if (!t?.por_modelo?.length) return null
+  const passa = teto && t.projecao_mes_usd > teto
+  const fable = t.fable
+  return (
+    <div className="tele" aria-label="Telemetria de custos por modelo">
+      <ul className="tele-modelos">
+        {t.por_modelo.map(m => {
+          const tier = TIERS[MODEL_TO_TIER[m.modelo]]
+          return (
+            <li key={m.modelo} title={`${m.requisicoes} chamadas · média ${usd(m.media_usd)} por chamada`}>
+              <span className="tele-nome">{tier?.label || m.modelo}</span>
+              <span className="tele-barra" aria-hidden="true">
+                <span style={{ width: `${m.fatia_custo_pct}%`, background: tier?.ui || 'var(--aurora-2)' }} />
+              </span>
+              <span className="mono tele-valor">{usd(m.custo_usd)}</span>
+              <span className="mono tele-pct">{pct(m.fatia_custo_pct)}</span>
+            </li>
+          )
+        })}
+      </ul>
+      <dl className="kv">
+        <div>
+          <dt>Projeção do mês</dt>
+          <dd className="mono" style={passa ? { color: 'var(--warn)' } : undefined}>{usd(t.projecao_mes_usd)}</dd>
+        </div>
+        <div title={`Fatia real das chamadas que foram ao Fable; meta: ${fable.meta_pct}%`}>
+          <dt>Fable · meta {pct(fable.meta_pct)}</dt>
+          <dd className="mono">{pct(fable.fatia_req_pct)} das chamadas</dd>
+        </div>
+      </dl>
+    </div>
   )
 }
 

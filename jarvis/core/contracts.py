@@ -12,8 +12,9 @@ from pydantic import BaseModel, Field
 class Route(StrEnum):
     LOCAL = "local"  # resposta por regra (sem IA), custo zero
     SIMPLE = "simples"  # Haiku 5.5, effort low
-    MEDIUM = "media"  # Sonnet 5.5, effort medium
-    COMPLEX = "complexa"  # Opus 5.5, effort high
+    MEDIUM = "media"  # Sonnet 5.5, effort high
+    COMPLEX = "complexa"  # Opus 5.5, effort xhigh
+    FABLE = "fable"  # Fable 5.1, effort high: só o topo da complexidade (~5% das perguntas) ou /fable
 
 
 class BudgetState(StrEnum):
@@ -25,7 +26,7 @@ class BudgetState(StrEnum):
 class Decision(BaseModel):
     route: Route
     model: str | None = None
-    effort: Literal["low", "medium", "high"] | None = None
+    effort: Literal["low", "medium", "high", "xhigh"] | None = None
     reason: str
     area: str | None = None  # área especializada detectada (tributario, oab, contabil)
 

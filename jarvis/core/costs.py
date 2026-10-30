@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import calendar
 import sqlite3
 import threading
 from datetime import datetime
@@ -11,6 +12,7 @@ from .contracts import BudgetState, UsageRecord
 
 # US$ por 1M tokens: (entrada, saída, leitura de cache, escrita de cache 5 min = 1,25x entrada)
 PRICES: dict[str, tuple[float, float, float, float]] = {
+    "claude-fable-5-1": (10.00, 50.00, 0.25, 12.50),
     "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
     "claude-opus-5": (5.00, 25.00, 0.50, 6.25),
     "claude-opus-4-8": (5.00, 25.00, 0.50, 6.25),
@@ -93,6 +95,29 @@ class CostLedger:
             return BudgetState.ECONOMY
         return BudgetState.NORMAL
 
+    def telemetry(self, now: datetime | None = None, meta_fable_pct: float = 5.0) -> dict:
+        """Custo do mês por modelo, projeção para o fim do mês e a fatia real do Fable contra a meta."""
+        now = now or datetime.now()
+        with self._conn() as c:
+            linhas = c.execute(
+                "SELECT model, COUNT(*), COALESCE(SUM(cost_usd),0) FROM usage WHERE at LIKE ? "
+                "GROUP BY model ORDER BY 3 DESC", (now.strftime("%Y-%m") + "%",),
+            ).fetchall()
+        reqs = sum(n for _, n, _ in linhas) or 1
+        gasto = sum(c for _, _, c in linhas)
+        por_modelo = [{
+            "modelo": m, "requisicoes": n, "custo_usd": round(c, 4), "media_usd": round(c / n, 4),
+            "fatia_req_pct": round(100 * n / reqs, 1), "fatia_custo_pct": round(100 * c / gasto, 1) if gasto else 0.0,
+        } for m, n, c in linhas]
+        dias_mes = calendar.monthrange(now.year, now.month)[1]
+        fable = next((x for x in por_modelo if x["modelo"].startswith("claude-fable")), None)
+        return {
+            "por_modelo": por_modelo,
+            "projecao_mes_usd": round(gasto / now.day * dias_mes, 2),
+            "fable": {"fatia_req_pct": fable["fatia_req_pct"] if fable else 0.0, "meta_pct": meta_fable_pct,
+                      "custo_usd": fable["custo_usd"] if fable else 0.0},
+        }
+
     def summary(self) -> dict:
         month = self.month_total()
         with self._conn() as c:
@@ -111,4 +136,5 @@ class CostLedger:
             "estado": self.state().value,
             "turnos_claude_mes": turns,
             "cache_hit_pct": round(100 * hit, 1),
+            "telemetria": self.telemetry(),
         }
