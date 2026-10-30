@@ -18,7 +18,7 @@ const Icon = ({ d, label }) => (
 )
 
 export default function TopBar({ phase, convMode, tier, online, muted, onToggleMute, wake, onToggleWake, voiceSupported,
-  panelsOpen, onTogglePanels }) {
+  bargeIn, onToggleBargeIn, panelsOpen, onTogglePanels }) {
   const now = useClock()
   const t = TIERS[tier] || TIERS.regras
   const label = phase === 'idle' && convMode === 'wake' ? 'Aguardando “Jarvis”' : PHASE[phase] || phase
@@ -49,6 +49,13 @@ export default function TopBar({ phase, convMode, tier, online, muted, onToggleM
             title={wake ? 'Parar de ouvir “Jarvis” em segundo plano' : 'Ouvir a palavra “Jarvis” em segundo plano'}>
             <Icon label="palavra de ativação" d={<><path d="M6 8.5a6 6 0 1 1 10.5 4c-1.2 1.4-2 2.3-2 4a3 3 0 0 1-5.5 1.6" />
               <path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-1.5 2-1.5 3.5" /></>} />
+          </button>
+        )}
+        {voiceSupported && (
+          <button className={`icon-btn wake-btn ${bargeIn ? 'on' : ''}`} onClick={onToggleBargeIn} aria-pressed={bargeIn}
+            title={bargeIn ? 'Modo fone ligado: “Jarvis, pare” interrompe a fala' : 'Modo fone: interromper a fala por voz (só com fone de ouvido)'}>
+            <Icon label="modo fone" d={<><path d="M4 15v-3a8 8 0 0 1 16 0v3" />
+              <rect x="3" y="15" width="4" height="6" rx="1.5" /><rect x="17" y="15" width="4" height="6" rx="1.5" /></>} />
           </button>
         )}
         <button className="icon-btn" onClick={onToggleMute} aria-pressed={muted}

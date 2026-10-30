@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createWebSpeechEngine } from '../lib/voice/webspeech.js'
-import { NO, STOP_WORDS, WAKE_WORD, YES, afterWakeWord, createSentenceSplitter } from '../lib/voice/sentences.js'
+import { createSentenceSplitter } from '../lib/voice/sentences.js'
+import { routeHeard } from '../lib/voice/route.js'
 import { corrigirTermos } from '../lib/voice/termos.js'
 
 const SILENCE_MS = 12000
 const WAKE_KEY = 'jarvis-ouvir-jarvis'
 const MUTE_KEY = 'jarvis-mudo'
+// modo fone: microfone aberto durante a fala para interromper por voz (com alto-falante, o JARVIS se ouviria)
+const BARGE_KEY = 'jarvis-interromper-por-voz'
 
 const readFlag = key => { try { return localStorage.getItem(key) === '1' } catch { return false } }
 const writeFlag = (key, v) => { try { localStorage.setItem(key, v ? '1' : '0') } catch { /* armazenamento indisponível */ } }
@@ -21,10 +24,15 @@ const writeFlag = (key, v) => { try { localStorage.setItem(key, v ? '1' : '0') }
 export function useConversation(deps) {
   const d = useRef(deps)
   useEffect(() => { d.current = deps })
-  const engine = useMemo(() => createWebSpeechEngine(), [])
+  const engine = useMemo(() => {
+    const e = createWebSpeechEngine()
+    e.setHalfDuplex(!readFlag(BARGE_KEY))
+    return e
+  }, [])
   const [mode, setMode] = useState(() => (readFlag(WAKE_KEY) ? 'wake' : 'off'))
   const [wakeEnabled, setWakeEnabled] = useState(() => readFlag(WAKE_KEY))
   const [muted, setMuted] = useState(() => readFlag(MUTE_KEY))
+  const [bargeIn, setBargeIn] = useState(() => readFlag(BARGE_KEY))
   const [speaking, setSpeaking] = useState(false)
   const [caption, setCaption] = useState('')
   const [error, setError] = useState('')
@@ -75,44 +83,34 @@ export function useConversation(deps) {
   const onResult = useCallback((raw, isFinal) => {
     if (!raw) return
     const text = corrigirTermos(raw)  // "Graves, ..." → "Jarvis, ...", "c t n" → "CTN"
-    const m = modeRef.current
     armSilence()
-
-    // falando: só interrompe com gatilho explícito (ignora o eco do próprio alto-falante)
-    if (engine.speaking) {
-      const echo = STOP_WORDS.test(engine.currentText) && STOP_WORDS.test(text)
-      if (STOP_WORDS.test(text) && !echo) {
+    const r = routeHeard(text, isFinal, {
+      mode: modeRef.current, speaking: engine.speaking, busy: d.current.busy,
+      pendingApproval: !!pendingApproval.current,
+    })
+    switch (r.action) {
+      case 'cancel':
         engine.cancel()
-        if (m !== 'active') setMode('active')
+        if (modeRef.current !== 'active') setMode('active')
         setCaption('')
-      }
-      return
-    }
-
-    // aprovação pendente: "sim"/"não" por voz
-    if (pendingApproval.current && isFinal) {
-      if (YES.test(text) || NO.test(text)) {
-        const ok = YES.test(text) && !NO.test(text)
-        d.current.approve(pendingApproval.current, ok)
+        break
+      case 'approve':
+        d.current.approve(pendingApproval.current, r.ok)
         pendingApproval.current = null
         setCaption('')
-        return
-      }
-    }
-
-    if (m === 'wake') {
-      if (!WAKE_WORD.test(text)) return
-      const rest = afterWakeWord(text)
-      setMode('active')
-      if (isFinal && rest && rest.length > 2) ask(rest)
-      else if (isFinal) say('Pois não?')
-      return
-    }
-
-    if (m === 'active') {
-      if (d.current.busy) return
-      if (!isFinal) { setCaption(text); return }
-      ask(text)
+        break
+      case 'wake':
+        setMode('active')
+        if (r.ask) ask(r.ask)
+        else if (r.greet) say('Pois não?')
+        break
+      case 'caption':
+        setCaption(text)
+        break
+      case 'ask':
+        ask(text)
+        break
+      default:
     }
   }, [engine, armSilence, ask, say])
 
@@ -158,6 +156,15 @@ export function useConversation(deps) {
     })
   }, [])
 
+  const toggleBargeIn = useCallback(() => {
+    setBargeIn(on => {
+      const next = !on
+      writeFlag(BARGE_KEY, next)
+      engine.setHalfDuplex(!next)
+      return next
+    })
+  }, [engine])
+
   const toggleMute = useCallback(() => {
     setMuted(v => {
       const next = !v
@@ -176,9 +183,9 @@ export function useConversation(deps) {
   })
 
   return {
-    supported: engine.supported, mode, wakeEnabled, muted, speaking, caption, error,
+    supported: engine.supported, mode, wakeEnabled, muted, bargeIn, speaking, caption, error,
     listening: mode === 'active' && !speaking,
-    toggle, toggleWake, toggleMute, ask, say, stop: () => engine.cancel(),
+    toggle, toggleWake, toggleMute, toggleBargeIn, ask, say, stop: () => engine.cancel(),
     clearApproval: () => { pendingApproval.current = null },
   }
 }

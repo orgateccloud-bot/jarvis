@@ -73,6 +73,7 @@ export default function App() {
           phase={phase} convMode={conv.mode} tier={uiTier} online={j.online}
           muted={conv.muted} onToggleMute={conv.toggleMute}
           wake={conv.wakeEnabled} onToggleWake={conv.toggleWake} voiceSupported={conv.supported.listen}
+          bargeIn={conv.bargeIn} onToggleBargeIn={conv.toggleBargeIn}
           panelsOpen={panelsOpen} onTogglePanels={() => setPanelsOpen(o => !o)}
         />
         {j.online === false && (

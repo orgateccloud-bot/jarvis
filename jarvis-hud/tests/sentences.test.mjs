@@ -1,7 +1,7 @@
 // Testes do divisor de frases (voz em streaming) e dos gatilhos de voz. Rode: npm test
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { NO, STOP_WORDS, YES, afterWakeWord, createSentenceSplitter } from '../src/lib/voice/sentences.js'
+import { NO, YES, afterWakeWord, createSentenceSplitter, isStopCommand } from '../src/lib/voice/sentences.js'
 
 function run(chunks) {
   const out = []
@@ -32,6 +32,6 @@ test('palavra de ativação e respostas sim/não', () => {
   assert.equal(afterWakeWord('Jarvis, que horas são?'), 'que horas são?')
   assert.equal(afterWakeWord('ok jarvis'), '')
   assert.equal(afterWakeWord('olá mundo'), null)
-  assert.ok(STOP_WORDS.test('Jarvis para'))
+  assert.ok(isStopCommand('Jarvis, pare') && !isStopCommand('Jarvis para'))
   assert.ok(YES.test('sim pode abrir') && NO.test('não, cancela') && !YES.test('não'))
 })

@@ -61,7 +61,13 @@ export function createSentenceSplitter(emit) {
 }
 
 // Gatilhos de voz
-export const STOP_WORDS = /\b(jarvis|pare|para|espera|espere|chega|sil[eê]ncio)\b/i
+// Interromper por voz só com comando curto no começo da fala: "Jarvis, pare", "Jarvis, silêncio" ou "pare".
+// "para", "espera" e "chega" saíram: aparecem em frases comuns e no eco da própria voz.
+const STOP_COMMAND = /^(?:jarvis[\s,!.]+(?:pare|sil[eê]ncio)|pare)(?![\p{L}\p{N}])/iu
+export function isStopCommand(text) {
+  const t = (text || '').trim()
+  return !!t && t.split(/\s+/).length <= 3 && STOP_COMMAND.test(t)
+}
 export const WAKE_WORD = /\bjarvis\b/i
 export const YES = /^\s*(sim|pode|pode sim|confirmo|confirma|autorizo|aprovado|aprovo|ok|claro|manda)\b/i
 export const NO = /^\s*(n[aã]o|cancela|cancelar|negado|nega|nem pensar)\b/i
