@@ -143,6 +143,10 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
     }
 
     const frame = now => {
+      if (document.hidden) { // segurança: um callback já agendado não reagenda com a aba oculta
+        raf = 0
+        return
+      }
       if (!ready) {
         if (failed) return
         if (!parallel || gl.getProgramParameter(prog, parallel.COMPLETION_STATUS_KHR)) finishLink()
@@ -202,7 +206,22 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       draw()
       raf = requestAnimationFrame(frame)
     }
-    raf = requestAnimationFrame(frame)
+    const start = () => {
+      if (raf || document.hidden) return
+      // retoma do instante atual: sem salto de tempo e sem rajada de quadros acumulados
+      last = marca = performance.now()
+      acc = 0
+      frames = 0
+      raf = requestAnimationFrame(frame)
+    }
+    // aba oculta: a animação para de vez (sem rAF nenhum) e volta ao ficar visível
+    const onVisibility = () => {
+      if (!document.hidden) return start()
+      cancelAnimationFrame(raf)
+      raf = 0
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    start()
 
     if (statsRef) {
       window.__cosmosStill = ({ t = 8, energy = 0.8 } = {}) => {
@@ -223,6 +242,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
 
     return () => {
       cancelAnimationFrame(raf)
+      document.removeEventListener('visibilitychange', onVisibility)
       if (statsRef) delete window.__cosmosStill
       window.removeEventListener('resize', resize)
       gl.deleteBuffer(buf)
