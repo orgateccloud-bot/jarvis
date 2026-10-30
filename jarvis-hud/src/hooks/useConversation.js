@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createWebSpeechEngine } from '../lib/voice/webspeech.js'
+import { createEchoFilter } from '../lib/voice/echo.js'
 import { createSentenceSplitter } from '../lib/voice/sentences.js'
 import { routeHeard } from '../lib/voice/route.js'
 import { corrigirTermos } from '../lib/voice/termos.js'
@@ -33,6 +34,7 @@ export function useConversation(deps) {
   const [wakeEnabled, setWakeEnabled] = useState(() => readFlag(WAKE_KEY))
   const [muted, setMuted] = useState(() => readFlag(MUTE_KEY))
   const [bargeIn, setBargeIn] = useState(() => readFlag(BARGE_KEY))
+  const echo = useMemo(() => createEchoFilter(), [])
   const [speaking, setSpeaking] = useState(false)
   const [caption, setCaption] = useState('')
   const [error, setError] = useState('')
@@ -62,8 +64,10 @@ export function useConversation(deps) {
   }, [engine, restMode])
 
   const say = useCallback(text => {
-    if (!mutedRef.current) engine.speak(text)
-  }, [engine])
+    if (mutedRef.current) return
+    echo.remember(text)
+    engine.speak(text)
+  }, [engine, echo])
 
   /** Envia um pedido e fala a resposta frase a frase enquanto ela chega. */
   const ask = useCallback(text => {
@@ -86,7 +90,7 @@ export function useConversation(deps) {
     armSilence()
     const r = routeHeard(text, isFinal, {
       mode: modeRef.current, speaking: engine.speaking, busy: d.current.busy,
-      pendingApproval: !!pendingApproval.current,
+      pendingApproval: !!pendingApproval.current, isEcho: echo.isEcho,
     })
     switch (r.action) {
       case 'cancel':
@@ -112,17 +116,17 @@ export function useConversation(deps) {
         break
       default:
     }
-  }, [engine, armSilence, ask, say])
+  }, [engine, echo, armSilence, ask, say])
 
   useEffect(() => {
     engine.on({
       result: (t, f) => onResult(t, f),
       speakStart: () => setSpeaking(true),
-      speakEnd: () => { setSpeaking(false); armSilence() },
+      speakEnd: () => { echo.ended(); setSpeaking(false); armSilence() },
       boundary: () => { d.current.energyRef.current = 1 },
       error: msg => { setError(msg); setMode('off') },
     })
-  }, [engine, onResult, armSilence])
+  }, [engine, echo, onResult, armSilence])
 
   // liga/desliga o microfone conforme o modo; em "wake" pausa quando a aba fica oculta (privacidade)
   useEffect(() => {

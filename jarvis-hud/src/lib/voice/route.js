@@ -1,9 +1,13 @@
 // Decide o que fazer com um texto reconhecido. Puro (sem React), para o fluxo da conversa ser testável.
-//   ctx: { mode, speaking, busy, pendingApproval }
+//   ctx: { mode, speaking, busy, pendingApproval, isEcho(text, { answer }) }
 //   devolve { action: 'ignore' | 'cancel' | 'approve' | 'wake' | 'caption' | 'ask', ... }
 import { NO, WAKE_WORD, YES, afterWakeWord, isStopCommand } from './sentences.js'
 
 export function routeHeard(text, isFinal, ctx) {
+  // eco da própria voz (frase em curso ou recente): descarta antes de tudo; nunca vira pergunta nem interrupção
+  const answer = ctx.pendingApproval && (YES.test(text) || NO.test(text))
+  if (!isStopCommand(text) && ctx.isEcho?.(text, { answer })) return { action: 'ignore', echo: true }
+
   // falando: só um comando curto e explícito interrompe; o resto é eco do alto-falante ou conversa paralela
   if (ctx.speaking) return isStopCommand(text) ? { action: 'cancel' } : { action: 'ignore' }
 
