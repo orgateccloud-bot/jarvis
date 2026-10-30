@@ -6,9 +6,10 @@
   --aurora: linear-gradient(135deg, var(--aurora-1), var(--aurora-2) 55%, var(--aurora-3));
 
   --space: #03040b;
-  --glass: rgba(8, 12, 26, 0.42);
-  --glass-strong: rgba(8, 12, 26, 0.62);
-  --glass-blur: blur(18px) saturate(140%);
+  /* sem backdrop-filter: tudo fica sobre o cosmos animado e o desfoque seria refeito a cada quadro na GPU;
+     a opacidade maior mantém a leitura que o desfoque dava */
+  --glass: rgba(8, 12, 26, 0.66);
+  --glass-strong: rgba(8, 12, 26, 0.8);
   --hairline: rgba(255, 255, 255, 0.08);
   --hairline-strong: rgba(255, 255, 255, 0.16);
 
@@ -68,8 +69,6 @@ button, input { font: inherit; color: inherit; }
 
 .glass {
   background: var(--glass);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--hairline);
   border-radius: var(--radius);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 50px rgba(0, 0, 0, 0.35);
