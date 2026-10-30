@@ -75,9 +75,12 @@ export function createWebSpeechEngine(io = {}) {
 
   const pickVoice = () => {
     if (!synth) return
-    const vs = synth.getVoices()
-    voice = vs.find(v => /pt-BR/i.test(v.lang) && /natural|neural|online/i.test(v.name))
-      || vs.find(v => /pt-BR/i.test(v.lang)) || vs.find(v => /^pt/i.test(v.lang)) || null
+    // voz local primeiro: a online depende da rede e atrasa ou falha no meio da frase
+    const br = synth.getVoices().filter(v => /pt-BR/i.test(v.lang))
+    const natural = v => /natural|neural/i.test(v.name)
+    voice = br.find(v => v.localService && natural(v)) || br.find(v => v.localService)
+      || br.find(v => natural(v) || /online/i.test(v.name)) || br[0]
+      || synth.getVoices().find(v => /^pt/i.test(v.lang)) || null
   }
   if (synth) {
     pickVoice()

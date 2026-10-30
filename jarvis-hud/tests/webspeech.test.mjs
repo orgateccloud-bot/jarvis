@@ -63,6 +63,24 @@ test('parar de ouvir durante a fala: a cauda não religa o microfone', () => {
   } finally { mock.timers.reset() }
 })
 
+test('voz: prefere a pt-BR local; sem local, a natural/online', () => {
+  const voz = (name, lang, localService) => ({ name, lang, localService })
+  const online = voz('Microsoft Francisca Online (Natural)', 'pt-BR', false)
+  const local = voz('Microsoft Maria', 'pt-BR', true)
+  const escolhida = vozes => {
+    const f = fakes()
+    f.synth.getVoices = () => vozes
+    const engine = createWebSpeechEngine(f)
+    engine.speak('Teste.')
+    const v = f.spoken[0].voice
+    engine.cancel()
+    return v
+  }
+  assert.equal(escolhida([online, local, voz('Joana', 'pt-PT', true)]), local)
+  assert.equal(escolhida([voz('Google português do Brasil', 'pt-BR', false), online]), online)
+  assert.equal(escolhida([voz('Joana', 'pt-PT', true)]).name, 'Joana')
+})
+
 test('listen() durante a fala espera a cauda; sem half-duplex o microfone fica aberto', () => {
   mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'] })
   try {
