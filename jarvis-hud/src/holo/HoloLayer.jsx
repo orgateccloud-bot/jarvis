@@ -1,11 +1,21 @@
 // Painéis de vidro em volta do sol (telas largas), como no vídeo de referência: CPU e RAM, custo, modelos,
 // neural, último turno e um painel decorativo. O conteúdo vem dos mesmos dados dos cards planos.
-import { memo, useState } from 'react'
+// Com o palco aberto, a câmera recua: os painéis dão lugar a blocos compactos ao lado do sol, o palco
+// 3D ocupa o centro e os detalhes ficam à direita.
+import { Suspense, lazy, memo, useEffect, useRef, useState } from 'react'
 import HoloPanel from './HoloPanel.jsx'
-import { arranjoRepouso } from './arranjo.js'
+import { Blocos, Detalhes, Trilho } from './PalcoUI.jsx'
+import { arranjoPalco, arranjoRepouso, trilho } from './arranjo.js'
+import projetos from './conteudo/projetos.json'
+import SafeBoundary from '../components/SafeBoundary.jsx'
+import { TRANSICAO_MS } from '../cosmos/sol.js'
 import { CostBadge, CostBody, NeuralBody, NeuralChip, TurnLine } from '../components/Cards.jsx'
 import { Ring, Sparkline } from '../components/Gauges.jsx'
 import { MODEL_TO_TIER, ROUTE_LABEL, ROUTE_TO_TIER, TIERS } from '../lib/tiers.js'
+
+const carregarPalco = () => import('./PalcoCena.jsx')
+const PalcoCena = lazy(carregarPalco)
+const DADOS = { projetos }
 
 const level = v => (v >= 90 ? 'var(--danger)' : v >= 75 ? 'var(--warn)' : 'var(--aurora-3)')
 const ORDEM = ['regras', 'simples', 'media', 'complexa', 'fable']
@@ -73,15 +83,34 @@ const Deco = memo(function Deco({ ram }) {
   )
 })
 
-export default function HoloLayer({ view, sol, vitals, history, costs, neural, mode, respostas }) {
+export default function HoloLayer({ view, sol, vitals, history, costs, neural, mode, respostas, palco, onPalco }) {
   const a = arranjoRepouso({ W: view.W, H: view.H, sol })
+  const ap = arranjoPalco({ W: view.W, H: view.H, sol })
   const [turnoOculto, setTurnoOculto] = useState(null)
+  // categoria em cena: fica montada até o fim do fade de saída, para o holograma se dissolver
+  const [exibida, setExibida] = useState(palco.categoria)
+  if (palco.aberto && palco.categoria !== exibida) setExibida(palco.categoria)
+  // a cena só é descartada depois que o sol termina de voltar (o descarte no meio da transição engasga)
+  const aberto = useRef(palco.aberto)
+  useEffect(() => { aberto.current = palco.aberto })
+  const fimSaida = e => {
+    if (e.target !== e.currentTarget || e.propertyName !== 'opacity' || palco.aberto) return
+    setTimeout(() => { if (!aberto.current) setExibida(null) }, Math.max(0, TRANSICAO_MS - 420) + 40)
+  }
+  // o código do palco (three) é baixado e compilado no ócio, antes da primeira abertura
+  useEffect(() => {
+    const ocioso = window.requestIdleCallback || (f => setTimeout(f, 2000))
+    const cancelar = window.cancelIdleCallback || clearTimeout
+    const id = ocioso(() => { carregarPalco() }, { timeout: 10000 })
+    return () => cancelar(id)
+  }, [])
   const uso = neural?.uso
   const hash = uso?.audit_hash
   const turnoTier = TIERS[MODEL_TO_TIER[uso?.modelo]]
   const pulso = respostas ? `r${respostas}` : ''
   return (
     <div className="holo-layer">
+      <div className={`holo-grupo ${palco.aberto ? 'oculto' : ''}`} aria-hidden={palco.aberto || undefined}>
       <HoloPanel id="deco" rect={a.deco} i={0} decorativo><Deco ram={history.ram} /></HoloPanel>
       <HoloPanel id="cpu" rect={a.cpu} i={1} title="CPU" label="CPU, memória e disco" glare={pulso}
         aside={<span className="holo-tag">{vitals ? `${vitals.uptime_hours?.toFixed(1)} h ligado` : 'aguardando'}</span>}>
@@ -103,6 +132,28 @@ export default function HoloLayer({ view, sol, vitals, history, costs, neural, m
           {uso ? <TurnLine uso={uso} /> : <p className="muted small">Custo, tokens e hash de auditoria aparecem aqui ao fim de cada resposta.</p>}
         </HoloPanel>
       )}
+      </div>
+
+      <div className={`holo-grupo holo-grupo-palco ${palco.aberto ? '' : 'oculto'}`} onTransitionEnd={fimSaida}
+        aria-hidden={!palco.aberto || undefined}>
+        {/* blocos e detalhes ficam montados (ocultos): abrir o palco só troca a classe, sem montar nada pesado */}
+        <Blocos ap={ap} vitals={vitals} costs={costs} neural={neural} />
+        <Detalhes rect={ap.detalhes} dados={DADOS[exibida || 'projetos']} selecionado={palco.selecionado} />
+        <section className="holo-palco" aria-label="Palco holográfico"
+          style={{ width: ap.palco.w, height: ap.palco.h, transform: `translate(${ap.palco.x}px, ${ap.palco.y}px)` }}>
+          {exibida && (
+            <SafeBoundary resetKey={exibida} fallback={<p className="holo-carregando">O holograma não pôde ser desenhado.</p>}>
+              <Suspense fallback={<p className="holo-carregando">Carregando o holograma…</p>}>
+                <PalcoCena categoria={exibida} dados={DADOS[exibida]} w={ap.palco.w} h={ap.palco.h}
+                  aberto={palco.aberto} selecionado={palco.selecionado}
+                  onSelecionar={id => onPalco({ type: 'selecionar', id })} />
+              </Suspense>
+            </SafeBoundary>
+          )}
+        </section>
+      </div>
+
+      <Trilho rect={trilho({ W: view.W, palco: palco.aberto ? ap.palco : null })} palco={palco} onPalco={onPalco} />
     </div>
   )
 }

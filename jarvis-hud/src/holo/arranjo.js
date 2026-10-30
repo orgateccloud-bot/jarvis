@@ -58,5 +58,43 @@ export function arranjoRepouso({ W, H, sol }) {
   return { cpu, deco, custo, modelos, neural, turno }
 }
 
+// ── modo palco: a câmera recua, o sol vai para a esquerda e encolhe, o palco ocupa o centro ──
+export const PALCO_SOL_X = 0.14 // centro do sol, em fração da largura
+export const PALCO_SOL_ESCALA = 0.55
+export const BLOCO_H = 92 // blocos compactos: escala 1 e texto de pelo menos 12 px (na fase 0, encolher os
+// painéis grandes para 0,55 deixava texto de 7 px)
+
+export const alvoSolPalco = (sol, W, H) => ({ x: (PALCO_SOL_X - 0.5) * (W / H), y: sol.y, r: sol.r * PALCO_SOL_ESCALA })
+
+export function arranjoPalco({ W, H, sol }) {
+  const s = alvoSolPalco(sol, W, H)
+  const { cy, rp } = solPx(s, W, H)
+  const conv = zonaConversa(W, H)
+  const esq = 0.3 * W
+  const blocoW = Math.min(300, conv.x0 - VAO - MARGEM, esq - VAO - MARGEM)
+  let y = cy + rp + 28
+  const bloco = () => {
+    const r = ret(MARGEM, y, blocoW, BLOCO_H, -6)
+    y += BLOCO_H + 12
+    return r
+  }
+  const cpu = bloco()
+  const custo = bloco()
+  const modelo = bloco()
+  const detX = 0.78 * W + VAO
+  return {
+    sol: s, cpu, custo, modelo,
+    palco: ret(esq, TOPO, 0.78 * W - esq, conv.y0 - VAO - TOPO, 0),
+    detalhes: ret(detX, TOPO, W - MARGEM - detX, H - MARGEM - TOPO, 6),
+  }
+}
+
+// trilho de categorias: no repouso, no alto entre os painéis; no palco, sobre a borda de cima do palco
+export const TRILHO = { w: 160, wPalco: 220, h: 34 }
+export function trilho({ W, palco }) {
+  if (palco) return ret(palco.x + palco.w / 2 - TRILHO.wPalco / 2, palco.y + 10, TRILHO.wPalco, TRILHO.h, 0)
+  return ret(W / 2 - TRILHO.w / 2, TOPO - 4, TRILHO.w, TRILHO.h, 0)
+}
+
 // sobreposição entre dois retângulos (sem contar a rotação, que é pequena nos painéis com texto)
 export const cruza = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h

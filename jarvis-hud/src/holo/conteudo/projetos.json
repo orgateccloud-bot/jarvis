@@ -1,0 +1,31 @@
+{
+  "categoria": "projetos",
+  "versao": 1,
+  "atualizado": "2026-10-30",
+  "fonte": "Pastas com repositório git em D:\\01_Projetos_Ativos e o MiniSaaS; resumos tirados dos README. Instantâneo estático até o núcleo expor os projetos.",
+  "grupos": {
+    "orgatec": { "nome": "ORGATEC", "cor": "#4D7CFF" },
+    "financeiro": { "nome": "Financeiro", "cor": "#34D399" },
+    "ferramentas": { "nome": "Ferramentas", "cor": "#0EA5E9" },
+    "pessoal": { "nome": "Pessoal", "cor": "#FFB25C" }
+  },
+  "itens": [
+    { "id": "jarvis", "nome": "JARVIS 4.0", "grupo": "pessoal", "resumo": "Assistente pessoal para Windows, conversacional e proativo, só com modelos Claude", "stack": ["Python", "FastAPI", "React"], "ultimo": "2026-10-30", "pasta": "D:\\01_Projetos_Ativos\\jarvis" },
+    { "id": "trilha", "nome": "Trilha", "grupo": "pessoal", "resumo": "Projetos de estudo e concursos", "stack": [], "ultimo": "2026-10-30", "pasta": "D:\\01_Projetos_Ativos\\Trilha" },
+    { "id": "asicvm", "nome": "ASIC-VM", "grupo": "pessoal", "resumo": "Máquina virtual em Rust que emula a arquitetura interna de um ASIC de mineração Bitcoin", "stack": ["Rust"], "ultimo": "2026-09-09", "pasta": "D:\\01_Projetos_Ativos\\AsicVm" },
+    { "id": "milkii", "nome": "milkii.art", "grupo": "pessoal", "resumo": "Portfólio estático para divulgação de arte", "stack": ["Next.js"], "ultimo": "2026-06-17", "pasta": "D:\\01_Projetos_Ativos\\milkii-art" },
+    { "id": "orgconc", "nome": "OrgConc", "grupo": "orgatec", "resumo": "Conciliação bancária e auditoria fiscal forense", "stack": ["FastAPI", "Supabase", "Claude API"], "ultimo": "2026-07-27", "pasta": "D:\\01_Projetos_Ativos\\OrgConc" },
+    { "id": "orgaudi", "nome": "OrgAudi", "grupo": "orgatec", "resumo": "Plataforma de auditoria fiscal", "stack": ["Python"], "ultimo": "2026-09-06", "pasta": "D:\\01_Projetos_Ativos\\OrgAudi" },
+    { "id": "orginv", "nome": "OrgInv", "grupo": "orgatec", "resumo": "Auditoria de ganho de capital em espólio", "stack": [], "ultimo": "2026-06-18", "pasta": "D:\\01_Projetos_Ativos\\OrgInv" },
+    { "id": "orgcred", "nome": "OrgCred", "grupo": "orgatec", "resumo": "Módulo de microcrédito (ESC) da ORGATEC", "stack": ["Python"], "ultimo": "2026-09-11", "pasta": "D:\\01_Projetos_Ativos\\OrgCredV1" },
+    { "id": "mini", "nome": "MiniSaaS", "grupo": "financeiro", "resumo": "SaaS financeiro multiempresa", "stack": ["FastAPI", "SQLite", "Alpine.js"], "ultimo": null, "pasta": "D:\\01_Projetos_Ativos\\Mini" },
+    { "id": "pdf2md", "nome": "ConvertPDftoMD", "grupo": "ferramentas", "resumo": "Conversor de PDF para Markdown, XML e OFX", "stack": ["Python", "Node.js"], "ultimo": "2026-05-25", "pasta": "D:\\01_Projetos_Ativos\\ConvertPDftoMD" }
+  ],
+  "ligacoes": [
+    { "de": "orgconc", "para": "orgaudi", "motivo": "família ORGATEC" },
+    { "de": "orgaudi", "para": "orginv", "motivo": "auditoria ORGATEC" },
+    { "de": "orgconc", "para": "orgcred", "motivo": "família ORGATEC" },
+    { "de": "orgconc", "para": "mini", "motivo": "mesma stack: FastAPI" },
+    { "de": "pdf2md", "para": "orgconc", "motivo": "gera OFX para a conciliação" }
+  ]
+}

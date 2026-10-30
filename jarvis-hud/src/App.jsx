@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import CosmosScene from './cosmos/CosmosScene.jsx'
 import TopBar from './components/TopBar.jsx'
 import { CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
@@ -10,7 +10,8 @@ import { useConversation } from './hooks/useConversation.js'
 import { useViewport } from './hooks/useViewport.js'
 import { ROUTE_TO_TIER, TIERS } from './lib/tiers.js'
 import HoloLayer from './holo/HoloLayer.jsx'
-import { holoAtivo } from './holo/arranjo.js'
+import { alvoSolPalco, holoAtivo } from './holo/arranjo.js'
+import { PALCO_INICIAL, comandoPalco, palcoReducer } from './holo/palco.js'
 import { SOL, SOL_HOLO, solPx } from './cosmos/sol.js'
 
 const REST_AFTER_MS = 30000 // depois de 30 s em espera, o sol volta a ser o Sol (G2V)
@@ -27,7 +28,24 @@ export default function App() {
   const [resting, setResting] = useState(true)
   const devStats = useRef(null) // só em dev: expõe window.__cosmosStill para capturas determinísticas
 
+  // telas largas: os cards viram painéis de vidro em volta do sol; nas demais fica o layout plano
+  const view = useViewport()
+  const holo = holoAtivo(view.W, view.H)
+  const holoRef = useRef(holo)
+  useEffect(() => { holoRef.current = holo }, [holo])
+  // palco holográfico (só no modo vidro): categoria aberta e item selecionado
+  const [palco, dispatchPalco] = useReducer(palcoReducer, PALCO_INICIAL)
+
   const send = useCallback((text, opts = {}) => {
+    // "mostra os projetos", "/holo projetos", "fecha o palco": resolvidos aqui, sem ir ao núcleo;
+    // a confirmação curta passa pela fala (onText/onDone), e a conversa por voz segue normalmente
+    const acao = holoRef.current ? comandoPalco(text) : null
+    if (acao) {
+      dispatchPalco(acao)
+      opts.onText?.(acao.fala)
+      opts.onDone?.(acao.fala)
+      return Promise.resolve()
+    }
     const msg = mode === 'auto' ? text : `/${mode} ${text}`
     setResting(false)
     return sendMessage(msg, { display: text, mode: mode === 'auto' ? null : mode, ...opts })
@@ -40,9 +58,15 @@ export default function App() {
   // texto digitado segue o mesmo caminho da voz (e é falado se a voz estiver ligada)
   const decide = useCallback((id, ok) => { clearApproval(); approve(id, ok) }, [clearApproval, approve])
 
-  // Esc interrompe a fala
+  // Esc interrompe a fala e fecha o palco; com o palco aberto, ← e → trocam a categoria
   useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') stop() }
+    const onKey = e => {
+      if (e.key === 'Escape') { stop(); dispatchPalco({ type: 'fechar' }) }
+      const digitando = e.target.closest?.('input, textarea, [contenteditable="true"]')
+      if (!digitando && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        dispatchPalco({ type: 'passo', dir: e.key === 'ArrowRight' ? 1 : -1 })
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [stop])
@@ -65,11 +89,9 @@ export default function App() {
   const alert = j.alertFlash || j.costs?.estado === 'teto'
   const uiTier = alert ? 'alerta' : activeTier
 
-  // telas largas: os cards viram painéis de vidro em volta do sol; nas demais fica o layout plano
-  const view = useViewport()
-  const holo = holoAtivo(view.W, view.H)
-  // no vidro o sol fica grande, como no vídeo; a área clicável e a legenda seguem o disco
-  const sol = holo ? SOL_HOLO : SOL
+  // no vidro o sol fica grande, como no vídeo; com o palco aberto ele vai para a esquerda e encolhe;
+  // a área clicável e a legenda seguem o disco
+  const sol = !holo ? SOL : palco.aberto ? alvoSolPalco(SOL_HOLO, view.W, view.H) : SOL_HOLO
   const solPos = holo ? solPx(sol, view.W, view.H) : undefined
   // respostas concluídas (inclui avisos do núcleo): cada uma faz um brilho varrer o vidro
   const respostas = j.messages.reduce((n, m) => n + (m.role === 'jarvis' && !m.streaming ? 1 : 0), 0)
@@ -124,8 +146,8 @@ export default function App() {
         </div>
       </div>
       {holo && (
-        <HoloLayer view={view} sol={sol} vitals={j.vitals} history={j.history} costs={j.costs}
-          neural={j.neural} mode={mode} respostas={respostas} />
+        <HoloLayer view={view} sol={SOL_HOLO} vitals={j.vitals} history={j.history} costs={j.costs}
+          neural={j.neural} mode={mode} respostas={respostas} palco={palco} onPalco={dispatchPalco} />
       )}
       <Toasts toasts={j.toasts} onDismiss={j.dismissToast} />
     </>
