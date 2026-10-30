@@ -28,8 +28,9 @@ def ambiente(tmp_path, monkeypatch):
         "sumido": {"tipo": "app", "exe": str(tmp_path / "nao-existe.exe")},
     }}), encoding="utf-8")
     chamadas = []
-    monkeypatch.setattr(mod.subprocess, "Popen", lambda *a, **k: chamadas.append(("popen", a)))
+    monkeypatch.setattr(mod.subprocess, "Popen", lambda *a, **k: chamadas.append(("popen", a, k)))
     monkeypatch.setattr(mod.os, "startfile", lambda alvo: chamadas.append(("startfile", alvo)), raising=False)
+    monkeypatch.setattr(mod.os, "name", "nt")
     ctx = ToolContext(roots=[raiz.resolve()], ledger=None, reminders=None, home=home)
     return {"reg": registry(catalogo), "ctx": ctx, "chamadas": chamadas, "tmp": tmp_path, "catalogo": catalogo}
 
@@ -86,6 +87,46 @@ def test_injecao_no_nome_e_recusada(ambiente, nome):
 def test_injecao_na_pasta_e_recusada(ambiente, pasta):
     with pytest.raises(ToolError):
         _abrir(ambiente, nome="editor", pasta=pasta)
+    assert ambiente["chamadas"] == []
+
+
+FALSOS = {"ANTHROPIC_API_KEY": "chave-falsa-de-teste", "ANTHROPIC_AUTH_TOKEN": "token-falso",
+          "GITHUB_TOKEN": "x", "aws_secret_access_key": "y", "MINHA_API_KEY": "z"}
+
+
+def test_chaves_nao_chegam_ao_programa_aberto(ambiente, monkeypatch):
+    for k, v in FALSOS.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("PATH_DE_TESTE", "fica")
+    _abrir(ambiente, nome="bloco de notas")
+    _abrir(ambiente, nome="editor", pasta=str(ambiente["ctx"].roots[0] / "projeto"))
+
+    assert all(c[0] == "popen" for c in ambiente["chamadas"])                # nada mais passa por os.startfile
+    argv_start, argv_editor = (c[1][0] for c in ambiente["chamadas"])
+    assert argv_start[-3:] == ["start", "", "notepad.exe"]
+    assert argv_editor[0].endswith("Editor.exe")
+    for _, _, kw in ambiente["chamadas"]:
+        nomes = {k.upper() for k in kw["env"]}
+        assert not nomes & {k.upper() for k in FALSOS}
+        assert "PATH_DE_TESTE" in nomes and "PATH" in nomes                   # o resto do ambiente segue igual
+    assert all(mod.os.environ.get(k) == v for k, v in FALSOS.items())        # o processo do JARVIS não mudou
+
+
+def test_ambiente_filho_real_nao_ve_a_chave(monkeypatch):
+    """Processo filho de verdade: a variável não chega até ele."""
+    import subprocess
+    import sys
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "chave-falsa-de-teste")
+    codigo = "import os; print('ANTHROPIC_API_KEY' in os.environ, 'PATH' in os.environ)"
+    saida = subprocess.run([sys.executable, "-c", codigo], env=mod.ambiente_filho(), capture_output=True,
+                           text=True, check=True, timeout=30).stdout
+    assert saida.split() == ["False", "True"]
+
+
+def test_alvo_com_metacaractere_do_cmd_e_recusado(ambiente):
+    with pytest.raises(ToolError, match="alvo inválido"):
+        mod._executar("startfile", "notepad.exe & calc.exe")
     assert ambiente["chamadas"] == []
 
 

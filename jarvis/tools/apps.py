@@ -35,7 +35,7 @@ MAX_LISTA = 300
 class App:
     nome: str
     tipo: str
-    abrir: str | None = None          # alvo do os.startfile (como antes da Etapa 1b)
+    abrir: str | None = None          # alvo do "start" do cmd.exe (resolve como o os.startfile)
     exe: Path | None = None           # executável chamado com lista de argumentos, sem shell
     terminal: bool = False            # abre o exe no Windows Terminal, na pasta
     pasta_padrao: Path | None = None
@@ -146,16 +146,30 @@ def _plano(p, ctx: ToolContext, cat: Catalogo) -> tuple[str, list[str] | str]:
     return "processo", [str(app.exe)]
 
 
+SENSIVEIS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+_NOME_SENSIVEL = re.compile(r"KEY|TOKEN|SECRET", re.IGNORECASE)
+_META_CMD = re.compile(r'[&|<>^%!"\r\n]')  # o cmd.exe interpreta estes mesmo dentro de aspas
+
+
+def ambiente_filho(base: dict[str, str] | None = None) -> dict[str, str]:
+    """Cópia do ambiente para o programa aberto, sem chaves, tokens e segredos. Não altera os.environ."""
+    base = os.environ if base is None else base
+    return {k: v for k, v in base.items() if k.upper() not in SENSIVEIS and not _NOME_SENSIVEL.search(k)}
+
+
 def _executar(modo: str, alvo) -> None:
-    if modo == "startfile":
-        if not hasattr(os, "startfile"):
-            raise ToolError("abrir aplicativos só é suportado no Windows")
-        os.startfile(alvo)  # nosec B606 — alvo só vem do apps.json validado
-        return
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    if modo == "startfile":
+        # os.startfile não aceita ambiente próprio e passaria as chaves do JARVIS ao programa. O "start" do
+        # cmd.exe resolve o alvo do mesmo jeito (App Paths, protocolos como spotify:) com o ambiente filtrado.
+        if os.name != "nt":
+            raise ToolError("abrir aplicativos só é suportado no Windows")
+        if _META_CMD.search(alvo):
+            raise ToolError(f"alvo inválido no apps.json: {alvo!r}")
+        alvo = [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "start", "", alvo]  # DETACHED: sem console
     # lista de argumentos vinda do apps.json + pasta validada por confinar(); sem shell
     subprocess.Popen(alvo, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,  # nosec B603
-                     stderr=subprocess.DEVNULL, close_fds=True, creationflags=flags)
+                     stderr=subprocess.DEVNULL, close_fds=True, creationflags=flags, env=ambiente_filho())
 
 
 def _params_abrir(cat: Catalogo) -> type[BaseModel]:
