@@ -39,6 +39,8 @@ class Settings(BaseModel):
     proactive: bool = Field(default_factory=lambda: _env("JARVIS_PROATIVO", "1") != "0")
     session_idle_min: int = Field(default_factory=lambda: int(_env("JARVIS_SESSAO_OCIOSA_MIN", "30")))
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
+    # Etapa 2: escuta por voz local (microfone → "Jarvis" → Whisper → fala), sem o HUD. Desligada por padrão.
+    voz_local: bool = Field(default_factory=lambda: _env("JARVIS_VOZ_LOCAL", "0") == "1")
 
     def tool_roots(self) -> list[Path]:
         """Pastas que as ferramentas podem ler: JARVIS_PASTAS (separadas por ;) ou as pastas pessoais."""
@@ -61,6 +63,10 @@ class Settings(BaseModel):
     def knowledge_dir(self) -> Path:
         """Base de conhecimento do especialista (leis e documentos): JARVIS_CONHECIMENTO ou D:\\JARVIS-Conhecimento."""
         return Path(_env("JARVIS_CONHECIMENTO", "D:\\JARVIS-Conhecimento"))
+
+    def voz_dir(self) -> Path:
+        """Modelos de voz e gravações de teste, fora do repositório: JARVIS_VOZ_DIR ou D:\\JARVIS-Voz."""
+        return Path(_env("JARVIS_VOZ_DIR", "D:\\JARVIS-Voz"))
 
     def move_roots(self) -> list[Path]:
         """De onde o JARVIS pode mover/mandar para a Lixeira: pastas pessoais, nunca o projeto nem o arquivo."""
