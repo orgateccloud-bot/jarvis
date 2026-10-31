@@ -28,8 +28,10 @@ class ItemFiscal(_Contrato):
     tipo_data: TipoData
     fonte_id: str
     fonte_nome: str
-    fonte_url: str | None = None          # oficial: obrigatório; interno: None (vale a fonte_nome)
-    origem: Literal["oficial", "interna"] = "oficial"
+    fonte_url: str | None = None          # oficial: obrigatório; interna/integração: opcional (vale a fonte_nome)
+    # oficial: página pública da fonte; integracao: sistema oficial ou ERP por API (ex.: SERPRO); interna: dado do
+    # escritório (banco do JARVIS, planilha)
+    origem: Literal["oficial", "integracao", "interna"] = "oficial"
     severidade: Severidade = "info"
     etiquetas: list[str] = Field(default_factory=list)   # para filtrar pelo cliente (ex.: "EFD-Contribuições")
 

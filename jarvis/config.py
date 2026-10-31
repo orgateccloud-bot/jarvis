@@ -41,6 +41,10 @@ class Settings(BaseModel):
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
     # Etapa 2: escuta por voz local (microfone → "Jarvis" → Whisper → fala), sem o HUD. Desligada por padrão.
     voz_local: bool = Field(default_factory=lambda: _env("JARVIS_VOZ_LOCAL", "0") == "1")
+    # Painel fiscal do HUD (card tributário e card do cliente). Ligado por padrão; 0 desliga rotas e coleta.
+    painel: bool = Field(default_factory=lambda: _env("JARVIS_PAINEL", "1") != "0")
+    fiscal_intervalo_min: int = Field(default_factory=lambda: int(_env("JARVIS_FISCAL_INTERVALO_MIN", "360")))
+    clientes_intervalo_min: int = Field(default_factory=lambda: int(_env("JARVIS_CLIENTES_INTERVALO_MIN", "1440")))
 
     def tool_roots(self) -> list[Path]:
         """Pastas que as ferramentas podem ler: JARVIS_PASTAS (separadas por ;) ou as pastas pessoais."""
@@ -67,6 +71,10 @@ class Settings(BaseModel):
     def voz_dir(self) -> Path:
         """Modelos de voz e gravações de teste, fora do repositório: JARVIS_VOZ_DIR ou D:\\JARVIS-Voz."""
         return Path(_env("JARVIS_VOZ_DIR", "D:\\JARVIS-Voz"))
+
+    def fontes_fiscais(self) -> Path:
+        """Fontes oficiais do card tributário: JARVIS_FONTES_FISCAIS ou config/fontes_fiscais.json."""
+        return Path(_env("JARVIS_FONTES_FISCAIS", str(ROOT / "config" / "fontes_fiscais.json")))
 
     def move_roots(self) -> list[Path]:
         """De onde o JARVIS pode mover/mandar para a Lixeira: pastas pessoais, nunca o projeto nem o arquivo."""
