@@ -7,6 +7,8 @@ import re
 
 _CPF = re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b")
 _CNPJ = re.compile(r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b")
+# CNPJ alfanumérico (desde julho de 2026): só com a pontuação, para não mascarar códigos quaisquer de 14 caracteres
+_CNPJ_ALFA = re.compile(r"\b[A-Z0-9]{2}\.[A-Z0-9]{3}\.[A-Z0-9]{3}/[A-Z0-9]{4}-\d{2}\b", re.IGNORECASE)
 
 
 def anonimizar_cpf(texto: str) -> str:
@@ -14,7 +16,7 @@ def anonimizar_cpf(texto: str) -> str:
 
 
 def anonimizar_cnpj(texto: str) -> str:
-    return _CNPJ.sub("**.***.***/****-**", texto)
+    return _CNPJ_ALFA.sub("**.***.***/****-**", _CNPJ.sub("**.***.***/****-**", texto))
 
 
 def pseudonimizar_nome(nome: str, salt: str) -> str:

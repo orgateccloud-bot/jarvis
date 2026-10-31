@@ -5,12 +5,10 @@ from __future__ import annotations
 from abc import ABC
 from typing import ClassVar
 
-from .contratos import ConfigAgente, PedidoTarefa, SaidaTarefa
+from .contratos import ConfigAgente, PedidoTarefa, SaidaTarefa, TarefaRecusada
 from .recursos import Recursos
 
-
-class TarefaRecusada(Exception):
-    """A tarefa não roda (teto atingido, entrada que não serve): vira estado "recusada", sem stack trace."""
+__all__ = ["Agente", "TarefaRecusada"]
 
 
 class Agente(ABC):

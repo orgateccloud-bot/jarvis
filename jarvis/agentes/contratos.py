@@ -14,6 +14,11 @@ EstadoExecucao = Literal["em_andamento", "concluida", "falhou", "recusada", "int
 Effort = Literal["low", "medium", "high", "xhigh"]
 
 
+class TarefaRecusada(Exception):
+    """A tarefa não roda (teto atingido, agente pausado, entrada que não serve): estado "recusada", sem stack trace.
+    A mensagem é escrita pelo código, nunca pelo modelo: pode ir para o HUD e ser falada."""
+
+
 class _Contrato(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
