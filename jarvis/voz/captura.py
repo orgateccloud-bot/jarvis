@@ -48,6 +48,10 @@ class Microfone:
         except queue.Full:
             self.perdidos += 1
 
+    @property
+    def aberto(self) -> bool:
+        return self._stream is not None
+
     def abrir(self) -> None:
         self._stream = sd.InputStream(samplerate=TAXA, channels=1, dtype="int16", blocksize=QUADRO,
                                       device=self.dispositivo, callback=self._callback)

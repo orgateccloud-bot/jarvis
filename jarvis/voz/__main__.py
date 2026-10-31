@@ -1,11 +1,13 @@
 """python -m jarvis.voz: serviço de escuta local.
 
-Fase 2b: recorte da fala (VAD) → Whisper local, que também é a ativação ("Jarvis" no começo da fala) → comando
-(Decisão B). Só registra no log; ainda não pergunta à API nem responde (fase 2c).
+Microfone → recorte da fala (VAD) → Whisper local, que também é a ativação ("Jarvis" no começo da fala) →
+comando (Decisão B) → a mesma pergunta do HUD à API local → resposta falada com a voz local (Daniel).
+Com JARVIS_VOZ_LOCAL=1 a API sobe e supervisiona este processo; ele também roda sozinho para diagnóstico:
 
     python -m jarvis.voz --listar-microfones
-    python -m jarvis.voz [--microfone "K8"] [--limiar 0.3] [--cpu]
-    python -m jarvis.voz --medir 600          roda 10 min e imprime CPU, RAM, falas, comandos e latências (JSON)
+    python -m jarvis.voz [--microfone "K8"] [--cpu]       serviço completo (precisa da API no ar)
+    python -m jarvis.voz --sem-api                        só escuta e registra no log (fase 2b)
+    python -m jarvis.voz --medir 600                      sem API: 10 min e imprime CPU, RAM, falas e latências
 
 O texto transcrito só vai para o log com JARVIS_VOZ_LOG_TEXTO=1, e passa por sanitizar() (CPF/CNPJ mascarados).
 """
@@ -24,7 +26,7 @@ from loguru import logger
 
 from jarvis.config import ROOT
 from jarvis.voz import offline
-from jarvis.voz.config import LIMIAR_ATIVACAO, MODELOS_ATIVACAO, WHISPER, pastas
+from jarvis.voz.config import LIMIAR_ATIVACAO, MODELOS_ATIVACAO, TAXA, WHISPER, pastas
 
 
 def _logs() -> None:
@@ -44,13 +46,15 @@ def _texto_para_log(texto: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m jarvis.voz", description="Escuta local do JARVIS (fase 2b).")
+    ap = argparse.ArgumentParser(prog="python -m jarvis.voz", description="Escuta por voz local do JARVIS.")
     ap.add_argument("--listar-microfones", action="store_true")
     ap.add_argument("--microfone", default=os.getenv("JARVIS_VOZ_MICROFONE", ""),
                     help="parte do nome do microfone (padrão: o do Windows)")
     ap.add_argument("--limiar", type=float, default=LIMIAR_ATIVACAO)
     ap.add_argument("--cpu", action="store_true", help="Whisper na CPU mesmo com GPU")
     ap.add_argument("--medir", type=float, default=0, metavar="SEGUNDOS")
+    ap.add_argument("--sem-api", action="store_true", help="só escuta e registra no log")
+    ap.add_argument("--pai", type=int, default=None, help="pid da API: o serviço termina junto com ela")
     args = ap.parse_args(argv)
     _logs()
     offline.ativar()  # antes de qualquer import pesado: nada neste processo sai do PC
@@ -61,6 +65,8 @@ def main(argv: list[str] | None = None) -> int:
         for i, nome in microfones():
             print(f"{i:3d}  {nome}")
         return 0
+
+    import numpy as np
 
     from jarvis.voz.ativacao import Ativacao
     from jarvis.voz.baixar import verificar, verificar_whisper
@@ -75,7 +81,19 @@ def main(argv: list[str] | None = None) -> int:
 
     proc = psutil.Process()
     transcritor = criar_transcritor(p.whisper(WHISPER), "cpu" if args.cpu else None)
+    transcritor.transcrever(np.zeros(TAXA, dtype=np.int16))  # aquecimento: a 1ª transcrição aloca na GPU (+0,3 s)
     escuta = Escuta(Ativacao(p.ativacao, limiar=args.limiar), transcritor)
+    if not args.sem_api and not args.medir:
+        from jarvis.voz.servico import Servico, cliente_padrao, interromper_por_voz
+
+        srv = Servico(escuta, cliente_padrao(), Microfone(escolher(args.microfone)), interromper_por_voz(), args.pai)
+        logger.info("voz: serviço local no ar (Whisper {}; interromper por voz: {})", transcritor.config,
+                    srv.conversa.interromper)
+        try:
+            srv.rodar()
+        except KeyboardInterrupt:
+            srv.parar.set()
+        return 0
     proc.cpu_percent(None)
     t0, quadros, eventos = time.monotonic(), 0, []
     mic = Microfone(escolher(args.microfone))

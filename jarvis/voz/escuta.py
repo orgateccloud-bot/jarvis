@@ -70,6 +70,12 @@ class Escuta:
             return None
         return self._encerrar()
 
+    def descartar(self) -> None:
+        """Joga fora a fala em andamento: o microfone vai ficar mudo (half-duplex) e o JARVIS vai falar."""
+        self.gravando, self._atalho = False, False
+        self._preroll.clear()
+        self.ativacao.reset()
+
     def encerrar(self) -> Evento | None:
         """Fecha uma fala em andamento (fim do áudio de teste ou desligamento)."""
         return self._encerrar() if self.gravando else None

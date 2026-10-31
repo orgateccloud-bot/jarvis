@@ -27,6 +27,7 @@ FRASES = {
     "ok_jarvis_maria": ("Microsoft Maria", "Ok, Jarvis."),
     "ok_jarvis_que_horas_daniel": ("Microsoft Daniel", "Ok, Jarvis, que horas são?"),
     "hey_jarvis_maria": ("Microsoft Maria", "Hey, Jarvis."),
+    "jarvis_capital_daniel": ("Microsoft Daniel", "Jarvis, qual é a capital da França?"),  # vai ao Claude
     # eco: o que o próprio JARVIS fala (sem a palavra de ativação) não pode disparar
     "eco_disco_daniel": ("Microsoft Daniel", "O disco C está com oitenta e dois por cento de uso, Senhor."),
     "eco_lembrete_daniel": ("Microsoft Daniel", "Lembrete criado para as quinze horas. Mais alguma coisa?"),
