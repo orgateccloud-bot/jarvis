@@ -9,6 +9,6 @@ pytesseract==0.3.10
 opencv-python-headless==4.9.0.80
 numpy==1.26.4
 requests==2.31.0
-loguru==0.7.2
+loguru==0.7.3
 pydantic==2.9.0
 sse-starlette==2.1.0
