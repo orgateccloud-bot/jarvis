@@ -5,7 +5,7 @@ const level = v => (v >= 90 ? 'var(--danger)' : v >= 75 ? 'var(--warn)' : 'var(-
 const usd = v => `US$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const pct = v => `${(v ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 
-function Card({ title, aside, children, className = '' }) {
+export function Card({ title, aside, children, className = '' }) {
   return (
     <section className={`card glass ${className}`}>
       <header className="card-head">

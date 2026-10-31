@@ -24,6 +24,8 @@ voz = ["numpy>=1.26", "onnxruntime>=1.18", "sounddevice>=0.5", "faster-whisper>=
        "winrt-runtime>=3; sys_platform == 'win32'",
        "winrt-Windows.Media.SpeechSynthesis; sys_platform == 'win32'",
        "winrt-Windows.Storage.Streams; sys_platform == 'win32'"]
+# Painel fiscal: ler a planilha de clientes em .xlsx (CSV e Google Sheets não precisam disto)
+painel = ["openpyxl>=3.1"]
 # Whisper na GPU NVIDIA (CUDA 12): cuBLAS e cuDNN dos wheels oficiais, carregados por jarvis/voz/cuda.py
 voz-gpu = ["nvidia-cublas-cu12==12.9.2.10", "nvidia-cudnn-cu12==9.*"]
 

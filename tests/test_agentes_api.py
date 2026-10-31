@@ -19,7 +19,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "agentes" / "extrato.csv"
 # Rota pública de propósito (a página do HUD e a documentação não entram no OpenAPI)
 PUBLICAS = {"/health"}
 EXEMPLOS = {"agente_id": "tributario", "tarefa_id": "0123456789abcdef", "session_id": "hud",
-            "approval_id": "x"}
+            "approval_id": "x", "cliente_id": "1", "documento": "00000000000191"}  # painel fiscal (#16)
 CONSULTA = {"resposta": "Cinco anos.", "resumo_voz": "Cinco anos.", "fontes_usadas": [], "dualidade": None,
             "nao_verificado": []}
 

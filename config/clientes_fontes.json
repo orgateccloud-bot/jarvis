@@ -1,0 +1,23 @@
+{
+  "versao": 1,
+  "nota": "Formato da API do ERP (só vale com JARVIS_ERP_URL e JARVIS_ERP_TOKEN). Premissa: o ERP do escritório ainda não foi informado; ajuste os caminhos e o mapa campo canônico → caminho no JSON do ERP (ponto separa níveis).",
+  "erp": {
+    "nome": "ERP (API)",
+    "caminho_lista": "/clientes",
+    "lista_chave": null,
+    "campo_documento": "documento",
+    "caminho_busca": "/clientes/{documento}",
+    "campos": {
+      "razao_social": "razao_social",
+      "regime_tributario": "regime_tributario",
+      "cnae_principal": "cnae_principal",
+      "cnaes_secundarios": "cnaes_secundarios",
+      "ufs_operacao": "ufs_operacao",
+      "obrigacoes": "obrigacoes",
+      "situacao_cadastral": "situacao_cadastral",
+      "contato": "contato",
+      "contratos": "contratos",
+      "pendencias": "pendencias"
+    }
+  }
+}

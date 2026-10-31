@@ -99,7 +99,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
 
 def create_app(settings: Settings | None = None, conversation: Conversation | None = None,
                monitor: Monitor | None = None, proactive: bool | None = None,
-               hud_dir: Path = HUD_DIST, iniciar_voz: bool = True) -> FastAPI:
+               hud_dir: Path = HUD_DIST, iniciar_voz: bool = True, painel_servicos: tuple | None = None,
+               iniciar_painel: bool = True) -> FastAPI:
     settings = settings or get_settings()
     token = settings.api_token()
     conv = conversation or build_conversation(settings)
@@ -122,11 +123,30 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
         voz_estado = EstadoVoz(ao_mudar=lambda estado: publicar_voz("voz", estado))
         supervisor = Supervisor(voz_estado) if iniciar_voz else None
 
+    # Painel fiscal do HUD (card tributário e card do cliente). JARVIS_PAINEL=0: sem rotas e sem coleta.
+    coleta = clientes = None
+    if settings.painel:
+        from ..painel.clientes import montar_servico
+        from ..painel.coleta import ArmazemPainel, ServicoColeta
+        from ..painel.fontes import carregar
+
+        coleta, clientes = painel_servicos or (
+            ServicoColeta(ArmazemPainel(settings.db_path), carregar(settings.fontes_fiscais())),
+            montar_servico(settings),
+        )
+
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
         tasks = [asyncio.create_task(run_monitor(monitor, bus))] if proactive else []
         if supervisor:
             tasks.append(asyncio.create_task(supervisor.rodar()))
+        if coleta is not None and iniciar_painel:
+            from ..painel.coleta import repetir
+
+            fiscal_s, clientes_s = settings.fiscal_intervalo_min * 60, settings.clientes_intervalo_min * 60
+            tasks.append(asyncio.create_task(repetir(coleta.coletar, fiscal_s, "fontes fiscais")))
+            tasks.append(asyncio.create_task(repetir(clientes.atualizar, clientes_s, "fontes de clientes",
+                                                     espera_inicial_s=60)))
         yield
         if agentes is not None:
             await agentes.encerrar()
@@ -157,6 +177,12 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
 
         app.include_router(rotas(voz_estado, conv, require_token, publicar_voz))
         app.state.voz = voz_estado
+
+    if coleta is not None:
+        from .painel import rotas as rotas_painel
+
+        app.include_router(rotas_painel(coleta, clientes, require_token))
+        app.state.painel = (coleta, clientes)
 
     @app.get("/health")
     async def health():
