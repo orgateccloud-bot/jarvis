@@ -15,6 +15,7 @@ O texto transcrito só vai para o log com JARVIS_VOZ_LOG_TEXTO=1, e passa por sa
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import json
 import os
 import statistics
@@ -37,6 +38,17 @@ def _logs() -> None:
     logger.add(ROOT / "logs" / "voz.log", level="INFO", rotation="10 MB", retention="30 days", encoding="utf-8")
 
 
+_falhas = None  # arquivo do faulthandler: fica aberto enquanto o processo viver
+
+
+def _falhas_nativas() -> None:
+    """Queda nativa (ex.: 0xC0000374, heap corrompido no PortAudio) não passa pelo loguru e o supervisor descarta o
+    stderr: o faulthandler grava a pilha de todas as threads em logs/voz-falhas.log antes de o processo morrer."""
+    global _falhas
+    _falhas = open(ROOT / "logs" / "voz-falhas.log", "a", encoding="utf-8")  # noqa: SIM115 — aberto até o fim
+    faulthandler.enable(file=_falhas, all_threads=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m jarvis.voz", description="Escuta por voz local do JARVIS.")
     ap.add_argument("--listar-microfones", action="store_true")
@@ -49,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pai", type=int, default=None, help="pid da API: o serviço termina junto com ela")
     args = ap.parse_args(argv)
     _logs()
+    _falhas_nativas()
     offline.ativar()  # antes de qualquer import pesado: nada neste processo sai do PC
 
     from jarvis.voz.captura import Microfone, microfones
@@ -133,4 +146,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        codigo = main()
+    except Exception:  # noqa: BLE001 — sem isto a queda some: o supervisor descarta o stderr
+        logger.exception("voz: o serviço caiu")
+        codigo = 1
+    raise SystemExit(codigo)

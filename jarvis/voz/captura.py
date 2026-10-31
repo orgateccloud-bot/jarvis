@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+import threading
 import time
 from collections import deque
 from collections.abc import Iterator
@@ -12,6 +13,11 @@ import numpy as np
 import sounddevice as sd
 
 from jarvis.voz.config import QUADRO, TAXA
+
+# O PortAudio é global no processo: reiniciá-lo (_terminate/_initialize, para enxergar um aparelho que voltou) com
+# um stream de saída aberto em outra thread corrompe a memória (31/10, 12:37: código 0xC0000374, com o K8 fora havia
+# 28 min). A fala segura esta trava enquanto toca; a reabertura do microfone, enquanto reinicia.
+TRAVA_PORTAUDIO = threading.Lock()
 
 
 def microfones() -> list[tuple[int, str]]:
@@ -133,8 +139,9 @@ class Microfone:
         lá. Sem `pedido`, ValueError se ele ainda não voltou. Recarregar o PortAudio a cada 2 s por meia hora
         corrompeu a memória do processo (31/10, 0xC0000374): quem chama precisa espaçar as tentativas."""
         self.fechar()
-        sd._terminate()
-        sd._initialize()
+        with TRAVA_PORTAUDIO:   # nunca com a fala tocando em outra thread
+            sd._terminate()
+            sd._initialize()
         if self._alvo is not None and not self.pedido:
             self.dispositivo = escolher(self._alvo)
         self.abrir()

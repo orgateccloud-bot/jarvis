@@ -53,8 +53,12 @@ def sintetizador_winrt(voz: str = VOZ, rate: float = RATE, pitch: float = PITCH)
 def tocador_sounddevice(dispositivo: int | None = None) -> Callable[[np.ndarray, int, Callable[[], bool]], None]:
     import sounddevice as sd
 
+    from jarvis.voz.captura import TRAVA_PORTAUDIO
+
     def tocar(audio: np.ndarray, taxa: int, cancelado: Callable[[], bool]) -> None:
-        with sd.OutputStream(samplerate=taxa, channels=1, dtype="int16", device=dispositivo) as out:
+        # a trava impede que a reabertura do microfone reinicie o PortAudio com este stream aberto
+        with TRAVA_PORTAUDIO, sd.OutputStream(samplerate=taxa, channels=1, dtype="int16",
+                                              device=dispositivo) as out:
             for i in range(0, len(audio), BLOCO):
                 if cancelado():
                     return

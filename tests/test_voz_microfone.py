@@ -7,9 +7,11 @@ import time
 import pytest
 
 np = pytest.importorskip("numpy")
+pytest.importorskip("sounddevice")
 
+from jarvis.voz import captura
 from jarvis.voz import servico as mod
-from jarvis.voz.captura import DetectorDeSilencio
+from jarvis.voz.captura import TRAVA_PORTAUDIO, DetectorDeSilencio, Microfone
 
 ZEROS = np.zeros(1280, dtype=np.int16)
 SALA = np.full(1280, 300, dtype=np.int16)
@@ -187,3 +189,127 @@ def test_servico_confere_em_repouso_se_o_microfone_pedido_voltou(monkeypatch):
         srv.parar.set()
         t.join(timeout=5)
     assert mic.tentativas == 1 and not mic.reserva
+
+
+# ── PR #18: trava do PortAudio, nada de reabrir com a fala tocando, sem microfone nenhum ao subir ──────
+class SemMicrofone(MicrofoneQueTrava):
+    """Nenhum aparelho de entrada: abrir e as primeiras reaberturas falham."""
+
+    def __init__(self, falhas=3):
+        super().__init__()
+        self.falhas = falhas
+
+    def abrir(self):
+        raise OSError("nenhum aparelho de entrada")
+
+    def reabrir(self):
+        self.tentativas += 1
+        if self.tentativas <= self.falhas:
+            raise OSError("nenhum aparelho de entrada")
+        self._aberto = True
+        self.reaberto.set()
+
+    def quadros(self, timeout=1.0):
+        while self._aberto:
+            time.sleep(0.01)
+            yield None
+
+
+def test_servico_sem_microfone_nenhum_ao_subir_espera_em_vez_de_cair(monkeypatch):
+    monkeypatch.setattr(mod, "ESPERAS_REABRIR_S", (0.01,))
+    mic = SemMicrofone(falhas=3)
+    srv = mod.Servico(EscutaFalsa(), ClienteSoBatimento(), mic, voz=VozMuda())
+    t = threading.Thread(target=srv.rodar, daemon=True)
+    t.start()
+    try:
+        assert mic.reaberto.wait(10), "o serviço não esperou um microfone aparecer"
+        assert t.is_alive()                       # o processo não caiu
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert mic.tentativas == 4
+
+
+class ParadaFalsa:
+    """Event que só registra as esperas (sem dormir de verdade)."""
+
+    def __init__(self):
+        self.esperas = []
+
+    def is_set(self):
+        return False
+
+    def wait(self, s):
+        self.esperas.append(s)
+        return False
+
+
+def test_espera_crescente_entre_as_tentativas(monkeypatch):
+    """De 2 em 2 s para sempre, foram mais de 800 reinícios do PortAudio em meia hora; agora a espera cresce."""
+    monkeypatch.setattr(mod, "ESPERAS_REABRIR_S", (1.0, 2.0, 3.0))
+    mic = SemMicrofone(falhas=6)
+    srv = mod.Servico(EscutaFalsa(), ClienteSoBatimento(), mic, voz=VozMuda())
+    srv.dono, srv.parar = True, ParadaFalsa()
+    srv._reabrir_microfone()
+    assert srv.parar.esperas == [1.0, 2.0, 3.0, 3.0, 3.0, 3.0] and mic.tentativas == 7
+
+
+class VozQueFala(VozMuda):
+    def __init__(self, frases):
+        self.frases = frases
+
+    @property
+    def falando(self):
+        return self.frases > 0
+
+
+def test_nao_reinicia_o_portaudio_com_a_fala_tocando():
+    voz = VozQueFala(frases=3)
+    mic = SemMicrofone(falhas=0)
+    srv = mod.Servico(EscutaFalsa(), ClienteSoBatimento(), mic, voz=voz)
+    srv.dono = True
+
+    class Parada(ParadaFalsa):
+        def wait(self, s):
+            super().wait(s)
+            voz.frases -= 1                      # cada espera de 0,5 s, uma frase a menos
+            return False
+
+    srv.parar = Parada()
+    srv._reabrir_microfone()
+    assert srv.parar.esperas == [0.5, 0.5, 0.5] and mic.tentativas == 1   # só reabriu depois da fala
+
+
+def test_reabrir_reinicia_o_portaudio_so_com_a_trava(monkeypatch):
+    vistos = []
+    monkeypatch.setattr(captura.sd, "_terminate", lambda: vistos.append(("terminate", TRAVA_PORTAUDIO.locked())))
+    monkeypatch.setattr(captura.sd, "_initialize", lambda: vistos.append(("initialize", TRAVA_PORTAUDIO.locked())))
+    monkeypatch.setattr(captura, "escolher", lambda _n: (_ for _ in ()).throw(ValueError("fora")))
+    mic = Microfone()
+    mic._alvo = "Microfone (K8)"                  # aberto antes pelo índice; agora sumiu
+    with pytest.raises(ValueError):
+        mic.reabrir()
+    assert vistos == [("terminate", True), ("initialize", True)] and not TRAVA_PORTAUDIO.locked()
+
+
+def test_a_fala_toca_segurando_a_trava(monkeypatch):
+    from jarvis.voz import fala
+
+    vistos = []
+
+    class SaidaFalsa:
+        def __init__(self, **_kw):
+            vistos.append(TRAVA_PORTAUDIO.locked())
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def write(self, _bloco):
+            vistos.append(TRAVA_PORTAUDIO.locked())
+
+    monkeypatch.setattr(captura.sd, "OutputStream", SaidaFalsa)
+    fala.tocador_sounddevice()(np.zeros(4000, dtype=np.int16), 16000, lambda: False)
+    assert vistos and all(vistos) and not TRAVA_PORTAUDIO.locked()

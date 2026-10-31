@@ -23,6 +23,7 @@ from jarvis.voz.fala import VozLocal
 BATIMENTO_S = 1.0
 ESPERAS_REABRIR_S = (2.0, 5.0, 10.0, 30.0, 60.0)  # entre tentativas de abrir o microfone que sumiu (fica no último)
 CONFERIR_PEDIDO_S = 60.0  # no padrão do Windows, de quanto em quanto tempo ver se o microfone pedido voltou
+LEMBRETE_S = 300.0  # sem microfone nenhum há muito tempo, o log lembra a cada 5 min (o serviço segue vivo)
 
 
 def texto_para_log(texto: str) -> str:
@@ -90,7 +91,12 @@ class Servico:
                 self.parar.wait(0.2)
                 continue
             if not self.mic.aberto:
-                self.mic.abrir()
+                try:
+                    self.mic.abrir()
+                except Exception as e:  # noqa: BLE001 — nenhum microfone ao subir: espera, em vez de cair
+                    logger.warning("voz: nenhum microfone para abrir ({}); esperando um aparecer", e)
+                    self._reabrir_microfone()
+                    continue
                 self._log_microfone("aberto")
             for q in self.mic.quadros(timeout=0.2):
                 if self.parar.is_set() or not self.dono:
@@ -138,8 +144,12 @@ class Servico:
         morto até alguém reiniciar o JARVIS."""
         logger.warning("voz: o microfone ({}) parou de entregar áudio; reabrindo", self.mic.nome)
         self.escuta.descartar()
-        tentativa = 0
+        tentativa, inicio = 0, time.monotonic()
+        lembrete = inicio + LEMBRETE_S
         while not self.parar.is_set() and self.dono:
+            if self.voz.falando:  # a fala usa o PortAudio: reabrir reinicia o PortAudio, então espera ela acabar
+                self.parar.wait(0.5)
+                continue
             try:
                 self.mic.reabrir()
                 self._log_microfone("reaberto")
@@ -148,6 +158,9 @@ class Servico:
                 if tentativa == 0:
                     logger.warning("voz: nenhum microfone disponível ({}); tentando de novo, cada vez mais espaçado "
                                    "(até {:.0f} s)", e, ESPERAS_REABRIR_S[-1])
+                elif time.monotonic() >= lembrete:
+                    logger.warning("voz: ainda sem microfone ({:.0f} min)", (time.monotonic() - inicio) / 60)
+                    lembrete = time.monotonic() + LEMBRETE_S
                 self.parar.wait(ESPERAS_REABRIR_S[min(tentativa, len(ESPERAS_REABRIR_S) - 1)])
                 tentativa += 1
 
