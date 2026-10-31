@@ -34,14 +34,19 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["jarvis*"]
 
+[tool.setuptools.package-data]
+"jarvis.agentes.tributario" = ["regras/*.json"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 # o teste de fumaça real (Menu Iniciar, registro e janelas desta máquina) só roda com: pytest -m windows_real
-addopts = "-m 'not windows_real'"
+# a paridade com o MiniSaaS (precisa do Mini na máquina e do pandas) só roda com: pytest -m mini
+addopts = "-m 'not windows_real and not mini'"
 markers = [
     "windows_real: lê o Windows de verdade; fora da execução padrão",
     "voz_modelos: usa os modelos de voz baixados; pulado se faltarem (ex.: no CI)",
+    "mini: compara o núcleo fiscal com o original do MiniSaaS (d:/01_Projetos_Ativos/Mini); fora da execução padrão",
 ]
 
 [tool.ruff]

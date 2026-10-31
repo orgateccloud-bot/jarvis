@@ -24,6 +24,7 @@ class ToolContext:
     journal: Any = None                                                      # MoveJournal
     memory: Any = None                                                       # JarvisMemory
     knowledge: Any = None                                                    # KnowledgeBase
+    agentes: Any = None                                                      # Orquestrador (Etapa 3)
     home: Path = field(default_factory=Path.home)  # ponto de partida dos caminhos relativos (não é raiz)
 
 
@@ -37,6 +38,7 @@ class Tool:
     needs_approval: bool = False
     details: Callable[[Any, Any], dict] | None = None  # extra para o card de aprovação (ex.: itens e GB do lote)
     builtin: dict | None = None       # ferramenta definida pela Anthropic (sem schema próprio), ex.: memória
+    assincrona: bool = False          # run é uma corrotina (ex.: comandar um agente que chama o Claude)
 
     def definition(self) -> dict:
         if self.builtin:
