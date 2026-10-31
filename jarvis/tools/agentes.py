@@ -105,7 +105,7 @@ class ComandarParams(BaseModel):
     cenario: ParametrosCenario | None = Field(default=None, description="Para comparar_cenarios e laudo")
 
 
-def _ler_lancamentos(caminho: str, ctx: ToolContext):
+def ler_lancamentos(caminho: str, ctx: ToolContext):
     from ..agentes.tributario.lancamentos import ler_csv
 
     alvo = confinar(caminho, ctx)
@@ -121,7 +121,7 @@ def _ler_lancamentos(caminho: str, ctx: ToolContext):
 
 async def comandar_agente(p: ComandarParams, ctx: ToolContext) -> str:
     orq = _orquestrador(ctx)
-    lancamentos = await asyncio.to_thread(_ler_lancamentos, p.arquivo, ctx) if p.arquivo else None
+    lancamentos = await asyncio.to_thread(ler_lancamentos, p.arquivo, ctx) if p.arquivo else None
     pedido = PedidoTarefa(tarefa=p.tarefa, pedido=p.pedido, lancamentos=lancamentos, cenario=p.cenario)
     try:
         r = await orq.comandar(p.agente, pedido, "jarvis_conversa")

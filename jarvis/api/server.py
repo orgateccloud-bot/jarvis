@@ -203,6 +203,11 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     async def audit_verify():
         return {"integra": conv.audit.verify()}
 
+    if agentes is not None:  # Etapa 3: antes do mount do HUD, que pega tudo o que sobrar
+        from .agentes import rotas_agentes
+
+        app.include_router(rotas_agentes(agentes, require_token, conv.tool_ctx))
+
     # HUD buildado (npm run build) servido pela própria API: sem servidor de desenvolvimento.
     # Montado por último, então as rotas acima têm prioridade.
     index = hud_dir / "index.html"
