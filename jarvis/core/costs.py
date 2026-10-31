@@ -76,13 +76,15 @@ class CostLedger:
             )
         return rec
 
-    def _sum_since(self, prefix: str) -> float:
+    def _sum_since(self, prefix: str, sessao: str | None = None) -> float:
+        """Soma desde o prefixo de data; com `sessao`, só os session_id que começam por ele (ex.: "agente-")."""
         with self._conn() as c:
-            row = c.execute("SELECT COALESCE(SUM(cost_usd),0) FROM usage WHERE at LIKE ?", (f"{prefix}%",)).fetchone()
+            row = c.execute("SELECT COALESCE(SUM(cost_usd),0) FROM usage WHERE at LIKE ? AND session_id LIKE ?",
+                            (f"{prefix}%", f"{sessao or ''}%")).fetchone()
         return float(row[0])
 
-    def month_total(self, now: datetime | None = None) -> float:
-        return self._sum_since((now or datetime.now()).strftime("%Y-%m"))
+    def month_total(self, now: datetime | None = None, sessao: str | None = None) -> float:
+        return self._sum_since((now or datetime.now()).strftime("%Y-%m"), sessao)
 
     def day_total(self, now: datetime | None = None) -> float:
         return self._sum_since((now or datetime.now()).strftime("%Y-%m-%d"))
@@ -120,6 +122,7 @@ class CostLedger:
 
     def summary(self) -> dict:
         month = self.month_total()
+        agentes = self.month_total(sessao="agente-")
         with self._conn() as c:
             row = c.execute(
                 "SELECT COUNT(*), COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(input_tokens),0) "
@@ -136,5 +139,6 @@ class CostLedger:
             "estado": self.state().value,
             "turnos_claude_mes": turns,
             "cache_hit_pct": round(100 * hit, 1),
+            "por_origem": {"jarvis": round(month - agentes, 4), "agentes": round(agentes, 4)},
             "telemetria": self.telemetry(),
         }

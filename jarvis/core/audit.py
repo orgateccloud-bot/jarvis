@@ -44,6 +44,18 @@ class AuditChain:
             self._last = result.audit_hash
         return result
 
+    def encontrar(self, audit_hash: str) -> dict | None:
+        """O registro selado com este hash, ou None."""
+        if not self.path.exists():
+            return None
+        with self.path.open(encoding="utf-8") as f:
+            for line in f:
+                if audit_hash in line:
+                    rec = json.loads(line)
+                    if rec.get("audit_hash") == audit_hash:
+                        return rec
+        return None
+
     def verify(self) -> bool:
         """Revalida a cadeia inteira; False se algum registro foi adulterado."""
         if not self.path.exists():

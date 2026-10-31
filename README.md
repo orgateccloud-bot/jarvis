@@ -19,6 +19,7 @@ de uma base local.
 | **Web e arquivos gerados** | Busca e leitura de páginas (Sonnet/Opus). Arquivos que o sandbox de código gera (CSV, PDF, gráficos) são baixados pela Files API para `JARVIS-Arquivo\Gerados\<data>\`. |
 | **Proatividade** | Monitores de RAM, CPU, disco e orçamento; lembretes; saudação; avisos por voz, no HUD e por notificação do Windows. |
 | **HUD e voz** | React 19 + Vite com cena WebGL2 (galáxia e sol cuja classe estelar muda com o modelo). Voz pelo navegador: mãos livres, palavra de ativação "Jarvis", aprovação por "sim/não" e correção de termos (siglas fiscais, variantes do nome). Ou, com `JARVIS_VOZ_LOCAL=1`, [voz local](#voz-local-sem-o-hud): escuta com o HUD fechado e sem áudio na nuvem. |
+| **Agentes (Etapa 3)** | O JARVIS é o cérebro: cria, observa, atualiza e comanda agentes subordinados, que não recebem ordem de mais ninguém. O primeiro é o [agente tributário](#agentes-etapa-3): dúvidas com a base local, análise de lançamentos com índice de risco de autuação, cenários atual × pós-Reforma (IBS/CBS) e laudo em 4 partes. |
 | **Privacidade** | CPF/CNPJ mascarados e nomes pseudonimizados antes de qualquer envio à nuvem; trilha de auditoria encadeada por hash (`dados/audit.jsonl`). |
 
 ## Arquitetura
@@ -33,7 +34,9 @@ jarvis-hud/dist  (React buildado)  ──SSE──►  jarvis/api  (FastAPI, 127
                                               │
                     core/llm ── Claude API (Haiku | Sonnet | Opus, cache, compaction, fallback)
                                               │
-                 tools/ (sistema, arquivos, disco, tarefas, memória, conhecimento, gerados)
+                 tools/ (sistema, arquivos, disco, tarefas, memória, conhecimento, gerados, agentes)
+                                              │
+                 agentes/orquestrador ──► agentes/tributario  (só por Recursos: gateway do Claude, base, pasta)
 ```
 
 ## Requisitos
@@ -51,10 +54,11 @@ copy .env.example .env
 cd jarvis-hud && npm ci && npm run build && cd ..
 ```
 
-Edite o `.env` (ao menos a credencial da Anthropic). Opcional, para a base de leis:
+Edite o `.env` (ao menos a credencial da Anthropic). Opcional, para a base de leis (ver
+[Base de conhecimento](#base-de-conhecimento)):
 
 ```bat
-.venv\Scripts\python -m jarvis.knowledge baixar
+.venv\Scripts\python -m jarvis.conhecimento atualizar
 ```
 
 ## Uso
@@ -165,6 +169,97 @@ esse áudio ao servidor dele, por isso só com o seu clique, e até você devolv
 O log da voz (`logs\voz.log`) guarda só métricas; o texto transcrito só entra com `JARVIS_VOZ_LOG_TEXTO=1`, com CPF
 e CNPJ mascarados. A tarefa de logon da seção anterior já cobre a voz: a API sobe o serviço sozinha.
 
+## Agentes (Etapa 3)
+
+O JARVIS comanda agentes subordinados; o usuário comanda o JARVIS. A cadeia é garantida no código:
+
+| Elo | Como |
+|---|---|
+| Usuário → JARVIS | Toda rota `/agentes*` exige o token da API (um teste percorre o OpenAPI e cobra 401 de toda rota). |
+| JARVIS → orquestrador | Só a API e as ferramentas do cérebro alcançam o orquestrador; cada ordem grava a origem (`usuario_api` ou `jarvis_conversa`) e tem id único. |
+| Orquestrador → agente | Objeto-capacidade: só o orquestrador guarda a referência do agente. O agente recebe `Recursos` (gateway do Claude, base de conhecimento só para leitura, pasta de entrega) e nada mais; um teste de lista branca de imports impede rede, API e ferramentas no código de agente. |
+| Mudanças | Atualizar, pausar, retomar ou reverter pelo JARVIS pede aprovação, com o diff no cartão. Cada mudança vira uma versão nova da configuração (nada é apagado). |
+
+**Agente tributário v1:**
+
+| Tarefa | Claude? | O que faz |
+|---|---|---|
+| `analisar_lancamentos` | não (US$ 0) | Classifica lançamentos de um CSV (`;`, vírgula decimal) e calcula o índice heurístico de risco de autuação (5 a 99%, fórmula do MiniSaaS) com cada fator e os grupos de fracionamento. |
+| `consultar` | Opus 5.5, `low` | Responde com os trechos da base local, cita lei e artigo e compara com o pós-Reforma quando couber; fonte citada fora dos trechos é marcada. |
+| `comparar_cenarios` | Opus 5.5, `low` | A calculadora local aplica o cronograma da EC 132/2023 e da LC 214/2025 (`jarvis/agentes/tributario/regras/cronograma_reforma.json`); o Claude só comenta. A alíquota de referência (28%) é estimativa. Não cobre o Simples Nacional. |
+| `laudo` | Opus 5.5, `low` | Base normativa, cenários, probabilidade de autuação (índice calculado pelo sistema, nunca pelo modelo) e resumo executivo, salvo em `.md` em `JARVIS-Arquivo\Agentes\tributario\`. |
+
+O agente roda só no Opus (decisão do usuário): trocar o modelo para outra família é recusado, e uma configuração
+antiga é migrada para o Opus 5.5 no boot. O effort padrão é `low` em todas as tarefas; a configuração do agente pode
+subi-lo (pelo JARVIS, com aprovação). Uma chamada ao Claude por tarefa (medido em 31/10/2026: consultar US$ 0,04 a
+0,05, comparar cenários US$ 0,05, laudo US$ 0,09), pelo
+gateway: CPF, CNPJ e nomes mascarados antes de sair, teto conferido no pior caso (gasto do mês + 12 mil tokens de
+saída) contra o teto geral e o subteto do agente, effort `low` no modo economia e custo no mesmo ledger (`/costs`
+mostra `por_origem`). No teto, as tarefas com Claude param e a análise de lançamentos continua.
+
+**Chave própria:** com `JARVIS_AGENTE_TRIBUTARIO_API_KEY` no `.env`, o agente fala com a Anthropic por um cliente só
+dele, e o gasto dele aparece separado por chave no console da Anthropic. Sem a variável, ele usa a chave do JARVIS, e
+o estado do agente (`GET /agentes`, `agentes_status`) traz `chave_anthropic: "jarvis"` com um aviso. O teto geral, o
+subteto e o ledger local valem igual nos dois casos. A chave vai do ambiente direto para o cliente: não é campo da
+configuração, não entra em log e fica fora do ambiente dos programas que o JARVIS abre (o filtro de `KEY`).
+
+**Como acionar:** por voz ou texto, "Jarvis, pede ao agente tributário…" (o turno do JARVIS também vai ao Opus 5.5,
+com esforço baixo, inclusive no modo economia, e delega). Medido: uma consulta pela voz custa US$ 0,15 com o cache
+de prompt frio (o JARVIS grava cerca de 19 mil tokens de prefixo) e US$ 0,08 com ele quente, e a primeira palavra
+sai em cerca de 20 s, quando o agente termina. Ou direto pela API, sem o custo do JARVIS:
+
+```bat
+curl -H "Authorization: Bearer %JARVIS_TOKEN%" http://127.0.0.1:8000/agentes
+curl -H "Authorization: Bearer %JARVIS_TOKEN%" -H "Content-Type: application/json" ^
+     -d "{\"tarefa\": \"analisar_lancamentos\", \"arquivo\": \"Downloads\\extrato.csv\"}" ^
+     http://127.0.0.1:8000/agentes/tributario/tarefas
+```
+
+Tarefa que passa de 20 s (`JARVIS_AGENTES_ESPERA_S`) responde "em andamento" (HTTP 202) e libera a conversa; o fim
+vira aviso falado no HUD e o resultado fica em `GET /agentes/tarefas/{id}`. `GET /agentes/tarefas/{id}/verificar`
+recalcula o sha256 do resultado e confere o selo na trilha de auditoria. A paridade do núcleo fiscal com o MiniSaaS
+roda com `pytest -m mini` (precisa do Mini na máquina e do pandas).
+
+## Base de conhecimento
+
+A ferramenta `buscar_conhecimento` é a porta única da base (o JARVIS e os agentes leem por ela). Filtros: `area`,
+`uf`, `tipo`, `esfera` e `vigente_em`; cada trecho traz fonte, URL, data da captura, situação e aviso de
+desatualização. A coleta e a indexação não usam a API do Claude.
+
+```
+D:\JARVIS-Conhecimento\
+  _catalogo\*.toml        fontes por biblioteca (só dados); só "aprovado" é baixado, e só o Senhor aprova
+  <área>\<fonte-id>.md    texto capturado, com cabeçalho v2 (fonte, data, vigência, situação, hash)
+  _versoes\<fonte-id>\    versões anteriores, com a vigência fechada (consultadas com vigente_em)
+  _entrada\               páginas salvas à mão pelo navegador (adaptador manual ou site que recusa o coletor)
+  _indice\base.db         índice SQLite FTS5 (incremental; a RAM do JARVIS não cresce com a base)
+  _relatorios\AAAA-MM-DD.md  novos, alterados, sem mudança, falhas e recusas de cada coleta
+```
+
+```bat
+.venv\Scripts\python -m jarvis.conhecimento validar                 :: confere os catálogos
+.venv\Scripts\python -m jarvis.conhecimento status
+.venv\Scripts\python -m jarvis.conhecimento atualizar --seco        :: mostra o que faria, sem gravar
+.venv\Scripts\python -m jarvis.conhecimento atualizar [--biblioteca juridico] [--fonte sv-stf] [--forcar]
+.venv\Scripts\python -m jarvis.conhecimento buscar "súmula vinculante 8" --area juridico
+```
+
+Incluir uma fonte é editar o TOML (sem código): `id`, `titulo`, `tipo`, `esfera`, `uf`, `url`, `adaptador`
+(`html_simples`, `pdf`, `lista_links`, `tabela`, `zip`, `pasta_local`, `manual`), `situacao`, `frequencia`, `corte`
+(`artigo`, `anexo`, `sumula`, `ementa`, `secao`, `pagina`). A coleta só acessa os domínios de `[seguranca]` do
+catálogo, a 1 requisição a cada 2 s por site. Se um site recusar o coletor, salve a página pelo navegador em
+`_entrada\<fonte-id>.htm` e rode de novo. Na biblioteca interna (`esfera = "interno"`), CPF, CNPJ e os nomes de
+`_catalogo\pii_nomes.txt` são mascarados antes de indexar.
+
+Atualização semanal (o Senhor cria; o JARVIS não agenda sozinho), por exemplo aos domingos às 7h, num prompt aberto
+na pasta do projeto:
+
+```bat
+schtasks /Create /TN "JARVIS Conhecimento" /SC WEEKLY /D SUN /ST 07:00 /TR "\"%CD%\.venv\Scripts\python.exe\" -m jarvis.conhecimento atualizar"
+```
+
+Cada fonte respeita a própria `frequencia` (uma fonte mensal conferida há 10 dias fica "em dia").
+
 ## Configuração
 
 Todas as opções estão comentadas em [`.env.example`](.env.example). As principais:
@@ -184,6 +279,8 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 | `JARVIS_PAINEL` | `1` | `0` desliga o [painel fiscal](#painel-fiscal-card-tributário-e-card-do-cliente) (rotas e coleta) |
 | `JARVIS_FISCAL_INTERVALO_MIN` | `360` | Minutos entre as coletas das fontes oficiais |
 | `JARVIS_CLIENTES_INTERVALO_MIN` | `1440` | Minutos entre as leituras da planilha, do ERP e do SERPRO |
+| `JARVIS_AGENTES` | `tributario` | [Agentes](#agentes-etapa-3) ativos, separados por vírgula; vazio ou `0` desliga a camada |
+| `JARVIS_AGENTES_ESPERA_S` | `20` | Segundos que o JARVIS espera uma tarefa de agente antes de responder "em andamento" |
 
 > **Atenção: `JARVIS_PASTAS` substitui a lista padrão, não soma a ela.**
 >
@@ -314,7 +411,7 @@ com o HUD é conferida pelos mesmos casos dos dois lados (`tests/fixtures/voz/ca
 ## Estrutura
 
 ```
-jarvis/            núcleo Python (api, core, tools, proactive, knowledge)
+jarvis/            núcleo Python (api, core, tools, proactive, conhecimento, voz, agentes)
 jarvis-hud/        interface React + WebGL2 e voz
 tests/             testes do núcleo (Claude simulado)
 _legado/           versões 1 a 3, arquivadas com plano de volta (LEIA-ME.md)

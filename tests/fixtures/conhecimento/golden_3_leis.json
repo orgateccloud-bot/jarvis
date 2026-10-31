@@ -1,0 +1,425 @@
+{
+ "decadência do crédito tributário": [
+  {
+   "score": 31.92,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 173",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 16.67,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 141",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 16.03,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 142",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 15.6,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 168",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 14.49,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 150",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  }
+ ],
+ "prescrição da ação de cobrança do crédito tributário": [
+  {
+   "score": 25.55,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 174",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 23.94,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 25",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 20.95,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 25-A",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 20.69,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 169",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 19.7,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 173",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  }
+ ],
+ "art. 173": [
+  {
+   "score": 18.2,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 173",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 3.97,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 150",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  }
+ ],
+ "o que diz o art. 3 do CTN sobre tributo": [
+  {
+   "score": 14.55,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 3",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 10.0,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 3 (parte 8)",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 10.0,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 3 (parte 7)",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 10.0,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 3 (parte 6)",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 10.0,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 3 (parte 5)",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  }
+ ],
+ "limite de receita bruta do MEI": [
+  {
+   "score": 17.81,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 18-A",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 15.06,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 18-A (parte 6)",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 14.77,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 68",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 14.19,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 18-A (parte 5)",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 14.1,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 36-A",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  }
+ ],
+ "sigilo profissional do advogado": [
+  {
+   "score": 8.66,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 7 (parte 3)",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 7.89,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 10",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 7.53,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 34",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 7.53,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 32",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 7.52,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 19",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  }
+ ],
+ "honorários de sucumbência pertencem ao advogado": [
+  {
+   "score": 22.65,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 23",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 18.88,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 21",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 14.64,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 24",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 12.02,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 22 (parte 2)",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 11.63,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 22",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  }
+ ],
+ "imunidade de templos de qualquer culto": [
+  {
+   "score": 19.2,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 9",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 12.38,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 10",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 10.78,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 18",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 8.55,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 18-D",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 8.51,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 11",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  }
+ ],
+ "isenção e exclusão do crédito tributário": [
+  {
+   "score": 17.28,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 175",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 15.15,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 111",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 7.69,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 174 (parte 2)",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 7.1,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 189",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 6.76,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 183",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  }
+ ],
+ "responsabilidade tributária dos sucessores": [
+  {
+   "score": 12.66,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 128",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 6.98,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 136",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 6.59,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 171-C",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 6.47,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 123",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 6.13,
+   "fonte": "Código Tributário Nacional (Lei 5.172/1966, compilada)",
+   "rotulo": "Art. 127-A",
+   "arquivo": "tributario/ctn-lei-5172-1966.txt",
+   "area": "tributario"
+  }
+ ],
+ "exclusão do simples nacional": [
+  {
+   "score": 19.46,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 27",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 16.3,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 23",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 15.21,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 31 (parte 2)",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 14.62,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 23 (parte 2)",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  },
+  {
+   "score": 14.4,
+   "fonte": "Lei Complementar 123/2006 (Simples Nacional)",
+   "rotulo": "Art. 16",
+   "arquivo": "tributario/lc-123-2006-simples-nacional.txt",
+   "area": "tributario"
+  }
+ ],
+ "infrações disciplinares do advogado": [
+  {
+   "score": 14.09,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 33",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 9.6,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 43",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 7.31,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 40",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 7.18,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 61",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  },
+  {
+   "score": 6.68,
+   "fonte": "Estatuto da Advocacia e da OAB (Lei 8.906/1994)",
+   "rotulo": "Art. 42",
+   "arquivo": "oab/estatuto-oab-lei-8906-1994.txt",
+   "area": "oab"
+  }
+ ]
+}

@@ -23,6 +23,7 @@ from .llm import (
     ToolInputUnparseable,
     TurnOutcome,
     area_note,
+    delegacao_note,
     telemetry_note,
 )
 from .privacy import sanitizar
@@ -32,26 +33,62 @@ MAX_STEPS = 6          # iterações do loop agêntico por turno
 MAX_JSON_RETRIES = 2   # reemissões quando a entrada de ferramenta chega ilegível
 
 
+def _blocos(m: dict) -> list[dict]:
+    return m["content"] if isinstance(m.get("content"), list) else []
+
+
+def _e_chamada(b: dict) -> bool:
+    return str(b.get("type", "")).endswith("tool_use")       # tool_use, server_tool_use, mcp_tool_use
+
+
+def _sem_fonte(b: dict, vivas: set) -> bool:
+    """O bloco nasceu dentro de uma chamada (`caller`: web_search ou ferramenta local rodada por um
+    code_execution) que não está mais na conversa."""
+    fonte = (b.get("caller") or {}).get("tool_id")
+    return fonte is not None and fonte not in vivas
+
+
 def fechar_ferramentas_orfas(history: list[dict]) -> int:
-    """Tira os server_tool_use (code_execution, web_search...) que ficaram sem o bloco de resultado.
+    """Tira os server_tool_use (code_execution, web_search...) que ficaram sem o bloco de resultado, e junto
+    tudo o que dependia deles.
 
     Uma resposta cortada (pause_turn no último passo, max_tokens, conexão que caiu) pode gravar a chamada sem o
     resultado; a partir daí a API recusa a conversa inteira com 400 ("tool use ... was found without a
-    corresponding ..._tool_result block") e o JARVIS para de responder. Só vale fora de um turno em andamento:
-    no meio do loop, o pause_turn precisa da chamada pendente para retomar. Devolve quantos blocos tirou.
+    corresponding ..._tool_result block") e o JARVIS para de responder. O resultado pode vir numa mensagem
+    seguinte (a resposta parou para uma ferramenta local com o code_execution ainda rodando), então a busca é na
+    conversa inteira. Ao tirar uma chamada, saem também os blocos cujo `caller` aponta para ela e os resultados
+    deles; senão a API recusa com "source tool ... not found". O mesmo vale para conversas gravadas antes desta
+    correção, em que a chamada já sumiu e só os dependentes e o resultado ficaram. Só vale fora de um turno em
+    andamento: no meio do loop, o pause_turn precisa da chamada pendente para retomar. Devolve quantos blocos
+    tirou.
     """
+    blocos = [b for m in history for b in _blocos(m)]
+    resultados = {b.get("tool_use_id") for b in blocos if str(b.get("type", "")).endswith("_tool_result")}
+    chamadas = {b.get("id") for b in blocos if _e_chamada(b)}
+    vivas = chamadas - {b.get("id") for b in blocos
+                        if b.get("type") == "server_tool_use" and b.get("id") not in resultados}
+    while dependentes := {b.get("id") for b in blocos
+                          if _e_chamada(b) and b.get("id") in vivas and _sem_fonte(b, vivas)}:
+        vivas -= dependentes
+
+    def sai(b: dict) -> bool:
+        if _sem_fonte(b, vivas):
+            return True
+        if _e_chamada(b):
+            return b.get("id") not in vivas
+        return str(b.get("type", "")).endswith("tool_result") and b.get("tool_use_id") not in vivas
+
     tirados = 0
     for m in history:
-        if m.get("role") != "assistant" or not isinstance(m.get("content"), list):
+        restantes = [b for b in _blocos(m) if not sai(b)]
+        if len(restantes) == len(_blocos(m)):
             continue
-        com_resultado = {b.get("tool_use_id") for b in m["content"] if str(b.get("type", "")).endswith("_tool_result")}
-        orfaos = [b for b in m["content"] if b.get("type") == "server_tool_use" and b.get("id") not in com_resultado]
-        if not orfaos:
-            continue
-        m["content"] = [b for b in m["content"] if b not in orfaos]
-        if all(b.get("type") == "thinking" for b in m["content"]):  # sobrou só o pensamento (ou nada)
-            m["content"].append({"type": "text", "text": "(a ferramenta foi interrompida antes do resultado)"})
-        tirados += len(orfaos)
+        tirados += len(_blocos(m)) - len(restantes)
+        m["content"] = restantes
+        if m.get("role") == "assistant" and all(b.get("type") == "thinking" for b in restantes):
+            restantes.append({"type": "text", "text": "(a ferramenta foi interrompida antes do resultado)"})
+        elif not restantes:  # mensagem do usuário só com resultados de ferramentas tiradas
+            restantes.append({"type": "text", "text": "(resultado de ferramenta interrompida)"})
     return tirados
 
 
@@ -71,12 +108,24 @@ class SessionStore:
     def history(self, session_id: str) -> list[dict]:
         path = self.root / f"{session_id}.json"
         if session_id not in self._cache:
-            self._cache[session_id] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+            self._cache[session_id] = []
             if path.exists():
+                gravado = path.read_text(encoding="utf-8")
+                self._cache[session_id] = json.loads(gravado)
                 self._last[session_id] = datetime.fromtimestamp(path.stat().st_mtime)
-            if n := fechar_ferramentas_orfas(self._cache[session_id]):  # conversa gravada antes da correção
-                logger.warning(f"sessão {session_id}: {n} ferramenta(s) de servidor sem resultado removida(s)")
+                if n := fechar_ferramentas_orfas(self._cache[session_id]):  # conversa gravada antes da correção
+                    copia = self._guardar_original(session_id, gravado)
+                    logger.warning(f"sessão {session_id}: {n} bloco(s) de ferramenta sem par removido(s); "
+                                   f"original em {copia}")
         return self._cache[session_id]
+
+    def _guardar_original(self, session_id: str, gravado: str) -> Path:
+        """Cópia do histórico como estava antes do reparo, em dados/sessions/arquivo/ (reversível)."""
+        arquivo = self.root / "arquivo"
+        arquivo.mkdir(exist_ok=True)
+        destino = arquivo / f"{session_id}-antes-do-reparo-{self.clock():%Y%m%d-%H%M%S}.json"
+        destino.write_text(gravado, encoding="utf-8")
+        return destino
 
     def rollover_if_idle(self, session_id: str) -> bool:
         """Arquiva a conversa se ficou parada além do limite. True se começou uma conversa nova."""
@@ -136,6 +185,11 @@ class Conversation:
         self._locks: dict[str, asyncio.Lock] = {}
         self._avisos: dict[str, list[str]] = {}   # avisos do sistema ao modelo (ex.: arquivo salvo), por sessão
 
+    def _agentes(self) -> frozenset[str]:
+        """Agentes ativos (Etapa 3): só eles recebem delegação do roteador."""
+        orq = getattr(self.tool_ctx, "agentes", None)
+        return frozenset(orq.ids()) if orq is not None and "comandar_agente" in self.tools else frozenset()
+
     async def nova_conversa(self, session_id: str) -> bool:
         """Arquiva a conversa e começa outra; espera o turno em andamento terminar (mesma trava do turn)."""
         async with self._locks.setdefault(session_id, asyncio.Lock()):
@@ -151,7 +205,7 @@ class Conversation:
     async def _turn(self, session_id: str, message: str) -> AsyncIterator[StreamEvent]:
         nova = self.store.rollover_if_idle(session_id)
         budget = self.ledger.state()
-        decision = decide(message, budget, self.tiers)
+        decision = decide(message, budget, self.tiers, agentes=self._agentes())
         quick = self.rules.answer(message) if decision.route is Route.LOCAL else None
         if decision.route is Route.LOCAL and quick is None and budget is not BudgetState.CAP_REACHED:
             # parecia trivial, mas nenhuma regra responde: vai para o modelo simples
@@ -177,7 +231,11 @@ class Conversation:
                     "O Claude volta no próximo mês, ou antes se o teto (JARVIS_BUDGET_USD) for aumentado."
                 )
             else:
-                nota = telemetry_note() + (f"\n{area_note(decision.area)}" if decision.area else "")
+                nota = telemetry_note()
+                if decision.delegar:
+                    nota += f"\n{delegacao_note(decision.delegar)}"
+                elif decision.area:
+                    nota += f"\n{area_note(decision.area)}"
                 if avisos := self._avisos.pop(session_id, None):
                     nota += "\n[desde a última resposta] " + "; ".join(avisos) + "."
                 history.append({"role": "system", "content": nota})
@@ -205,7 +263,7 @@ class Conversation:
         finally:
             # fim do turno: nenhuma chamada de ferramenta de servidor pode ficar sem resultado no histórico
             if n := fechar_ferramentas_orfas(history):
-                logger.warning(f"turno terminou com {n} ferramenta(s) de servidor sem resultado; removida(s)")
+                logger.warning(f"turno terminou com {n} bloco(s) de ferramenta de servidor sem par; removido(s)")
             if not completed:
                 # turno interrompido (cliente desconectou, erro): fecha o histórico de forma válida
                 self._close_dangling(history)
@@ -387,7 +445,10 @@ class Conversation:
 
         yield StreamEvent(type="tool", data={"fase": "inicio", "nome": name, "resumo": resumo})
         try:
-            output = await asyncio.to_thread(tool.run, params, self.tool_ctx)
+            if tool.assincrona:
+                output = await tool.run(params, self.tool_ctx)
+            else:
+                output = await asyncio.to_thread(tool.run, params, self.tool_ctx)
             done(output)
             yield StreamEvent(type="tool", data={"fase": "fim", "nome": name, "resumo": resumo, "ok": True})
             self._seal_tool(session_id, name, resumo)

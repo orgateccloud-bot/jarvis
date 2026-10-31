@@ -24,6 +24,7 @@ class ToolContext:
     journal: Any = None                                                      # MoveJournal
     memory: Any = None                                                       # JarvisMemory
     knowledge: Any = None                                                    # KnowledgeBase
+    agentes: Any = None                                                      # Orquestrador (Etapa 3)
     home: Path = field(default_factory=Path.home)  # ponto de partida dos caminhos relativos (não é raiz)
 
 
@@ -37,6 +38,7 @@ class Tool:
     needs_approval: bool = False
     details: Callable[[Any, Any], dict] | None = None  # extra para o card de aprovação (ex.: itens e GB do lote)
     builtin: dict | None = None       # ferramenta definida pela Anthropic (sem schema próprio), ex.: memória
+    assincrona: bool = False          # run é uma corrotina (ex.: comandar um agente que chama o Claude)
 
     def definition(self) -> dict:
         if self.builtin:
@@ -62,19 +64,22 @@ class ToolError(Exception):
     """Erro esperado de ferramenta (vira tool_result com is_error, sem stack trace)."""
 
 
-def registry(apps_json: Path | None = None) -> dict[str, Tool]:
-    """Todas as ferramentas. A lista de programas de abrir_app vem de config/apps.json (ou de apps_json)."""
+def registry(apps_json: Path | None = None, knowledge: Any = None) -> dict[str, Tool]:
+    """Todas as ferramentas. A lista de programas de abrir_app vem de config/apps.json (ou de apps_json); a
+    descrição de buscar_conhecimento, das áreas da base (knowledge: KnowledgeBase)."""
     from .apps import CATALOGO_PADRAO, app_tools, carregar_catalogo
     from .disk import DISK_TOOLS
     from .files import FILE_TOOLS
-    from .knowledge import KNOWLEDGE_TOOLS
+    from .knowledge import KNOWLEDGE_TOOLS, knowledge_tools
     from .memory import MEMORY_TOOLS
     from .settings import SETTINGS_TOOLS
     from .system import SYSTEM_TOOLS
     from .tasks import TASK_TOOLS
 
     apps = app_tools(carregar_catalogo(apps_json or CATALOGO_PADRAO))
-    tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS, *KNOWLEDGE_TOOLS,
+    conhecimento = KNOWLEDGE_TOOLS if knowledge is None else knowledge_tools(knowledge.areas_em_uso()
+                                                                             or knowledge.areas())
+    tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS, *conhecimento,
              *apps]
     return {t.name: t for t in tools}
 

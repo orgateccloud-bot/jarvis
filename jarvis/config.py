@@ -18,6 +18,11 @@ def _env(name: str, default: str) -> str:
     return os.getenv(name, default).strip()
 
 
+def var_chave_agente(agente_id: str) -> str:
+    """Variável da chave da Anthropic só de um agente: JARVIS_AGENTE_<ID>_API_KEY."""
+    return f"JARVIS_AGENTE_{agente_id.upper()}_API_KEY"
+
+
 class Settings(BaseModel):
     host: str = Field(default_factory=lambda: _env("JARVIS_HOST", "127.0.0.1"))
     port: int = Field(default_factory=lambda: int(_env("JARVIS_PORT", "8000")))
@@ -45,6 +50,15 @@ class Settings(BaseModel):
     painel: bool = Field(default_factory=lambda: _env("JARVIS_PAINEL", "1") != "0")
     fiscal_intervalo_min: int = Field(default_factory=lambda: int(_env("JARVIS_FISCAL_INTERVALO_MIN", "360")))
     clientes_intervalo_min: int = Field(default_factory=lambda: int(_env("JARVIS_CLIENTES_INTERVALO_MIN", "1440")))
+    # Etapa 3: agentes subordinados ativos (separados por vírgula); vazio ou 0 desliga a camada inteira
+    agentes: list[str] = Field(default_factory=lambda: [
+        a.strip() for a in _env("JARVIS_AGENTES", "tributario").split(",") if a.strip() and a.strip() != "0"])
+    agentes_espera_s: float = Field(default_factory=lambda: float(_env("JARVIS_AGENTES_ESPERA_S", "20")))
+
+    def chave_agente(self, agente_id: str) -> str:
+        """Chave da Anthropic só do agente ("" = usa a do JARVIS). Lida do ambiente na hora: não é campo, então não
+        aparece no repr nem no model_dump."""
+        return _env(var_chave_agente(agente_id), "")
 
     def tool_roots(self) -> list[Path]:
         """Pastas que as ferramentas podem ler: JARVIS_PASTAS (separadas por ;) ou as pastas pessoais."""
@@ -67,6 +81,10 @@ class Settings(BaseModel):
     def knowledge_dir(self) -> Path:
         """Base de conhecimento do especialista (leis e documentos): JARVIS_CONHECIMENTO ou D:\\JARVIS-Conhecimento."""
         return Path(_env("JARVIS_CONHECIMENTO", "D:\\JARVIS-Conhecimento"))
+
+    def agentes_dir(self) -> Path:
+        """Entregas dos agentes (laudos), uma subpasta por agente: <JARVIS_ARQUIVO>\\Agentes."""
+        return self.archive_dir() / "Agentes"
 
     def voz_dir(self) -> Path:
         """Modelos de voz e gravações de teste, fora do repositório: JARVIS_VOZ_DIR ou D:\\JARVIS-Voz."""

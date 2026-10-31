@@ -70,10 +70,17 @@ _AREAS = {
                    r"\b(icms|ipi|iss|issqn|pis|cofins|irpf|irpj|csll|ibs|cbs|ctn|itcmd|itcd|itbi|iptu|ipva|pgfn|darf)\b"],
     "oab": [r"\boab\b", r"\badvoca", r"\badvogad", r"\bexame de ordem", r"\bcodigo de etica", r"\bhonorarios?\b",
             r"\bsigilo profissional", r"\b8\.?906\b", r"\bestatuto da (advocacia|oab|ordem)"],
+    # precedentes da biblioteca jurídica (súmulas e temas do STF/STJ); empate com tributário fica com tributário
+    "juridico": [r"\bsumulas?\b", r"\bvinculante", r"\bjurisprudencia", r"\bprecedentes?\b", r"\brepercussao geral",
+                 r"\b(recursos?|temas?) repetitivos?", r"\btema \d+", r"\b(stf|stj|supremo)\b", r"\b(irdr|iac)\b"],
     "contabil": [r"\bcontab", r"\bbalanco", r"\bbalancete", r"\bdre\b", r"\b(livro )?razao contabil|\blivro razao", r"\bconcilia", r"\bsped\b",
                  r"\becd\b", r"\becf\b", r"\bescritura", r"\bdepreciac", r"\bnota fiscal", r"\bauditoria",
                  r"\bpgdas", r"\bplano de contas"],
 }
+
+# "Jarvis, pede ao agente tributário..." (o Whisper às vezes escreve "a gente tributário")
+_DELEGACAO = re.compile(r"\b(?:agente|a gente)\s+(tributari[oa])\b")
+_AGENTE_DO_TERMO = {"tributario": "tributario", "tributaria": "tributario"}
 
 _FORCE = {"/haiku": Route.SIMPLE, "/sonnet": Route.MEDIUM, "/opus": Route.COMPLEX, "/fable": Route.FABLE}
 _EFFORT = {Route.SIMPLE: "low", Route.MEDIUM: "high", Route.COMPLEX: "xhigh", Route.FABLE: "high"}
@@ -124,7 +131,15 @@ def area_for(t: str) -> str | None:
     return melhor if contagem[melhor] else None
 
 
-def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Decision:
+def delegacao_para(t: str, agentes: frozenset[str] | set[str] = frozenset()) -> str | None:
+    """Agente pedido no texto (já normalizado), se estiver ativo."""
+    m = _DELEGACAO.search(t)
+    agente = _AGENTE_DO_TERMO.get(m.group(1)) if m else None
+    return agente if agente in agentes else None
+
+
+def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS,
+           agentes: frozenset[str] | set[str] = frozenset()) -> Decision:
     t = _norm(text)
 
     if budget is BudgetState.CAP_REACHED:
@@ -137,10 +152,16 @@ def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Deci
     if forced is None and any(re.search(p, t) for p in _LOCAL_PATTERNS):
         return Decision(route=Route.LOCAL, reason="pedido trivial resolvido localmente")
 
+    area = area_for(t)
+    if (delegar := delegacao_para(t, agentes)) and not forced:
+        # pedido do usuário (31/10/2026): delegação no Opus, inclusive no modo economia; esforço baixo porque o
+        # trabalho pesado é do agente e o JARVIS só delega e relata (nada de Fable só para delegar)
+        return Decision(route=Route.COMPLEX, model=tiers.model(Route.COMPLEX), effort="low", area=area,
+                        delegar=delegar, reason=f"delegação ao agente {delegar}: Opus com esforço baixo")
+
     score = complexity_score(t)
     route = forced or tier_for(score, tiers.fable_pontos)
     reason = "forçado pelo usuário" if forced else f"complexidade {score}"
-    area = area_for(t)
 
     if budget is BudgetState.ECONOMY:
         route = route if forced else _DOWN[route]
@@ -149,5 +170,6 @@ def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Deci
         reason += f"; área {area}: no mínimo intermediário"
     if budget is BudgetState.ECONOMY:
         return Decision(route=route, model=tiers.model(route), effort="low",
-                        reason=f"{reason}; modo economia (>=80% do teto)", area=area)
-    return Decision(route=route, model=tiers.model(route), effort=_EFFORT[route], reason=reason, area=area)
+                        reason=f"{reason}; modo economia (>=80% do teto)", area=area, delegar=delegar)
+    return Decision(route=route, model=tiers.model(route), effort=_EFFORT[route], reason=reason, area=area,
+                    delegar=delegar)
