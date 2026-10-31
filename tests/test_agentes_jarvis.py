@@ -33,7 +33,8 @@ async def test_ponta_a_ponta_dois_fakes(settings):
     ])
     evs = await run_turn(conv, PEDIDO, session="hud")
     rota = evs[0].data
-    assert (rota["rota"], rota["effort"]) == ("media", "low") and "delegação" in rota["motivo"]
+    assert (rota["rota"], rota["modelo"], rota["effort"]) == ("complexa", "claude-opus-5-5", "low")
+    assert "delegação" in rota["motivo"]
     primeira = fake_j.calls[0]
     assert "comandar_agente" in primeira["system"] and "agentes_status" in primeira["system"]
     assert "[delegação ao agente tributario]" in primeira["messages"][-1]["content"]
@@ -129,14 +130,14 @@ async def test_csv_confinado_e_analise_sem_claude(settings, tmp_path):
     assert ok["estado"] == "concluida" and ok["indice_risco_pct"] == 5.0 and fake_a.calls == []
 
 
-def test_delegacao_sonnet_low():
+def test_delegacao_opus_low():
     ativos = {"tributario"}
     d = decide("Jarvis, pede ao agente tributário um laudo da empresa", BudgetState.NORMAL, agentes=ativos)
-    assert (d.route, d.effort, d.delegar) == (Route.MEDIUM, "low", "tributario")
+    assert (d.route, d.model, d.effort, d.delegar) == (Route.COMPLEX, "claude-opus-5-5", "low", "tributario")
     sem = decide("Jarvis, pede ao agente tributário um laudo da empresa", BudgetState.NORMAL)
     assert sem.delegar is None and sem.route is Route.FABLE       # sem agente ativo: segue o roteamento normal
     economia = decide("pede ao agente tributário a análise", BudgetState.ECONOMY, agentes=ativos)
-    assert (economia.route, economia.effort) == (Route.MEDIUM, "low")
+    assert (economia.route, economia.effort) == (Route.COMPLEX, "low")   # o usuário quer Opus mesmo na economia
     assert decide("pede ao agente tributário", BudgetState.CAP_REACHED, agentes=ativos).route is Route.LOCAL
     forcado = decide("/opus pede ao agente tributário um parecer", BudgetState.NORMAL, agentes=ativos)
     assert forcado.route is Route.COMPLEX and forcado.delegar == "tributario"

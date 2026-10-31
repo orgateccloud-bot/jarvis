@@ -151,9 +151,10 @@ def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS,
 
     area = area_for(t)
     if (delegar := delegacao_para(t, agentes)) and not forced:
-        # o trabalho pesado é do agente: o JARVIS só delega e relata (nada de Fable só para delegar)
-        return Decision(route=Route.MEDIUM, model=tiers.model(Route.MEDIUM), effort="low", area=area,
-                        delegar=delegar, reason=f"delegação ao agente {delegar}: intermediário com esforço baixo")
+        # pedido do usuário (31/10/2026): delegação no Opus, inclusive no modo economia; esforço baixo porque o
+        # trabalho pesado é do agente e o JARVIS só delega e relata (nada de Fable só para delegar)
+        return Decision(route=Route.COMPLEX, model=tiers.model(Route.COMPLEX), effort="low", area=area,
+                        delegar=delegar, reason=f"delegação ao agente {delegar}: Opus com esforço baixo")
 
     score = complexity_score(t)
     route = forced or tier_for(score, tiers.fable_pontos)
