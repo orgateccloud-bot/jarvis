@@ -21,10 +21,9 @@ from jarvis.voz.escuta import Escuta
 from jarvis.voz.fala import VozLocal
 
 BATIMENTO_S = 1.0
-# Esperas entre as tentativas de abrir o microfone que sumiu (depois da última, ela se repete). Cada tentativa
-# reinicia o PortAudio para enxergar o aparelho que voltou: de 2 em 2 s por meia hora, foram mais de 800 (31/10).
-ESPERAS_REABRIR_S = (2.0, 4.0, 8.0, 15.0, 30.0)
-LEMBRETE_S = 300.0  # com o microfone fora há muito tempo, o log lembra a cada 5 min (o serviço segue vivo)
+ESPERAS_REABRIR_S = (2.0, 5.0, 10.0, 30.0, 60.0)  # entre tentativas de abrir o microfone que sumiu (fica no último)
+CONFERIR_PEDIDO_S = 60.0  # no padrão do Windows, de quanto em quanto tempo ver se o microfone pedido voltou
+LEMBRETE_S = 300.0  # sem microfone nenhum há muito tempo, o log lembra a cada 5 min (o serviço segue vivo)
 
 
 def texto_para_log(texto: str) -> str:
@@ -81,6 +80,7 @@ class Servico:
             threading.Thread(target=alvo, name=alvo.__name__, daemon=True).start()
         mudo = False
         silencio = DetectorDeSilencio()
+        conferido = time.monotonic()
         while not self.parar.is_set():
             if not self.dono:
                 if self.mic.aberto:
@@ -93,12 +93,11 @@ class Servico:
             if not self.mic.aberto:
                 try:
                     self.mic.abrir()
-                except Exception as e:  # noqa: BLE001 — aparelho fora ao subir (ex.: receptor do K8 desligado)
-                    logger.warning("voz: microfone {} indisponível ao abrir ({}); esperando ele voltar",
-                                   self.mic.nome, e)
-                    self._esperar_microfone()
+                except Exception as e:  # noqa: BLE001 — nenhum microfone ao subir: espera, em vez de cair
+                    logger.warning("voz: nenhum microfone para abrir ({}); esperando um aparecer", e)
+                    self._reabrir_microfone()
                     continue
-                logger.info("voz: microfone aberto ({})", self.mic.nome)
+                self._log_microfone("aberto")
             for q in self.mic.quadros(timeout=0.2):
                 if self.parar.is_set() or not self.dono:
                     break
@@ -109,9 +108,12 @@ class Servico:
                     if fechar:
                         self.escuta.descartar()
                 if q is None and self.mic.parado() and not self.voz.falando:
-                    logger.warning("voz: o microfone ({}) parou de entregar áudio; reabrindo", self.mic.nome)
-                    self.escuta.descartar()
-                    self._esperar_microfone()
+                    self._reabrir_microfone()
+                    break
+                if (self.mic.reserva and time.monotonic() - conferido > CONFERIR_PEDIDO_S
+                        and self.conversa.estado() == "repouso" and not self.escuta.gravando):
+                    conferido = time.monotonic()  # só em repouso: reabrir corta ~0,1 s de áudio
+                    self._conferir_pedido()
                     break
                 if q is None or fechar:
                     continue
@@ -129,30 +131,51 @@ class Servico:
         self.mic.fechar()
         self.voz.encerrar()
 
-    def _esperar_microfone(self) -> None:
-        """O aparelho sumiu (receptor sem fio que reiniciou, cabo solto) ou não estava lá ao subir: reabre o mesmo
-        aparelho até ele voltar, com esperas crescentes (2 s até 30 s). Nunca reinicia o PortAudio com a fala
-        tocando, e o processo não cai: sem isso o serviço ficava "ouvindo" um stream morto, ou saía com código 1."""
-        n, inicio = 0, time.monotonic()
+    def _log_microfone(self, verbo: str) -> None:
+        if self.mic.reserva:
+            logger.warning("voz: microfone {} no padrão do Windows ({}): {!r} não está conectado; confiro a cada "
+                           "{:.0f} s se ele voltou", verbo, self.mic.nome, self.mic.pedido, CONFERIR_PEDIDO_S)
+        else:
+            logger.info("voz: microfone {} ({})", verbo, self.mic.nome)
+
+    def _reabrir_microfone(self) -> None:
+        """O stream parou sem erro (receptor sem fio que reiniciou, cabo solto): reabre o mesmo aparelho, ou o padrão
+        do Windows se ele sumiu, com tentativas cada vez mais espaçadas. Sem isso o serviço fica "ouvindo" um stream
+        morto até alguém reiniciar o JARVIS."""
+        logger.warning("voz: o microfone ({}) parou de entregar áudio; reabrindo", self.mic.nome)
+        self.escuta.descartar()
+        tentativa, inicio = 0, time.monotonic()
         lembrete = inicio + LEMBRETE_S
         while not self.parar.is_set() and self.dono:
-            if self.voz.falando:  # a fala usa o PortAudio: espera ela acabar
+            if self.voz.falando:  # a fala usa o PortAudio: reabrir reinicia o PortAudio, então espera ela acabar
                 self.parar.wait(0.5)
                 continue
             try:
                 self.mic.reabrir()
-                logger.info("voz: microfone reaberto ({})", self.mic.nome)
+                self._log_microfone("reaberto")
                 return
-            except Exception as e:  # noqa: BLE001 — aparelho ainda fora: tenta de novo
-                if n == 0:
-                    logger.warning("voz: microfone ainda indisponível ({}); tentando de novo com espera crescente "
+            except Exception as e:  # noqa: BLE001 — nenhum microfone disponível: tenta de novo
+                if tentativa == 0:
+                    logger.warning("voz: nenhum microfone disponível ({}); tentando de novo, cada vez mais espaçado "
                                    "(até {:.0f} s)", e, ESPERAS_REABRIR_S[-1])
                 elif time.monotonic() >= lembrete:
-                    logger.warning("voz: ainda esperando o microfone {} ({:.0f} min)", self.mic.nome,
-                                   (time.monotonic() - inicio) / 60)
+                    logger.warning("voz: ainda sem microfone ({:.0f} min)", (time.monotonic() - inicio) / 60)
                     lembrete = time.monotonic() + LEMBRETE_S
-                self.parar.wait(ESPERAS_REABRIR_S[min(n, len(ESPERAS_REABRIR_S) - 1)])
-                n += 1
+                self.parar.wait(ESPERAS_REABRIR_S[min(tentativa, len(ESPERAS_REABRIR_S) - 1)])
+                tentativa += 1
+
+    def _conferir_pedido(self) -> None:
+        """No padrão do Windows: reabre para ver se o microfone pedido voltou (o PortAudio só relê a lista ao
+        reiniciar). Só registra quando muda."""
+        self.escuta.descartar()
+        try:
+            self.mic.reabrir()
+        except Exception as e:  # noqa: BLE001 — o laço principal reabre na próxima volta
+            logger.warning("voz: falha ao conferir o microfone ({})", e)
+            return
+        if not self.mic.reserva:
+            logger.info("voz: {!r} voltou; ouvindo por ele ({})", self.mic.pedido, self.mic.nome)
+
 
 def cliente_padrao() -> Cliente:
     from jarvis.config import get_settings

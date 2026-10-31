@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     _falhas_nativas()
     offline.ativar()  # antes de qualquer import pesado: nada neste processo sai do PC
 
-    from jarvis.voz.captura import Microfone, escolher, microfones
+    from jarvis.voz.captura import Microfone, microfones
 
     if args.listar_microfones:
         for i, nome in microfones():
@@ -92,10 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.sem_api and not args.medir:
         from jarvis.voz.servico import Servico, cliente_padrao, interromper_por_voz
 
-        # o aparelho é procurado pelo nome só ao abrir: com o receptor sem fio desligado o serviço sobe e espera
-        # ele voltar, em vez de sair com código 1 (31/10, 12:37: 4 saídas seguidas e o supervisor desistiu)
-        mic = Microfone(alvo=args.microfone or None)
-        srv = Servico(escuta, cliente_padrao(), mic, interromper_por_voz(), args.pai)
+        srv = Servico(escuta, cliente_padrao(), Microfone(pedido=args.microfone), interromper_por_voz(), args.pai)
         logger.info("voz: serviço local no ar (Whisper {}; interromper por voz: {})", transcritor.config,
                     srv.conversa.interromper)
         try:
@@ -105,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     proc.cpu_percent(None)
     t0, quadros, eventos = time.monotonic(), 0, []
-    mic = Microfone(escolher(args.microfone))
+    mic = Microfone(pedido=args.microfone)
     try:
         with mic:
             logger.info("ouvindo (ativação pelo Whisper {}; atalho hey_jarvis {:.2f})", transcritor.config, args.limiar)

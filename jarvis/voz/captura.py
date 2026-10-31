@@ -72,17 +72,21 @@ class Microfone:
     """Captura contínua. O callback do PortAudio só enfileira; quem consome é `quadros()`.
 
     `mudo` descarta os quadros sem fechar o stream (half-duplex da fase 2c: reabrir custaria latência).
+
+    `pedido` é parte do nome (JARVIS_VOZ_MICROFONE). Se o aparelho não estiver conectado, abre o padrão do Windows
+    e marca `reserva`; quem usa decide quando conferir se ele voltou (31/10: o receptor do K8 sumiu por horas, o
+    serviço nem iniciava e o supervisor desistiu).
     """
 
-    def __init__(self, dispositivo: int | None = None, fila_max: int = 50, alvo: str | None = None):
+    def __init__(self, dispositivo: int | None = None, fila_max: int = 50, pedido: str | None = None):
         self.dispositivo = dispositivo
+        self.pedido = pedido or None
+        self.reserva = False           # aberto no padrão do Windows porque o `pedido` não estava conectado
         self.mudo = False
         self.perdidos = 0  # quadros descartados porque o consumidor atrasou
         self._fila: queue.Queue[np.ndarray] = queue.Queue(maxsize=fila_max)
         self._stream: sd.InputStream | None = None
-        # nome (ou parte dele) do aparelho, para reachar depois que o índice mudar. Com alvo e sem dispositivo, o
-        # aparelho só é procurado ao abrir: o serviço sobe mesmo com ele fora (receptor sem fio desligado)
-        self._alvo: str | None = alvo
+        self._alvo: str | None = None  # nome completo do aparelho, para reachar depois que o índice mudar
         self.ultimo = 0.0              # time.monotonic() do último callback, mesmo com `mudo`
 
     def _callback(self, dados, _frames, _tempo, _status) -> None:
@@ -96,8 +100,6 @@ class Microfone:
 
     @property
     def nome(self) -> str:
-        if self.dispositivo is None and self._alvo:
-            return self._alvo
         return str(sd.query_devices(self.dispositivo, kind="input")["name"])
 
     @property
@@ -105,10 +107,12 @@ class Microfone:
         return self._stream is not None
 
     def abrir(self) -> None:
-        """ValueError se o aparelho escolhido pelo nome não está na lista do PortAudio."""
-        if self.dispositivo is None and self._alvo is not None:
-            self.dispositivo = escolher(self._alvo)
-        if self.dispositivo is not None and self._alvo is None:
+        if self.pedido:
+            try:
+                self.dispositivo, self.reserva = escolher(self.pedido), False
+            except ValueError:
+                self.dispositivo, self.reserva = None, True
+        elif self.dispositivo is not None and self._alvo is None:
             self._alvo = self.nome
         self._stream = sd.InputStream(samplerate=TAXA, channels=1, dtype="int16", blocksize=QUADRO,
                                       device=self.dispositivo, callback=self._callback)
@@ -131,12 +135,14 @@ class Microfone:
 
     def reabrir(self) -> None:
         """Fecha, recarrega a lista de aparelhos do PortAudio (ele só a lê ao iniciar, e o aparelho que volta pode
-        ganhar outro índice) e abre o mesmo aparelho pelo nome. ValueError se ele ainda não voltou."""
+        ganhar outro índice) e abre o mesmo aparelho pelo nome; com `pedido`, o padrão do Windows se ele não estiver
+        lá. Sem `pedido`, ValueError se ele ainda não voltou. Recarregar o PortAudio a cada 2 s por meia hora
+        corrompeu a memória do processo (31/10, 0xC0000374): quem chama precisa espaçar as tentativas."""
         self.fechar()
         with TRAVA_PORTAUDIO:   # nunca com a fala tocando em outra thread
             sd._terminate()
             sd._initialize()
-        if self._alvo is not None:
+        if self._alvo is not None and not self.pedido:
             self.dispositivo = escolher(self._alvo)
         self.abrir()
 

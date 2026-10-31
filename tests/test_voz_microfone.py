@@ -43,7 +43,7 @@ class MicrofoneQueTrava:
     """Entrega uns quadros, depois o PortAudio para de chamar o callback (parado) e a primeira reabertura falha
     (receptor ainda reiniciando)."""
 
-    nome = "Microfone (K8)"
+    nome, pedido, reserva = "Microfone (K8)", None, False
 
     def __init__(self):
         self.mudo, self._aberto, self.travado = False, False, False
@@ -80,6 +80,8 @@ class MicrofoneQueTrava:
 
 
 class EscutaFalsa:
+    gravando = False
+
     def __init__(self):
         self.descartes = 0
 
@@ -124,21 +126,86 @@ def test_servico_reabre_o_microfone_que_parou_sem_erro(monkeypatch):
     assert escuta.descartes >= 1         # a fala pela metade antes da queda não vira pergunta
 
 
-# ── 31/10, 12:37: K8 fora por meia hora, queda nativa (0xC0000374) e 4 saídas com código 1 ─────────
-class MicrofoneAusente(MicrofoneQueTrava):
-    """O receptor está desligado ao subir: abrir e as primeiras reaberturas falham."""
+def test_microfone_pedido_ausente_abre_o_padrao_e_volta_quando_ele_aparece(monkeypatch):
+    """31/10: o receptor do K8 sumiu por horas; o serviço nem iniciava (ValueError) e o supervisor desistiu."""
+    from jarvis.voz import captura
+
+    conectados, abertos = [], []
+
+    def escolher(nome):
+        if nome in conectados:
+            return 7
+        raise ValueError(f"microfone não encontrado: {nome!r}")
+
+    class StreamFalso:
+        def __init__(self, device=None, **_kw):
+            abertos.append(device)
+
+        def start(self):
+            pass
+
+        abort = close = start
+
+    monkeypatch.setattr(captura, "escolher", escolher)
+    monkeypatch.setattr(captura.sd, "InputStream", StreamFalso)
+    monkeypatch.setattr(captura.sd, "_terminate", lambda: None)
+    monkeypatch.setattr(captura.sd, "_initialize", lambda: None)
+    mic = captura.Microfone(pedido="K8")
+    mic.abrir()
+    assert mic.reserva and abertos == [None]          # None = padrão do Windows
+    mic.reabrir()
+    assert mic.reserva and abertos == [None, None]    # ainda fora: continua no padrão, sem erro
+    conectados.append("K8")
+    mic.reabrir()
+    assert not mic.reserva and abertos == [None, None, 7]
+
+
+class MicrofoneReserva(MicrofoneQueTrava):
+    """Aberto no padrão do Windows; o pedido volta na primeira conferência."""
+
+    pedido, reserva = "K8", True
+
+    def reabrir(self):
+        self.tentativas += 1
+        self.reserva = False
+        self.reaberto.set()
+
+    def quadros(self, timeout=1.0):
+        while self._aberto:
+            time.sleep(0.01)
+            yield SALA
+
+
+def test_servico_confere_em_repouso_se_o_microfone_pedido_voltou(monkeypatch):
+    monkeypatch.setattr(mod, "CONFERIR_PEDIDO_S", 0.05)
+    mic = MicrofoneReserva()
+    srv = mod.Servico(EscutaFalsa(), ClienteSoBatimento(), mic, voz=VozMuda())
+    t = threading.Thread(target=srv.rodar, daemon=True)
+    t.start()
+    try:
+        assert mic.reaberto.wait(10), "o serviço não conferiu o microfone pedido"
+        time.sleep(0.2)                    # de volta ao pedido: não confere mais
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert mic.tentativas == 1 and not mic.reserva
+
+
+# ── PR #18: trava do PortAudio, nada de reabrir com a fala tocando, sem microfone nenhum ao subir ──────
+class SemMicrofone(MicrofoneQueTrava):
+    """Nenhum aparelho de entrada: abrir e as primeiras reaberturas falham."""
 
     def __init__(self, falhas=3):
         super().__init__()
         self.falhas = falhas
 
     def abrir(self):
-        raise ValueError("microfone não encontrado: 'K8'")
+        raise OSError("nenhum aparelho de entrada")
 
     def reabrir(self):
         self.tentativas += 1
         if self.tentativas <= self.falhas:
-            raise ValueError("microfone não encontrado: 'K8'")
+            raise OSError("nenhum aparelho de entrada")
         self._aberto = True
         self.reaberto.set()
 
@@ -148,15 +215,14 @@ class MicrofoneAusente(MicrofoneQueTrava):
             yield None
 
 
-def test_servico_sobe_com_o_microfone_ausente_e_espera_ele_voltar(monkeypatch):
-    """Antes, escolher("K8") levantava ValueError antes do serviço subir: saída com código 1, sem nada no log."""
+def test_servico_sem_microfone_nenhum_ao_subir_espera_em_vez_de_cair(monkeypatch):
     monkeypatch.setattr(mod, "ESPERAS_REABRIR_S", (0.01,))
-    mic = MicrofoneAusente(falhas=3)
+    mic = SemMicrofone(falhas=3)
     srv = mod.Servico(EscutaFalsa(), ClienteSoBatimento(), mic, voz=VozMuda())
     t = threading.Thread(target=srv.rodar, daemon=True)
     t.start()
     try:
-        assert mic.reaberto.wait(10), "o serviço não esperou o microfone voltar"
+        assert mic.reaberto.wait(10), "o serviço não esperou um microfone aparecer"
         assert t.is_alive()                       # o processo não caiu
     finally:
         srv.parar.set()
@@ -181,10 +247,10 @@ class ParadaFalsa:
 def test_espera_crescente_entre_as_tentativas(monkeypatch):
     """De 2 em 2 s para sempre, foram mais de 800 reinícios do PortAudio em meia hora; agora a espera cresce."""
     monkeypatch.setattr(mod, "ESPERAS_REABRIR_S", (1.0, 2.0, 3.0))
-    mic = MicrofoneAusente(falhas=6)
+    mic = SemMicrofone(falhas=6)
     srv = mod.Servico(EscutaFalsa(), ClienteSoBatimento(), mic, voz=VozMuda())
     srv.dono, srv.parar = True, ParadaFalsa()
-    srv._esperar_microfone()
+    srv._reabrir_microfone()
     assert srv.parar.esperas == [1.0, 2.0, 3.0, 3.0, 3.0, 3.0] and mic.tentativas == 7
 
 
@@ -197,9 +263,9 @@ class VozQueFala(VozMuda):
         return self.frases > 0
 
 
-def test_nao_reinicia_o_portaudio_com_a_fala_tocando(monkeypatch):
+def test_nao_reinicia_o_portaudio_com_a_fala_tocando():
     voz = VozQueFala(frases=3)
-    mic = MicrofoneAusente(falhas=0)
+    mic = SemMicrofone(falhas=0)
     srv = mod.Servico(EscutaFalsa(), ClienteSoBatimento(), mic, voz=voz)
     srv.dono = True
 
@@ -210,7 +276,7 @@ def test_nao_reinicia_o_portaudio_com_a_fala_tocando(monkeypatch):
             return False
 
     srv.parar = Parada()
-    srv._esperar_microfone()
+    srv._reabrir_microfone()
     assert srv.parar.esperas == [0.5, 0.5, 0.5] and mic.tentativas == 1   # só reabriu depois da fala
 
 
@@ -219,25 +285,11 @@ def test_reabrir_reinicia_o_portaudio_so_com_a_trava(monkeypatch):
     monkeypatch.setattr(captura.sd, "_terminate", lambda: vistos.append(("terminate", TRAVA_PORTAUDIO.locked())))
     monkeypatch.setattr(captura.sd, "_initialize", lambda: vistos.append(("initialize", TRAVA_PORTAUDIO.locked())))
     monkeypatch.setattr(captura, "escolher", lambda _n: (_ for _ in ()).throw(ValueError("fora")))
-    mic = Microfone(alvo="K8")
+    mic = Microfone()
+    mic._alvo = "Microfone (K8)"                  # aberto antes pelo índice; agora sumiu
     with pytest.raises(ValueError):
         mic.reabrir()
     assert vistos == [("terminate", True), ("initialize", True)] and not TRAVA_PORTAUDIO.locked()
-
-
-def test_microfone_pelo_nome_so_procura_o_aparelho_ao_abrir(monkeypatch):
-    procurados = []
-
-    def escolher(nome):
-        procurados.append(nome)
-        raise ValueError(f"microfone não encontrado: {nome!r}")
-
-    monkeypatch.setattr(captura, "escolher", escolher)
-    mic = Microfone(alvo="K8")                    # criar não procura nada: o serviço sobe sem o aparelho
-    assert procurados == [] and mic.nome == "K8" and not mic.aberto
-    with pytest.raises(ValueError, match="K8"):
-        mic.abrir()
-    assert procurados == ["K8"]
 
 
 def test_a_fala_toca_segurando_a_trava(monkeypatch):

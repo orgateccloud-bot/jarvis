@@ -34,7 +34,7 @@ pytestmark = [
 class MicrofoneDeWav:
     """Entrega os quadros de um WAV e depois silêncio, no ritmo que o serviço pedir (sem esperar o tempo real)."""
 
-    nome = "WAV de teste"
+    nome, pedido, reserva = "WAV de teste", None, False
 
     def __init__(self, audio):
         self.audio, self.i, self.mudo, self.perdidos, self._aberto = audio, 0, False, 0, False
