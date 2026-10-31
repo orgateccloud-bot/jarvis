@@ -124,12 +124,16 @@ class ServicoColeta:
         return self.relogio().date()
 
 
-async def run_coleta(servico: ServicoColeta, intervalo_s: float, espera_inicial_s: float = 20.0) -> None:
-    """Laço agendado: a primeira coleta sai logo depois da subida da API; depois, a cada intervalo."""
+async def repetir(tarefa: Callable[[], object], intervalo_s: float, nome: str, espera_inicial_s: float = 20.0) -> None:
+    """Laço agendado: a primeira execução sai logo depois da subida da API; depois, a cada intervalo. Nunca morre."""
     await asyncio.sleep(espera_inicial_s)
     while True:
         try:
-            await asyncio.to_thread(servico.coletar)
-        except Exception:  # noqa: BLE001 — o laço de coleta nunca pode morrer
-            logger.exception("painel: coleta agendada")
+            await asyncio.to_thread(tarefa)
+        except Exception:  # noqa: BLE001 — o laço agendado nunca pode morrer
+            logger.exception("painel: {} (execução agendada)", nome)
         await asyncio.sleep(intervalo_s)
+
+
+async def run_coleta(servico: ServicoColeta, intervalo_s: float, espera_inicial_s: float = 20.0) -> None:
+    await repetir(servico.coletar, intervalo_s, "coleta das fontes fiscais", espera_inicial_s)
