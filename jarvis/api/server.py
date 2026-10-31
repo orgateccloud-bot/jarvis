@@ -23,6 +23,7 @@ HUD_DIST = ROOT / "jarvis-hud" / "dist"
 # Só quem abre o HUD por um nome local recebe o token: um site que aponte o próprio domínio para 127.0.0.1
 # (DNS rebinding) chega com outro Host e recebe a página sem ele.
 HOSTS_LOCAIS = {"127.0.0.1", "localhost", "[::1]"}
+from ..conhecimento.base import KnowledgeBase
 from ..core.approvals import Approvals
 from ..core.audit import AuditChain
 from ..core.contracts import ApprovalDecision, ChatRequest
@@ -30,7 +31,6 @@ from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
-from ..knowledge import KnowledgeBase
 from ..proactive.bus import EventBus, ProactiveEvent, event_source
 from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
@@ -45,7 +45,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
     reminders = ReminderStore(settings.db_path)
     memory = JarvisMemory(settings.data_dir, salt=salt)
     memory.semear(settings.user_name)
-    tools = registry()
+    knowledge = KnowledgeBase(settings.knowledge_dir())
+    tools = registry(knowledge=knowledge)
     return Conversation(
         claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools)),
         rules=RuleResponder(settings.user_name),
@@ -59,7 +60,7 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         tool_ctx=ToolContext(
             roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
             archive=settings.archive_dir(), move_roots=settings.move_roots(), journal=MoveJournal(settings.db_path),
-            memory=memory, knowledge=KnowledgeBase(settings.knowledge_dir()),
+            memory=memory, knowledge=knowledge,
         ),
         approvals=Approvals(timeout_s=approval_timeout_s),
     )

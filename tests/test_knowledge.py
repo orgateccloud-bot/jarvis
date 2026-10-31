@@ -1,11 +1,9 @@
 import json
-from types import SimpleNamespace
 
-from jarvis import knowledge
 from jarvis.api.server import build_conversation
 from jarvis.core.contracts import BudgetState, Route
 from jarvis.core.router import area_for, decide
-from jarvis.knowledge import Fonte, KnowledgeBase, baixar, cortar, html_para_texto
+from jarvis.knowledge import KnowledgeBase, cortar, html_para_texto
 from tests.conftest import FakeAnthropic, text_turn, tool_turn
 from tests.test_tools import run_turn, tool_results
 
@@ -66,28 +64,8 @@ def test_indice_se_refaz_quando_a_pasta_muda(tmp_path):
     assert achado.area == "geral" and achado.arquivo == "geral.txt"
 
 
-def test_baixar_grava_cabecalho_e_guarda_a_versao_anterior(tmp_path, monkeypatch):
-    html = "<html><body>" + "".join(f"<p>Art. {i}º Texto do artigo {i}.</p>" for i in range(1, 12)) + "</body></html>"
-
-    class Resp:
-        headers = SimpleNamespace(get_content_charset=lambda: "utf-8")
-
-        def read(self):
-            return html.encode()
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-    monkeypatch.setattr(knowledge.urllib.request, "urlopen", lambda req, timeout: Resp())
-    fonte = [Fonte("tributario/teste.txt", "Lei Teste", "https://www.planalto.gov.br/teste.htm")]
-    baixar(tmp_path, fonte)
-    baixar(tmp_path, fonte)
-    texto = (tmp_path / "tributario" / "teste.txt").read_text(encoding="utf-8")
-    assert texto.startswith("Título: Lei Teste\nFonte: https://www.planalto.gov.br/teste.htm") and "Art. 11º" in texto
-    assert len(list((tmp_path / "_versoes").glob("teste.*.txt"))) == 1
+# O antigo baixar() (fontes fixas no código) virou a coleta pelo catálogo: cabeçalho, versões e relatório estão
+# cobertos em tests/test_conhecimento_coleta.py::test_versoes_relatorio_e_busca_de_ponta_a_ponta.
 
 
 def test_area_pelo_assunto_e_piso_no_intermediario():
