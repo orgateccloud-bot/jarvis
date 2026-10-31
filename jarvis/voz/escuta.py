@@ -10,7 +10,9 @@ Fase 2b: devolve o Evento e o chamador só registra no log. Na 2c o Evento vira 
 
 from __future__ import annotations
 
+import time
 from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -24,6 +26,10 @@ from jarvis.voz.transcricao import Transcricao, Transcritor
 PREROLL = 6           # quadros antes da 1ª voz (480 ms): o VAD demora um pouco a subir no começo da fala
 MIN_FALA_S = 0.3      # mais curto que isso é estalo, tosse ou batida: nem vai ao Whisper
 MAX_CURTA_S = 8.0     # falas mais longas (conversa, TV) só vão ao Whisper se o modelo pronto disparou nelas
+# Transcrição adiantada: com este silêncio o Whisper já começa, em paralelo com a espera do fim da fala; se a
+# pessoa voltar a falar, o resultado é descartado. Na voz do usuário (31/10) o Whisper levava ~0,55 s e a espera
+# 0,72 s, em sequência (~1,27 s); adiantado, o Whisper fica escondido dentro da espera.
+ESPECULAR_QUADROS = 3  # 240 ms
 
 
 @dataclass(frozen=True)
@@ -32,8 +38,9 @@ class Evento:
     transcricao: Transcricao
     duracao_fala_s: float
     espera_fim_s: float   # silêncio esperado para decidir que a fala acabou
-    latencia_s: float     # do último quadro com voz até a transcrição pronta (espera_fim_s + Whisper)
+    latencia_s: float     # do último quadro com voz até a transcrição pronta (espera + o que faltou do Whisper)
     atalho: bool          # o modelo pronto "hey jarvis" também disparou nesta fala
+    adiantada: bool = False  # a transcrição começou durante o silêncio e foi aproveitada
 
 
 @dataclass
@@ -42,6 +49,8 @@ class Contagem:
     curtas_demais: int = 0
     longas_sem_atalho: int = 0
     transcritas: int = 0
+    adiantadas: int = 0     # transcrições que começaram no silêncio e foram aproveitadas
+    descartadas: int = 0    # adiantadas jogadas fora porque a pessoa voltou a falar
     comandos: dict = field(default_factory=dict)  # tipo do comando → quantas
 
 
@@ -54,6 +63,9 @@ class Escuta:
         self.gravando = False
         self._atalho = False
         self.contagem = Contagem()
+        # um Whisper por vez: a transcrição adiantada e a final passam pela mesma fila
+        self._fila = ThreadPoolExecutor(max_workers=1, thread_name_prefix="whisper")
+        self._adiantada: tuple[Future, int | None] | None = None  # (resultado, último quadro com voz naquele ponto)
 
     def processar(self, quadro: np.ndarray) -> Evento | None:
         s = self.ativacao.score(quadro)   # modelo pronto: só o atalho para falas longas
@@ -66,13 +78,22 @@ class Escuta:
                 self.gravando, self._atalho = True, self.ativacao.confirma(s)
             return None
         self._atalho = self._atalho or self.ativacao.confirma(s)
-        if not self.fim.adicionar(quadro, p):
-            return None
-        return self._encerrar()
+        if self.fim.adicionar(quadro, p):
+            return self._encerrar()
+        if self._adiantada and self._adiantada[1] != self.fim.ultima_voz:
+            self._adiantada = None            # voltou a falar: o texto adiantado ficou incompleto
+            self.contagem.descartadas += 1
+        if self._adiantada is None and self.fim.silencio == ESPECULAR_QUADROS and self._vale_transcrever():
+            self._adiantada = (self._fila.submit(self.transcritor.transcrever, self.fim.audio), self.fim.ultima_voz)
+        return None
+
+    def _vale_transcrever(self) -> bool:
+        d = self.fim.duracao_fala_s
+        return d >= MIN_FALA_S and (d <= MAX_CURTA_S or self._atalho)
 
     def descartar(self) -> None:
         """Joga fora a fala em andamento: o microfone vai ficar mudo (half-duplex) e o JARVIS vai falar."""
-        self.gravando, self._atalho = False, False
+        self.gravando, self._atalho, self._adiantada = False, False, None
         self._preroll.clear()
         self.ativacao.reset()
 
@@ -86,7 +107,8 @@ class Escuta:
         duracao, atalho = self.fim.duracao_fala_s, self._atalho
         espera = self.fim.quadros_desde_a_voz * SEG_QUADRO
         audio = self.fim.audio
-        self.gravando, self._atalho = False, False
+        adiantada = self._adiantada if self._adiantada and self._adiantada[1] == self.fim.ultima_voz else None
+        self.gravando, self._atalho, self._adiantada = False, False, None
         self._preroll.clear()
         self.ativacao.reset()  # zera também o VAD: a próxima fala começa do zero
         if duracao < MIN_FALA_S:
@@ -95,11 +117,15 @@ class Escuta:
         if duracao > MAX_CURTA_S and not atalho:
             c.longas_sem_atalho += 1
             return None
-        tr = self.transcritor.transcrever(audio)
+        t0 = time.monotonic()
+        futuro = adiantada[0] if adiantada else self._fila.submit(self.transcritor.transcrever, audio)
+        tr = futuro.result()
+        faltou = time.monotonic() - t0  # o que ainda faltava do Whisper quando o fim da fala foi confirmado
         cmd = classificar(tr.texto, duracao, tr.no_speech_prob)
         c.transcritas += 1
+        c.adiantadas += bool(adiantada)
         c.comandos[cmd.tipo] = c.comandos.get(cmd.tipo, 0) + 1
-        return Evento(cmd, tr, duracao, espera, espera + tr.segundos, atalho)
+        return Evento(cmd, tr, duracao, espera, espera + faltou, atalho, adiantada=bool(adiantada))
 
     def processar_clip(self, audio: np.ndarray) -> list[Evento]:
         """Simula a escuta contínua num áudio inteiro (testes e medição). Inclui os eventos "nada"."""

@@ -90,6 +90,27 @@ def test_fala_longa_so_vai_ao_whisper_se_o_modelo_pronto_disparou(escuta, monkey
     assert eventos[0].atalho and _comandos(eventos) == [("pergunta", "que horas são?")]
 
 
+def test_transcricao_adiantada_e_aproveitada_e_pausa_curta_a_descarta(escuta):
+    antes = (escuta.contagem.adiantadas, escuta.contagem.descartadas)
+    ev = escuta.processar_clip(_clip("jarvis_que_horas_daniel"))[0]
+    assert ev.adiantada and escuta.contagem.adiantadas == antes[0] + 1        # começou no silêncio e valeu
+
+    # "Jarvis." + pausa de 400 ms (mais que o adiantamento, menos que o fim) + "Jarvis, que horas são?"
+    with wave.open(str(FIXTURES / "jarvis_daniel.wav"), "rb") as w:
+        nome = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+    pausa, pad = np.zeros(int(TAXA * 0.4), dtype=np.int16), np.zeros(TAXA, dtype=np.int16)
+    with wave.open(str(FIXTURES / "jarvis_que_horas_daniel.wav"), "rb") as w:
+        pedido = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+
+    def aparar(x):  # tira o silêncio que o SAPI deixa nas pontas: a pausa fica exatamente em 400 ms
+        som = np.flatnonzero(np.abs(x) > 300)
+        return x[som[0]:som[-1] + 1]
+
+    eventos = escuta.processar_clip(np.concatenate([pad, aparar(nome), pausa, aparar(pedido), pad]))
+    assert escuta.contagem.descartadas > antes[1]                             # o texto adiantado ficou velho
+    assert len(eventos) == 1 and "que horas" in eventos[0].transcricao.texto  # uma fala só, inteira
+
+
 def test_latencia_ate_o_texto_na_gpu(escuta):
     if ":cuda:" not in escuta.transcritor.config:
         pytest.skip("Whisper na CPU: a meta de latência é para a GPU")

@@ -10,7 +10,7 @@ from jarvis.voz.config import LIMIAR_VAD, QUADRO, TAXA
 from jarvis.voz.vad import Vad
 
 SEG_QUADRO = QUADRO / TAXA   # 0,08 s
-SILENCIO_MS = 700            # fim de fala (SUPOSIÇÃO do plano; medido na fase 2b)
+SILENCIO_MS = 560            # fim de fala: nas 58 gravações do usuário, 480, 560 e 700 ms deram o mesmo acerto
 MAX_S = 15.0                 # teto de uma fala
 FOLGA_INICIO = 2             # quadros mantidos antes da primeira voz (160 ms)
 LACUNA_MAX = 4               # pausa tolerada dentro da mesma fala ao procurar o começo ("Ok, ... Jarvis")
