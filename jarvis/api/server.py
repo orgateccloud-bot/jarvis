@@ -9,6 +9,7 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import anthropic
 import psutil
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,18 +40,40 @@ from ..tools.journal import MoveJournal
 from ..tools.memory import JarvisMemory
 
 
-def build_conversation(settings: Settings, claude_client=None, approval_timeout_s: float = 60.0) -> Conversation:
+def build_orquestrador(settings: Settings, audit: AuditChain, ledger: CostLedger, client, salt: str, knowledge):
+    """Etapa 3: o orquestrador dos agentes (None com JARVIS_AGENTES vazio ou 0)."""
+    if not settings.agentes:
+        return None
+    from ..agentes.orquestrador import Orquestrador
+    from ..agentes.registro import Registro
+
+    return Orquestrador(Registro(settings.db_path), audit, ledger, client=client, salt=salt,
+                        pasta=settings.agentes_dir(), conhecimento=knowledge, ativos=settings.agentes,
+                        espera_s=settings.agentes_espera_s)
+
+
+def build_conversation(settings: Settings, claude_client=None, approval_timeout_s: float = 60.0,
+                       agent_client=None) -> Conversation:
+    """agent_client: cliente do Claude dos agentes (padrão: o mesmo do JARVIS; os testes usam um falso separado)."""
     ledger = CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold)
     salt = settings.salt()
     reminders = ReminderStore(settings.db_path)
     memory = JarvisMemory(settings.data_dir, salt=salt)
     memory.semear(settings.user_name)
+    audit = AuditChain(settings.data_dir / "audit.jsonl")
+    knowledge = KnowledgeBase(settings.knowledge_dir())
+    claude_client = claude_client or anthropic.AsyncAnthropic()
+    agentes = build_orquestrador(settings, audit, ledger, agent_client or claude_client, salt, knowledge)
     tools = registry()
+    if agentes is not None:
+        from ..tools.agentes import ferramentas_agentes
+
+        tools |= {t.name: t for t in ferramentas_agentes(agentes.catalogo())}
     return Conversation(
         claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools)),
         rules=RuleResponder(settings.user_name),
         ledger=ledger,
-        audit=AuditChain(settings.data_dir / "audit.jsonl"),
+        audit=audit,
         store=SessionStore(settings.data_dir / "sessions", idle=timedelta(minutes=settings.session_idle_min)),
         salt=salt,
         tiers=Tiers(settings.model_simple, settings.model_medium, settings.model_complex, settings.model_fable,
@@ -59,7 +82,7 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         tool_ctx=ToolContext(
             roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
             archive=settings.archive_dir(), move_roots=settings.move_roots(), journal=MoveJournal(settings.db_path),
-            memory=memory, knowledge=KnowledgeBase(settings.knowledge_dir()),
+            memory=memory, knowledge=knowledge, agentes=agentes,
         ),
         approvals=Approvals(timeout_s=approval_timeout_s),
     )
@@ -73,6 +96,9 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     conv = conversation or build_conversation(settings)
     logger.add(settings.data_dir.parent / "logs" / "jarvis.log", rotation="10 MB", retention="30 days")
     bus = EventBus()
+    agentes = conv.tool_ctx.agentes if conv.tool_ctx else None
+    if agentes is not None:
+        agentes.publicar = bus.publish   # Etapa 3: fim de tarefa, falha, recusa e configuração vão ao HUD
     monitor = monitor or Monitor(conv.ledger, conv.tool_ctx.reminders, settings.user_name)
     proactive = settings.proactive if proactive is None else proactive
 
@@ -93,6 +119,8 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
         if supervisor:
             tasks.append(asyncio.create_task(supervisor.rodar()))
         yield
+        if agentes is not None:
+            await agentes.encerrar()
         if supervisor:
             supervisor.parar()
         for task in tasks:

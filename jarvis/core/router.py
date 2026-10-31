@@ -75,6 +75,10 @@ _AREAS = {
                  r"\bpgdas", r"\bplano de contas"],
 }
 
+# "Jarvis, pede ao agente tributário..." (o Whisper às vezes escreve "a gente tributário")
+_DELEGACAO = re.compile(r"\b(?:agente|a gente)\s+(tributari[oa])\b")
+_AGENTE_DO_TERMO = {"tributario": "tributario", "tributaria": "tributario"}
+
 _FORCE = {"/haiku": Route.SIMPLE, "/sonnet": Route.MEDIUM, "/opus": Route.COMPLEX, "/fable": Route.FABLE}
 _EFFORT = {Route.SIMPLE: "low", Route.MEDIUM: "high", Route.COMPLEX: "xhigh", Route.FABLE: "high"}
 _DOWN = {Route.FABLE: Route.COMPLEX, Route.COMPLEX: Route.MEDIUM, Route.MEDIUM: Route.SIMPLE,
@@ -124,7 +128,15 @@ def area_for(t: str) -> str | None:
     return melhor if contagem[melhor] else None
 
 
-def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Decision:
+def delegacao_para(t: str, agentes: frozenset[str] | set[str] = frozenset()) -> str | None:
+    """Agente pedido no texto (já normalizado), se estiver ativo."""
+    m = _DELEGACAO.search(t)
+    agente = _AGENTE_DO_TERMO.get(m.group(1)) if m else None
+    return agente if agente in agentes else None
+
+
+def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS,
+           agentes: frozenset[str] | set[str] = frozenset()) -> Decision:
     t = _norm(text)
 
     if budget is BudgetState.CAP_REACHED:
@@ -137,10 +149,15 @@ def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Deci
     if forced is None and any(re.search(p, t) for p in _LOCAL_PATTERNS):
         return Decision(route=Route.LOCAL, reason="pedido trivial resolvido localmente")
 
+    area = area_for(t)
+    if (delegar := delegacao_para(t, agentes)) and not forced:
+        # o trabalho pesado é do agente: o JARVIS só delega e relata (nada de Fable só para delegar)
+        return Decision(route=Route.MEDIUM, model=tiers.model(Route.MEDIUM), effort="low", area=area,
+                        delegar=delegar, reason=f"delegação ao agente {delegar}: intermediário com esforço baixo")
+
     score = complexity_score(t)
     route = forced or tier_for(score, tiers.fable_pontos)
     reason = "forçado pelo usuário" if forced else f"complexidade {score}"
-    area = area_for(t)
 
     if budget is BudgetState.ECONOMY:
         route = route if forced else _DOWN[route]
@@ -149,5 +166,6 @@ def decide(text: str, budget: BudgetState, tiers: Tiers = DEFAULT_TIERS) -> Deci
         reason += f"; área {area}: no mínimo intermediário"
     if budget is BudgetState.ECONOMY:
         return Decision(route=route, model=tiers.model(route), effort="low",
-                        reason=f"{reason}; modo economia (>=80% do teto)", area=area)
-    return Decision(route=route, model=tiers.model(route), effort=_EFFORT[route], reason=reason, area=area)
+                        reason=f"{reason}; modo economia (>=80% do teto)", area=area, delegar=delegar)
+    return Decision(route=route, model=tiers.model(route), effort=_EFFORT[route], reason=reason, area=area,
+                    delegar=delegar)

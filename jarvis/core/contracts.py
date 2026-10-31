@@ -29,6 +29,7 @@ class Decision(BaseModel):
     effort: Literal["low", "medium", "high", "xhigh"] | None = None
     reason: str
     area: str | None = None  # área especializada detectada (tributario, oab, contabil)
+    delegar: str | None = None  # Etapa 3: o pedido é para um agente subordinado (ex.: tributario)
 
 
 class ChatRequest(BaseModel):

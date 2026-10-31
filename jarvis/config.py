@@ -41,6 +41,10 @@ class Settings(BaseModel):
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
     # Etapa 2: escuta por voz local (microfone → "Jarvis" → Whisper → fala), sem o HUD. Desligada por padrão.
     voz_local: bool = Field(default_factory=lambda: _env("JARVIS_VOZ_LOCAL", "0") == "1")
+    # Etapa 3: agentes subordinados ativos (separados por vírgula); vazio ou 0 desliga a camada inteira
+    agentes: list[str] = Field(default_factory=lambda: [
+        a.strip() for a in _env("JARVIS_AGENTES", "tributario").split(",") if a.strip() and a.strip() != "0"])
+    agentes_espera_s: float = Field(default_factory=lambda: float(_env("JARVIS_AGENTES_ESPERA_S", "20")))
 
     def tool_roots(self) -> list[Path]:
         """Pastas que as ferramentas podem ler: JARVIS_PASTAS (separadas por ;) ou as pastas pessoais."""
@@ -63,6 +67,10 @@ class Settings(BaseModel):
     def knowledge_dir(self) -> Path:
         """Base de conhecimento do especialista (leis e documentos): JARVIS_CONHECIMENTO ou D:\\JARVIS-Conhecimento."""
         return Path(_env("JARVIS_CONHECIMENTO", "D:\\JARVIS-Conhecimento"))
+
+    def agentes_dir(self) -> Path:
+        """Entregas dos agentes (laudos), uma subpasta por agente: <JARVIS_ARQUIVO>\\Agentes."""
+        return self.archive_dir() / "Agentes"
 
     def voz_dir(self) -> Path:
         """Modelos de voz e gravações de teste, fora do repositório: JARVIS_VOZ_DIR ou D:\\JARVIS-Voz."""

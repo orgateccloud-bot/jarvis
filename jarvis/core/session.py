@@ -23,6 +23,7 @@ from .llm import (
     ToolInputUnparseable,
     TurnOutcome,
     area_note,
+    delegacao_note,
     telemetry_note,
 )
 from .privacy import sanitizar
@@ -136,6 +137,11 @@ class Conversation:
         self._locks: dict[str, asyncio.Lock] = {}
         self._avisos: dict[str, list[str]] = {}   # avisos do sistema ao modelo (ex.: arquivo salvo), por sessão
 
+    def _agentes(self) -> frozenset[str]:
+        """Agentes ativos (Etapa 3): só eles recebem delegação do roteador."""
+        orq = getattr(self.tool_ctx, "agentes", None)
+        return frozenset(orq.ids()) if orq is not None and "comandar_agente" in self.tools else frozenset()
+
     async def nova_conversa(self, session_id: str) -> bool:
         """Arquiva a conversa e começa outra; espera o turno em andamento terminar (mesma trava do turn)."""
         async with self._locks.setdefault(session_id, asyncio.Lock()):
@@ -151,7 +157,7 @@ class Conversation:
     async def _turn(self, session_id: str, message: str) -> AsyncIterator[StreamEvent]:
         nova = self.store.rollover_if_idle(session_id)
         budget = self.ledger.state()
-        decision = decide(message, budget, self.tiers)
+        decision = decide(message, budget, self.tiers, agentes=self._agentes())
         quick = self.rules.answer(message) if decision.route is Route.LOCAL else None
         if decision.route is Route.LOCAL and quick is None and budget is not BudgetState.CAP_REACHED:
             # parecia trivial, mas nenhuma regra responde: vai para o modelo simples
@@ -177,7 +183,11 @@ class Conversation:
                     "O Claude volta no próximo mês, ou antes se o teto (JARVIS_BUDGET_USD) for aumentado."
                 )
             else:
-                nota = telemetry_note() + (f"\n{area_note(decision.area)}" if decision.area else "")
+                nota = telemetry_note()
+                if decision.delegar:
+                    nota += f"\n{delegacao_note(decision.delegar)}"
+                elif decision.area:
+                    nota += f"\n{area_note(decision.area)}"
                 if avisos := self._avisos.pop(session_id, None):
                     nota += "\n[desde a última resposta] " + "; ".join(avisos) + "."
                 history.append({"role": "system", "content": nota})
@@ -387,7 +397,10 @@ class Conversation:
 
         yield StreamEvent(type="tool", data={"fase": "inicio", "nome": name, "resumo": resumo})
         try:
-            output = await asyncio.to_thread(tool.run, params, self.tool_ctx)
+            if tool.assincrona:
+                output = await tool.run(params, self.tool_ctx)
+            else:
+                output = await asyncio.to_thread(tool.run, params, self.tool_ctx)
             done(output)
             yield StreamEvent(type="tool", data={"fase": "fim", "nome": name, "resumo": resumo, "ok": True})
             self._seal_tool(session_id, name, resumo)

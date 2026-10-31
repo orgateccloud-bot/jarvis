@@ -119,6 +119,15 @@ def area_note(area: str) -> str:
     )
 
 
+def delegacao_note(agente: str) -> str:
+    """Orientação do turno quando o usuário pede algo a um agente: o JARVIS delega e relata, não responde sozinho."""
+    return (
+        f"[delegação ao agente {agente}] Use comandar_agente (agente={agente}) com o pedido do usuário; não responda "
+        "a pergunta por conta própria. Depois relate o resultado em poucas frases. Se a tarefa ficar em andamento, "
+        "diga que o aviso chega quando terminar e não consulte o status de novo neste turno."
+    )
+
+
 # Restrições de JSON Schema que a saída estruturada não aceita (o Pydantic valida depois, no cliente)
 _SEM_SUPORTE = {"minLength", "maxLength", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
                 "minItems", "maxItems", "pattern", "default", "title"}
