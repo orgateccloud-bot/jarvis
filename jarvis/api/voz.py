@@ -31,6 +31,7 @@ CARGA_S = 60.0             # tolerância na subida (carregar o Whisper na GPU le
 CONCESSAO_HUD_S = 15.0
 ESPERAS_S = (1, 2, 5, 10, 30)
 FALHAS_MAX, JANELA_FALHAS_S = 5, 300
+RETOMAR_S = 300.0         # depois de 5 falhas em 5 min, espera isto e tenta de novo (antes desistia de vez)
 
 EstadoServico = Literal["repouso", "ouvindo", "processando", "falando"]
 Acao = Literal["ouvir", "parar", "mudo", "som"]
@@ -80,7 +81,9 @@ class EstadoVoz:
 
 
 class Supervisor:
-    """Sobe python -m jarvis.voz, reinicia com espera crescente e desiste depois de 5 falhas em 5 min."""
+    """Sobe python -m jarvis.voz e reinicia com espera crescente. Depois de 5 falhas em 5 min fica em "falhou"
+    (o HUD oferece o microfone do navegador) e tenta de novo a cada RETOMAR_S: a voz volta sozinha quando a
+    causa passa (31/10: o receptor do K8 fora por meia hora derrubou o serviço e a voz só voltava reiniciando a API)."""
 
     def __init__(self, estado: EstadoVoz, comando: list[str] | None = None, popen=subprocess.Popen,
                  dormir=asyncio.sleep, relogio: Callable[[], float] = time.monotonic):
@@ -110,8 +113,10 @@ class Supervisor:
             logger.warning("voz: serviço local {}; falhas em 5 min: {}", motivo, len(self.falhas))
             if len(self.falhas) >= FALHAS_MAX:
                 self.estado.situacao = "falhou"
-                logger.error("voz: desisti depois de {} falhas em 5 min", FALHAS_MAX)
-                return
+                logger.error("voz: {} falhas em 5 min; nova tentativa em {:.0f} min", FALHAS_MAX, RETOMAR_S / 60)
+                await self._dormir(RETOMAR_S)
+                self.falhas = []
+                continue
             self.estado.situacao = "reiniciando"
             await self._dormir(ESPERAS_S[min(len(self.falhas), len(ESPERAS_S)) - 1])
         self.estado.situacao = "desligado"

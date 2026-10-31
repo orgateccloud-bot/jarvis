@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from jarvis.api.server import build_conversation, create_app
-from jarvis.api.voz import CARGA_S, CONCESSAO_HUD_S, ESPERAS_S, FALHAS_MAX, EstadoVoz, Supervisor
+from jarvis.api.voz import CARGA_S, CONCESSAO_HUD_S, ESPERAS_S, FALHAS_MAX, RETOMAR_S, EstadoVoz, Supervisor
 from tests.conftest import FakeAnthropic
 
 AUTH = {"Authorization": "Bearer token-de-teste"}
@@ -103,14 +103,29 @@ def _supervisor(estado, procs, agora):
     return sup, esperas
 
 
-def test_supervisor_reinicia_com_espera_crescente_e_desiste():
+def test_supervisor_reinicia_com_espera_crescente_e_retoma_depois_de_falhar():
+    """5 falhas em 5 min: fica em "falhou" (o HUD oferece o microfone do navegador), espera RETOMAR_S e tenta de
+    novo. Antes desistia de vez, e a voz só voltava reiniciando a API (31/10, 12:38)."""
     agora = [0.0]
     estado = EstadoVoz(relogio=lambda: agora[0])
-    procs = [ProcFalso() for _ in range(FALHAS_MAX)]
+    procs = [ProcFalso() for _ in range(FALHAS_MAX)] + [ProcFalso(vive=True)]
+    situacao_na_pausa = []
     sup, esperas = _supervisor(estado, procs, agora)
-    asyncio.run(sup.rodar())
-    assert estado.situacao == "falhou" and procs == []
-    assert [e for e in esperas if e != 1.0] == list(ESPERAS_S[1:FALHAS_MAX - 1])   # 1 s de vigia entre elas
+
+    async def cenario():
+        tarefa = asyncio.create_task(sup.rodar())
+        while procs:                        # o sexto processo só sobe depois da pausa longa
+            if RETOMAR_S in esperas and not situacao_na_pausa:
+                situacao_na_pausa.append(estado.situacao)
+            await asyncio.sleep(0)
+        sup.parar()
+        await tarefa
+
+    asyncio.run(cenario())
+    curtas = [e for e in esperas if e not in (1.0, RETOMAR_S)]
+    assert curtas == list(ESPERAS_S[1:FALHAS_MAX - 1])             # 1 s de vigia entre elas
+    assert esperas.count(RETOMAR_S) == 1 and situacao_na_pausa == ["falhou"]
+    assert sup.falhas == [] and estado.situacao == "desligado"     # recomeçou do zero e parou a pedido
 
 
 def test_supervisor_mata_processo_travado_sem_batimento():

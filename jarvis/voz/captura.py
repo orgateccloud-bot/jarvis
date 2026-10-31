@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue
+import threading
 import time
 from collections import deque
 from collections.abc import Iterator
@@ -12,6 +13,11 @@ import numpy as np
 import sounddevice as sd
 
 from jarvis.voz.config import QUADRO, TAXA
+
+# O PortAudio é global no processo: reiniciá-lo (_terminate/_initialize, para enxergar um aparelho que voltou) com
+# um stream de saída aberto em outra thread corrompe a memória (31/10, 12:37: código 0xC0000374, com o K8 fora havia
+# 28 min). A fala segura esta trava enquanto toca; a reabertura do microfone, enquanto reinicia.
+TRAVA_PORTAUDIO = threading.Lock()
 
 
 def microfones() -> list[tuple[int, str]]:
@@ -68,13 +74,15 @@ class Microfone:
     `mudo` descarta os quadros sem fechar o stream (half-duplex da fase 2c: reabrir custaria latência).
     """
 
-    def __init__(self, dispositivo: int | None = None, fila_max: int = 50):
+    def __init__(self, dispositivo: int | None = None, fila_max: int = 50, alvo: str | None = None):
         self.dispositivo = dispositivo
         self.mudo = False
         self.perdidos = 0  # quadros descartados porque o consumidor atrasou
         self._fila: queue.Queue[np.ndarray] = queue.Queue(maxsize=fila_max)
         self._stream: sd.InputStream | None = None
-        self._alvo: str | None = None  # nome completo do aparelho, para reachar depois que o índice mudar
+        # nome (ou parte dele) do aparelho, para reachar depois que o índice mudar. Com alvo e sem dispositivo, o
+        # aparelho só é procurado ao abrir: o serviço sobe mesmo com ele fora (receptor sem fio desligado)
+        self._alvo: str | None = alvo
         self.ultimo = 0.0              # time.monotonic() do último callback, mesmo com `mudo`
 
     def _callback(self, dados, _frames, _tempo, _status) -> None:
@@ -88,6 +96,8 @@ class Microfone:
 
     @property
     def nome(self) -> str:
+        if self.dispositivo is None and self._alvo:
+            return self._alvo
         return str(sd.query_devices(self.dispositivo, kind="input")["name"])
 
     @property
@@ -95,6 +105,9 @@ class Microfone:
         return self._stream is not None
 
     def abrir(self) -> None:
+        """ValueError se o aparelho escolhido pelo nome não está na lista do PortAudio."""
+        if self.dispositivo is None and self._alvo is not None:
+            self.dispositivo = escolher(self._alvo)
         if self.dispositivo is not None and self._alvo is None:
             self._alvo = self.nome
         self._stream = sd.InputStream(samplerate=TAXA, channels=1, dtype="int16", blocksize=QUADRO,
@@ -120,8 +133,9 @@ class Microfone:
         """Fecha, recarrega a lista de aparelhos do PortAudio (ele só a lê ao iniciar, e o aparelho que volta pode
         ganhar outro índice) e abre o mesmo aparelho pelo nome. ValueError se ele ainda não voltou."""
         self.fechar()
-        sd._terminate()
-        sd._initialize()
+        with TRAVA_PORTAUDIO:   # nunca com a fala tocando em outra thread
+            sd._terminate()
+            sd._initialize()
         if self._alvo is not None:
             self.dispositivo = escolher(self._alvo)
         self.abrir()

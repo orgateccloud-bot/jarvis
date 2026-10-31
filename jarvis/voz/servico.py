@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 
 import psutil
 from loguru import logger
@@ -20,7 +21,10 @@ from jarvis.voz.escuta import Escuta
 from jarvis.voz.fala import VozLocal
 
 BATIMENTO_S = 1.0
-REABRIR_S = 2.0   # nova tentativa de abrir o microfone que sumiu
+# Esperas entre as tentativas de abrir o microfone que sumiu (depois da última, ela se repete). Cada tentativa
+# reinicia o PortAudio para enxergar o aparelho que voltou: de 2 em 2 s por meia hora, foram mais de 800 (31/10).
+ESPERAS_REABRIR_S = (2.0, 4.0, 8.0, 15.0, 30.0)
+LEMBRETE_S = 300.0  # com o microfone fora há muito tempo, o log lembra a cada 5 min (o serviço segue vivo)
 
 
 def texto_para_log(texto: str) -> str:
@@ -87,7 +91,13 @@ class Servico:
                 self.parar.wait(0.2)
                 continue
             if not self.mic.aberto:
-                self.mic.abrir()
+                try:
+                    self.mic.abrir()
+                except Exception as e:  # noqa: BLE001 — aparelho fora ao subir (ex.: receptor do K8 desligado)
+                    logger.warning("voz: microfone {} indisponível ao abrir ({}); esperando ele voltar",
+                                   self.mic.nome, e)
+                    self._esperar_microfone()
+                    continue
                 logger.info("voz: microfone aberto ({})", self.mic.nome)
             for q in self.mic.quadros(timeout=0.2):
                 if self.parar.is_set() or not self.dono:
@@ -99,7 +109,9 @@ class Servico:
                     if fechar:
                         self.escuta.descartar()
                 if q is None and self.mic.parado() and not self.voz.falando:
-                    self._reabrir_microfone()
+                    logger.warning("voz: o microfone ({}) parou de entregar áudio; reabrindo", self.mic.nome)
+                    self.escuta.descartar()
+                    self._esperar_microfone()
                     break
                 if q is None or fechar:
                     continue
@@ -117,24 +129,30 @@ class Servico:
         self.mic.fechar()
         self.voz.encerrar()
 
-    def _reabrir_microfone(self) -> None:
-        """O stream parou sem erro (receptor sem fio que reiniciou, cabo solto): reabre o mesmo aparelho de 2 em 2 s
-        até ele voltar. Sem isso o serviço fica "ouvindo" um stream morto até alguém reiniciar o JARVIS."""
-        logger.warning("voz: o microfone ({}) parou de entregar áudio; reabrindo", self.mic.nome)
-        self.escuta.descartar()
-        avisou = False
+    def _esperar_microfone(self) -> None:
+        """O aparelho sumiu (receptor sem fio que reiniciou, cabo solto) ou não estava lá ao subir: reabre o mesmo
+        aparelho até ele voltar, com esperas crescentes (2 s até 30 s). Nunca reinicia o PortAudio com a fala
+        tocando, e o processo não cai: sem isso o serviço ficava "ouvindo" um stream morto, ou saía com código 1."""
+        n, inicio = 0, time.monotonic()
+        lembrete = inicio + LEMBRETE_S
         while not self.parar.is_set() and self.dono:
+            if self.voz.falando:  # a fala usa o PortAudio: espera ela acabar
+                self.parar.wait(0.5)
+                continue
             try:
                 self.mic.reabrir()
                 logger.info("voz: microfone reaberto ({})", self.mic.nome)
                 return
             except Exception as e:  # noqa: BLE001 — aparelho ainda fora: tenta de novo
-                if not avisou:
-                    logger.warning("voz: microfone ainda indisponível ({}); tentando de novo a cada {:.0f} s", e,
-                                   REABRIR_S)
-                    avisou = True
-                self.parar.wait(REABRIR_S)
-
+                if n == 0:
+                    logger.warning("voz: microfone ainda indisponível ({}); tentando de novo com espera crescente "
+                                   "(até {:.0f} s)", e, ESPERAS_REABRIR_S[-1])
+                elif time.monotonic() >= lembrete:
+                    logger.warning("voz: ainda esperando o microfone {} ({:.0f} min)", self.mic.nome,
+                                   (time.monotonic() - inicio) / 60)
+                    lembrete = time.monotonic() + LEMBRETE_S
+                self.parar.wait(ESPERAS_REABRIR_S[min(n, len(ESPERAS_REABRIR_S) - 1)])
+                n += 1
 
 def cliente_padrao() -> Cliente:
     from jarvis.config import get_settings
