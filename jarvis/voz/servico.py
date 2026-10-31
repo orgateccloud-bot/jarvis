@@ -13,7 +13,7 @@ import threading
 import psutil
 from loguru import logger
 
-from jarvis.voz.captura import Microfone
+from jarvis.voz.captura import DetectorDeSilencio, Microfone
 from jarvis.voz.cliente import Cliente
 from jarvis.voz.conversa import Conversa
 from jarvis.voz.escuta import Escuta
@@ -66,6 +66,7 @@ class Servico:
         for alvo in (self._batimento, self._avisos):
             threading.Thread(target=alvo, name=alvo.__name__, daemon=True).start()
         mudo = False
+        silencio = DetectorDeSilencio()
         while not self.parar.is_set():
             if not self.dono:
                 if self.mic.aberto:
@@ -77,7 +78,7 @@ class Servico:
                 continue
             if not self.mic.aberto:
                 self.mic.abrir()
-                logger.info("voz: microfone aberto")
+                logger.info("voz: microfone aberto ({})", self.mic.nome)
             for q in self.mic.quadros(timeout=0.2):
                 if self.parar.is_set() or not self.dono:
                     break
@@ -89,6 +90,13 @@ class Servico:
                         self.escuta.descartar()
                 if q is None or fechar:
                     continue
+                if aviso := silencio.alimentar(q):
+                    if aviso == "mudo":
+                        logger.warning("voz: o microfone só entrega silêncio absoluto há 10 s (desligado, mudo no "
+                                       "aparelho ou receptor solto?); troque com JARVIS_VOZ_MICROFONE "
+                                       "(python -m jarvis.voz --listar-microfones)")
+                    else:
+                        logger.info("voz: o microfone voltou a captar som")
                 if ev := self.escuta.processar(q):
                     acao = self.conversa.ouvido(ev)
                     logger.info("voz: comando={} ação={} latência={:.2f}s whisper={:.3f}s", ev.comando.tipo,

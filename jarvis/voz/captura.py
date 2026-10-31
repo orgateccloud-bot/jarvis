@@ -27,6 +27,30 @@ def escolher(nome: str | None) -> int | None:
     raise ValueError(f"microfone não encontrado: {nome!r}. Disponíveis: {[n for _, n in microfones()]}")
 
 
+class DetectorDeSilencio:
+    """Microfone que só entrega zeros (desligado, mudo no aparelho, receptor solto): sem isso o serviço fica
+    "ouvindo" sem ouvir nada e ninguém sabe por quê (31/10: o K8 entregava pico 1 enquanto a C920 captava a sala).
+    alimentar() devolve "mudo" ao entrar nesse estado e "voltou" ao sair; senão None."""
+
+    def __init__(self, quadros: int = 125, limite: int = 2):  # 125 quadros = 10 s
+        self.quadros, self.limite = quadros, limite
+        self._seguidos = 0
+        self.mudo = False
+
+    def alimentar(self, quadro: np.ndarray) -> str | None:
+        if int(np.abs(quadro).max(initial=0)) <= self.limite:
+            self._seguidos += 1
+            if not self.mudo and self._seguidos >= self.quadros:
+                self.mudo = True
+                return "mudo"
+            return None
+        self._seguidos = 0
+        if self.mudo:
+            self.mudo = False
+            return "voltou"
+        return None
+
+
 class Microfone:
     """Captura contínua. O callback do PortAudio só enfileira; quem consome é `quadros()`.
 
@@ -47,6 +71,10 @@ class Microfone:
             self._fila.put_nowait(dados[:, 0].copy())
         except queue.Full:
             self.perdidos += 1
+
+    @property
+    def nome(self) -> str:
+        return str(sd.query_devices(self.dispositivo, kind="input")["name"])
 
     @property
     def aberto(self) -> bool:

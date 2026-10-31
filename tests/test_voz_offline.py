@@ -33,3 +33,14 @@ def test_local_passa_e_externo_e_barrado(trava):
         udp.sendto(b"x", ("8.8.8.8", 53))
     udp.close()
     assert offline.bloqueadas() == antes + 3
+
+
+def test_detector_de_silencio_avisa_microfone_que_so_entrega_zeros():
+    np = pytest.importorskip("numpy")
+    from jarvis.voz.captura import DetectorDeSilencio
+
+    d = DetectorDeSilencio(quadros=5)
+    zeros, sala = np.zeros(1280, dtype=np.int16), np.full(1280, 300, dtype=np.int16)
+    assert [d.alimentar(zeros) for _ in range(6)] == [None, None, None, None, "mudo", None]   # avisa uma vez
+    assert d.alimentar(sala) == "voltou" and d.alimentar(zeros) is None
+    assert [d.alimentar(sala) for _ in range(10)] == [None] * 10                             # som normal: nada
