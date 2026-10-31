@@ -59,13 +59,24 @@ class SessionStore:
         last = self._last.get(session_id)
         if not hist or last is None or self.clock() - last < self.idle:
             return False
+        self._arquivar(session_id, last)
+        return True
+
+    def nova(self, session_id: str) -> bool:
+        """Arquiva já a conversa ("Ok Jarvis" isolado, Etapa 2). True se havia histórico para arquivar."""
+        if not self.history(session_id):
+            return False
+        self._arquivar(session_id, self.clock())
+        return True
+
+    def _arquivar(self, session_id: str, quando: datetime) -> None:
+        """Move o histórico para dados/sessions/arquivo/ (reversível) e começa uma conversa vazia."""
         arquivo = self.root / "arquivo"
         arquivo.mkdir(exist_ok=True)
-        destino = arquivo / f"{session_id}-{last:%Y%m%d-%H%M%S}.json"
-        destino.write_text(json.dumps(hist, ensure_ascii=False), encoding="utf-8")
+        destino = arquivo / f"{session_id}-{quando:%Y%m%d-%H%M%S}.json"
+        destino.write_text(json.dumps(self.history(session_id), ensure_ascii=False), encoding="utf-8")
         self._cache[session_id] = []
         self.save(session_id)
-        return True
 
     def save(self, session_id: str) -> None:
         path = self.root / f"{session_id}.json"
@@ -99,6 +110,12 @@ class Conversation:
         self.approvals = approvals or Approvals()
         self._locks: dict[str, asyncio.Lock] = {}
         self._avisos: dict[str, list[str]] = {}   # avisos do sistema ao modelo (ex.: arquivo salvo), por sessão
+
+    async def nova_conversa(self, session_id: str) -> bool:
+        """Arquiva a conversa e começa outra; espera o turno em andamento terminar (mesma trava do turn)."""
+        async with self._locks.setdefault(session_id, asyncio.Lock()):
+            self._avisos.pop(session_id, None)
+            return self.store.nova(session_id)
 
     async def turn(self, session_id: str, message: str) -> AsyncIterator[StreamEvent]:
         lock = self._locks.setdefault(session_id, asyncio.Lock())
