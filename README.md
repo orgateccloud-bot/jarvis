@@ -197,6 +197,12 @@ gateway: CPF, CNPJ e nomes mascarados antes de sair, teto conferido no pior caso
 saída) contra o teto geral e o subteto do agente, effort `low` no modo economia e custo no mesmo ledger (`/costs`
 mostra `por_origem`). No teto, as tarefas com Claude param e a análise de lançamentos continua.
 
+**Chave própria:** com `JARVIS_AGENTE_TRIBUTARIO_API_KEY` no `.env`, o agente fala com a Anthropic por um cliente só
+dele, e o gasto dele aparece separado por chave no console da Anthropic. Sem a variável, ele usa a chave do JARVIS, e
+o estado do agente (`GET /agentes`, `agentes_status`) traz `chave_anthropic: "jarvis"` com um aviso. O teto geral, o
+subteto e o ledger local valem igual nos dois casos. A chave vai do ambiente direto para o cliente: não é campo da
+configuração, não entra em log e fica fora do ambiente dos programas que o JARVIS abre (o filtro de `KEY`).
+
 **Como acionar:** por voz ou texto, "Jarvis, pede ao agente tributário…" (o turno do JARVIS também vai ao Opus 5.5,
 com esforço baixo, inclusive no modo economia, e delega). Medido: uma consulta pela voz custa US$ 0,15 com o cache
 de prompt frio (o JARVIS grava cerca de 19 mil tokens de prefixo) e US$ 0,08 com ele quente, e a primeira palavra

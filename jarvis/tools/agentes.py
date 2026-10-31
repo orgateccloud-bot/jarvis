@@ -88,7 +88,7 @@ def agentes_status(p: StatusParams, ctx: ToolContext) -> str:
         "agente": e.id, "nome": e.nome, "estado": e.estado, "saude": e.saude, "versao_config": e.versao_config,
         "versao_codigo": e.versao_codigo, "modelo": e.config.modelo, "custo_mes_usd": e.custo_mes_usd,
         "subteto_usd": e.config.teto_mensal_usd, "execucoes_mes": e.execucoes_mes, "falhas_mes": e.falhas_mes,
-        "tarefas": list(e.tarefas),
+        "chave_anthropic": e.chave_anthropic, "avisos": e.avisos, "tarefas": list(e.tarefas),
         "ultimas": [{"tarefa_id": x.tarefa_id, "tarefa": x.tarefa, "estado": x.estado, "resumo": x.resumo}
                     for x in e.ultimas[:3]],
     } for e in estados], ensure_ascii=False, default=str)

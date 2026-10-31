@@ -40,7 +40,14 @@ from ..tools.journal import MoveJournal
 from ..tools.memory import JarvisMemory
 
 
-def build_orquestrador(settings: Settings, audit: AuditChain, ledger: CostLedger, client, salt: str, knowledge):
+def clientes_proprios(settings: Settings) -> dict:
+    """Agente com JARVIS_AGENTE_<ID>_API_KEY ganha um cliente da Anthropic só dele (o gasto sai separado no console).
+    A chave vai do ambiente direto para o cliente: não é guardada nem registrada em log."""
+    return {a: anthropic.AsyncAnthropic(api_key=chave) for a in settings.agentes if (chave := settings.chave_agente(a))}
+
+
+def build_orquestrador(settings: Settings, audit: AuditChain, ledger: CostLedger, client, salt: str, knowledge,
+                       clientes: dict | None = None):
     """Etapa 3: o orquestrador dos agentes (None com JARVIS_AGENTES vazio ou 0)."""
     if not settings.agentes:
         return None
@@ -49,12 +56,13 @@ def build_orquestrador(settings: Settings, audit: AuditChain, ledger: CostLedger
 
     return Orquestrador(Registro(settings.db_path), audit, ledger, client=client, salt=salt,
                         pasta=settings.agentes_dir(), conhecimento=knowledge, ativos=settings.agentes,
-                        espera_s=settings.agentes_espera_s)
+                        espera_s=settings.agentes_espera_s, clientes=clientes)
 
 
 def build_conversation(settings: Settings, claude_client=None, approval_timeout_s: float = 60.0,
                        agent_client=None) -> Conversation:
-    """agent_client: cliente do Claude dos agentes (padrão: o mesmo do JARVIS; os testes usam um falso separado)."""
+    """agent_client: cliente do Claude de todos os agentes, acima das chaves próprias (os testes usam um falso
+    separado). Sem ele, o agente com chave própria usa um cliente só dele e os outros, o do JARVIS."""
     ledger = CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold)
     salt = settings.salt()
     reminders = ReminderStore(settings.db_path)
@@ -63,7 +71,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
     audit = AuditChain(settings.data_dir / "audit.jsonl")
     knowledge = KnowledgeBase(settings.knowledge_dir())
     claude_client = claude_client or anthropic.AsyncAnthropic()
-    agentes = build_orquestrador(settings, audit, ledger, agent_client or claude_client, salt, knowledge)
+    agentes = build_orquestrador(settings, audit, ledger, agent_client or claude_client, salt, knowledge,
+                                 clientes=None if agent_client is not None else clientes_proprios(settings))
     tools = registry(knowledge=knowledge)
     if agentes is not None:
         from ..tools.agentes import ferramentas_agentes

@@ -168,3 +168,69 @@ async def test_flag_desligada_sem_ferramentas(settings, monkeypatch):
     evs = await run_turn(conv, PEDIDO)
     assert "delegação" not in evs[0].data["motivo"]
     assert "[delegação" not in json.dumps(fake.calls[0]["messages"], ensure_ascii=False)
+
+
+CHAVE = "sk-ant-teste-so-do-agente"
+
+
+async def test_chave_propria_do_agente(settings, monkeypatch):
+    """Com JARVIS_AGENTE_TRIBUTARIO_API_KEY, o agente fala com a Anthropic por um cliente só dele; teto, ledger e
+    selo seguem iguais, e a chave não aparece no estado, na configuração, no log nem nos programas abertos."""
+    import anthropic
+    from loguru import logger
+
+    from jarvis.tools.apps import ambiente_filho
+
+    monkeypatch.setenv("JARVIS_AGENTE_TRIBUTARIO_API_KEY", CHAVE)
+    fake_a = FakeAnthropic(script=[text_turn(json.dumps(CONSULTA, ensure_ascii=False))])
+    criados = []
+
+    def fabrica(**kw):
+        criados.append(kw)
+        return fake_a
+
+    monkeypatch.setattr(anthropic, "AsyncAnthropic", fabrica)
+    linhas = []
+    sink = logger.add(lambda m: linhas.append(str(m)), level="DEBUG")
+    try:
+        fake_j = FakeAnthropic(script=[
+            tool_turn("comandar_agente", {"agente": "tributario", "tarefa": "consultar",
+                                          "pedido": "prazo de decadência"}),
+            text_turn("O agente tributário diz: cinco anos."),
+        ])
+        conv = build_conversation(settings, claude_client=fake_j)
+        await run_turn(conv, PEDIDO, session="hud")
+    finally:
+        logger.remove(sink)
+    assert criados == [{"api_key": CHAVE}]
+    assert len(fake_a.calls) == 1 and "agente tributário do JARVIS" in fake_a.calls[0]["system"]
+    assert len(fake_j.calls) == 2                          # o JARVIS segue no cliente dele
+    estado = conv.tool_ctx.agentes.observar("tributario")
+    assert estado.chave_anthropic == "propria" and estado.avisos == []
+    assert estado.custo_mes_usd > 0 and conv.ledger.summary()["por_origem"]["agentes"] > 0
+    assert conv.audit.verify()
+    assert any("chave da Anthropic própria" in ln for ln in linhas)
+    textos = [repr(settings), json.dumps(settings.model_dump(mode="json")), estado.model_dump_json(), *linhas]
+    assert not any(CHAVE in t for t in textos)
+    assert "JARVIS_AGENTE_TRIBUTARIO_API_KEY" not in ambiente_filho()
+
+
+def test_sem_chave_propria_usa_a_do_jarvis(settings):
+    from jarvis.tools.agentes import StatusParams, agentes_status
+
+    fake = FakeAnthropic()
+    conv = build_conversation(settings, claude_client=fake)
+    orq = conv.tool_ctx.agentes
+    assert orq._gateways["tributario"].client is fake
+    estado = orq.observar("tributario")
+    assert estado.chave_anthropic == "jarvis" and "JARVIS_AGENTE_TRIBUTARIO_API_KEY" in estado.avisos[0]
+    status = json.loads(agentes_status(StatusParams(), conv.tool_ctx))
+    assert status[0]["chave_anthropic"] == "jarvis" and status[0]["avisos"] == estado.avisos
+
+
+def test_cliente_injetado_vence_a_chave_propria(settings, monkeypatch):
+    """O cliente passado em agent_client (o falso dos testes) vale mais que a chave do .env: nada sai para a rede."""
+    monkeypatch.setenv("JARVIS_AGENTE_TRIBUTARIO_API_KEY", CHAVE)
+    fake_a = FakeAnthropic()
+    conv = build_conversation(settings, claude_client=FakeAnthropic(), agent_client=fake_a)
+    assert conv.tool_ctx.agentes._gateways["tributario"].client is fake_a

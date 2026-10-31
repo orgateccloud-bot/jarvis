@@ -177,4 +177,6 @@ class EstadoAgente(_Contrato):
     execucoes_mes: int = 0
     falhas_mes: int = 0
     custo_mes_usd: float = 0.0
+    chave_anthropic: Literal["propria", "jarvis"] = "jarvis"
+    avisos: list[str] = Field(default_factory=list)
     ultimas: list[ExecucaoResumo] = Field(default_factory=list)

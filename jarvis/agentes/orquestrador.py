@@ -17,6 +17,7 @@ from typing import Any
 
 from loguru import logger
 
+from ..config import var_chave_agente
 from ..core.audit import AuditChain
 from ..core.contracts import AgentResult, BudgetState, Route
 from ..core.costs import CostLedger
@@ -59,7 +60,9 @@ def sha256_canonico(r: ResultadoTarefa) -> str:
 class Orquestrador:
     def __init__(self, registro: Registro, audit: AuditChain, ledger: CostLedger, *, client: Any, salt: str,
                  pasta: Path, conhecimento: Any = None, catalogo: dict[str, type[Agente]] | None = None,
-                 ativos: Iterable[str] = ("tributario",), espera_s: float = ESPERA_S):
+                 ativos: Iterable[str] = ("tributario",), espera_s: float = ESPERA_S,
+                 clientes: dict[str, Any] | None = None):
+        """clientes: agente → cliente da Anthropic com chave só dele; quem não está aqui usa `client` (o do JARVIS)."""
         self.registro = registro
         self.audit = audit
         self.ledger = ledger
@@ -72,10 +75,12 @@ class Orquestrador:
         self._ocupado: dict[str, str] = {}      # agente → tarefa em execução
         self._fora_do_turno: set[str] = set()   # tarefas que terminam depois de quem comandou parar de esperar
         self._tarefas: set[asyncio.Task] = set()
-        self._iniciar(list(ativos), client, salt, pasta, ConsultaConhecimento(conhecimento))
+        self._chave_propria: set[str] = set()   # agentes com cliente da Anthropic próprio
+        self._iniciar(list(ativos), client, clientes or {}, salt, pasta, ConsultaConhecimento(conhecimento))
 
     # ---------- criar e restaurar ----------
-    def _iniciar(self, ativos: list[str], client: Any, salt: str, pasta: Path, conhecimento) -> None:
+    def _iniciar(self, ativos: list[str], client: Any, clientes: dict[str, Any], salt: str, pasta: Path,
+                 conhecimento) -> None:
         if n := self.registro.marcar_interrompidas():
             logger.warning(f"agentes: {n} execução(ões) interrompida(s) pelo encerramento anterior")
         for tipo in ativos:
@@ -92,9 +97,15 @@ class Orquestrador:
                     tipo, config.model_copy(update={"modelo": padrao}), "sistema",
                     f"o {cls.nome} roda só em {', '.join(cls.modelos)}: {config.modelo} trocado por {padrao}")
                 logger.info(f"agentes: {tipo} migrado para {padrao} (v{versao})")
-            gateway = GatewayClaude(client, self.ledger, tipo, salt,
+            cliente = clientes.get(tipo)
+            if cliente is not None:
+                self._chave_propria.add(tipo)
+                logger.info(f"agentes: {tipo} usa a chave da Anthropic própria ({var_chave_agente(tipo)})")
+            else:
+                cliente = client
+            gateway = GatewayClaude(cliente, self.ledger, tipo, salt,
                                     lambda agente_id=tipo: self.registro.config(agente_id)[1].teto_mensal_usd)
-            recursos = Recursos(claude=gateway if client is not None else None, conhecimento=conhecimento,
+            recursos = Recursos(claude=gateway if cliente is not None else None, conhecimento=conhecimento,
                                 pasta=pasta / tipo, salt=salt)
             self._agentes[tipo] = cls(tipo, recursos)
             self._gateways[tipo] = gateway
@@ -213,11 +224,16 @@ class Orquestrador:
         else:
             estado = "ocioso"
         degradado = bool(ultimas) and sum(e.estado == "falhou" for e in ultimas) / len(ultimas) > 0.5
+        propria = agente_id in self._chave_propria
+        avisos = [] if propria or not agente.com_claude else [
+            (f"usa a chave da Anthropic do JARVIS: no console da Anthropic o gasto dele sai junto com o do JARVIS "
+             f"(o ledger local separa); {var_chave_agente(agente_id)} no .env dá a ele uma chave só dele")]
         return EstadoAgente(
             id=agente_id, tipo=agente.tipo, nome=agente.nome, descricao=agente.descricao,
             versao_codigo=agente.versao_codigo, versao_config=versao, estado=estado,
             saude="degradado" if degradado else "ok", tarefas=dict(agente.tarefas), config=config,
-            execucoes_mes=execucoes, falhas_mes=falhas, custo_mes_usd=round(custo, 4), ultimas=ultimas,
+            execucoes_mes=execucoes, falhas_mes=falhas, custo_mes_usd=round(custo, 4),
+            chave_anthropic="propria" if propria else "jarvis", avisos=avisos, ultimas=ultimas,
         )
 
     def observar_todos(self) -> list[EstadoAgente]:
