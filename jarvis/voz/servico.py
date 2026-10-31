@@ -20,6 +20,7 @@ from jarvis.voz.escuta import Escuta
 from jarvis.voz.fala import VozLocal
 
 BATIMENTO_S = 1.0
+REABRIR_S = 2.0   # nova tentativa de abrir o microfone que sumiu
 
 
 def texto_para_log(texto: str) -> str:
@@ -97,11 +98,14 @@ class Servico:
                     mudo = self.mic.mudo = fechar
                     if fechar:
                         self.escuta.descartar()
+                if q is None and self.mic.parado() and not self.voz.falando:
+                    self._reabrir_microfone()
+                    break
                 if q is None or fechar:
                     continue
                 if aviso := silencio.alimentar(q):
                     if aviso == "mudo":
-                        logger.warning("voz: o microfone só entrega silêncio absoluto há 10 s (desligado, mudo no "
+                        logger.warning("voz: o microfone só entrega silêncio digital há 10 s (desligado, mudo no "
                                        "aparelho ou receptor solto?); troque com JARVIS_VOZ_MICROFONE "
                                        "(python -m jarvis.voz --listar-microfones)")
                     else:
@@ -112,6 +116,24 @@ class Servico:
                                 acao, texto_para_log(ev.transcricao.texto), ev.latencia_s, ev.transcricao.segundos)
         self.mic.fechar()
         self.voz.encerrar()
+
+    def _reabrir_microfone(self) -> None:
+        """O stream parou sem erro (receptor sem fio que reiniciou, cabo solto): reabre o mesmo aparelho de 2 em 2 s
+        até ele voltar. Sem isso o serviço fica "ouvindo" um stream morto até alguém reiniciar o JARVIS."""
+        logger.warning("voz: o microfone ({}) parou de entregar áudio; reabrindo", self.mic.nome)
+        self.escuta.descartar()
+        avisou = False
+        while not self.parar.is_set() and self.dono:
+            try:
+                self.mic.reabrir()
+                logger.info("voz: microfone reaberto ({})", self.mic.nome)
+                return
+            except Exception as e:  # noqa: BLE001 — aparelho ainda fora: tenta de novo
+                if not avisou:
+                    logger.warning("voz: microfone ainda indisponível ({}); tentando de novo a cada {:.0f} s", e,
+                                   REABRIR_S)
+                    avisou = True
+                self.parar.wait(REABRIR_S)
 
 
 def cliente_padrao() -> Cliente:
