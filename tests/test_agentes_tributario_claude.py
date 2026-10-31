@@ -204,3 +204,20 @@ def test_config_antiga_migra_para_opus(tmp_path):
         orq.reverter("tributario", 1, "usuario_api", "voltar ao Sonnet")
     boot()
     assert len(reg.versoes("tributario")) == 2                                      # migra uma vez só
+
+
+def test_aviso_da_base_v2_chega_ao_prompt():
+    """A base v2 marca trecho revogado ou desatualizado: o agente repassa o aviso, não cita como vigente."""
+    from types import SimpleNamespace
+
+    from jarvis.agentes.recursos import ConsultaConhecimento
+    from jarvis.agentes.tributario import prompts
+
+    velho = SimpleNamespace(fonte="Lei X", rotulo="Art. 9", arquivo="tributario/x.md", texto="texto antigo",
+                            baixado_em="2025-01-02", situacao="revogada", aviso="revogada: não use como norma vigente")
+    base = SimpleNamespace(buscar=lambda consulta, area, k: [(1.0, velho)])
+    achados = ConsultaConhecimento(base).buscar("art. 9")
+    assert achados[0]["aviso"] == "revogada: não use como norma vigente"
+    bloco = prompts.trechos(achados)
+    assert 'situacao="revogada"' in bloco and 'aviso="revogada: não use como norma vigente"' in bloco
+    assert "repita o aviso" in prompts.SYSTEM

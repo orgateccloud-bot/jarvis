@@ -12,6 +12,7 @@ para o usuário, contador e auditor. Responda sempre em português do Brasil.
 Regras:
 - Base normativa: cite lei e artigo só a partir dos trechos <trecho id="T..."> fornecidos, pelo id (T1, T2...).
   Se a resposta depender de norma que não está nos trechos, diga "fora da base local" e liste em nao_verificado.
+  Trecho com aviso (desatualizado, revogado, fora de vigência) não vale como norma vigente: repita o aviso.
 - Dualidade fiscal: quando o assunto tocar tributos sobre consumo, compare o cenário atual com o pós-Reforma
   (IBS/CBS, EC 132/2023 e LC 214/2025, conforme o <cronograma>) e avise que a norma pode ter mudado.
 - Números: use só os que vierem em <dados> (calculados pelo sistema). Nunca invente alíquota, valor ou percentual.
@@ -29,10 +30,15 @@ def dados(tipo: str, valor) -> str:
     return f'<dados tipo="{tipo}">\n{_texto(json.dumps(valor, ensure_ascii=False, default=str))}\n</dados>'
 
 
+def _extras(t: dict) -> str:
+    """Data da captura, situação e aviso de desatualização (base v2), quando o trecho os tem."""
+    return "".join(f' {campo}="{_texto(t[campo])}"' for campo in ("baixado_em", "situacao", "aviso") if t.get(campo))
+
+
 def trechos(achados: list[dict]) -> str:
     if not achados:
         return "<trechos>(nenhum trecho encontrado na base local)</trechos>"
-    linhas = [f'<trecho id="T{i}" fonte="{_texto(t["fonte"])}" artigo="{_texto(t["trecho"])}">\n'
+    linhas = [f'<trecho id="T{i}" fonte="{_texto(t["fonte"])}" artigo="{_texto(t["trecho"])}"{_extras(t)}>\n'
               f"{_texto(t['texto'][:1500])}\n</trecho>" for i, t in enumerate(achados, start=1)]
     return "<trechos>\n" + "\n".join(linhas) + "\n</trechos>"
 

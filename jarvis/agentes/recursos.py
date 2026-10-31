@@ -27,10 +27,17 @@ class ConsultaConhecimento:
         self._base = base
 
     def buscar(self, consulta: str, area: str | None = "tributario", k: int = 5) -> list[dict]:
+        """Trechos com fonte e artigo; da base v2 vêm também data da captura, situação e aviso de desatualização."""
         if self._base is None:
             return []
-        return [{"fonte": t.fonte, "trecho": t.rotulo, "arquivo": t.arquivo, "texto": t.texto}
-                for _, t in self._base.buscar(consulta, area, k)]
+        saida = []
+        for _, t in self._base.buscar(consulta, area, k):
+            item = {"fonte": t.fonte, "trecho": t.rotulo, "arquivo": t.arquivo, "texto": t.texto}
+            for campo in ("baixado_em", "situacao", "aviso"):
+                if valor := getattr(t, campo, ""):
+                    item[campo] = valor
+            saida.append(item)
+        return saida
 
 
 @dataclass
