@@ -41,7 +41,7 @@ class MicrofoneQueTrava:
     """Entrega uns quadros, depois o PortAudio para de chamar o callback (parado) e a primeira reabertura falha
     (receptor ainda reiniciando)."""
 
-    nome = "Microfone (K8)"
+    nome, pedido, reserva = "Microfone (K8)", None, False
 
     def __init__(self):
         self.mudo, self._aberto, self.travado = False, False, False
@@ -78,6 +78,8 @@ class MicrofoneQueTrava:
 
 
 class EscutaFalsa:
+    gravando = False
+
     def __init__(self):
         self.descartes = 0
 
@@ -108,7 +110,7 @@ class VozMuda:
 
 
 def test_servico_reabre_o_microfone_que_parou_sem_erro(monkeypatch):
-    monkeypatch.setattr(mod, "REABRIR_S", 0.01)
+    monkeypatch.setattr(mod, "ESPERAS_REABRIR_S", (0.01,))
     mic, escuta = MicrofoneQueTrava(), EscutaFalsa()
     srv = mod.Servico(escuta, ClienteSoBatimento(), mic, voz=VozMuda())
     t = threading.Thread(target=srv.rodar, daemon=True)
@@ -120,3 +122,68 @@ def test_servico_reabre_o_microfone_que_parou_sem_erro(monkeypatch):
         t.join(timeout=5)
     assert mic.tentativas == 2           # a primeira falhou (aparelho fora) e ele tentou de novo
     assert escuta.descartes >= 1         # a fala pela metade antes da queda não vira pergunta
+
+
+def test_microfone_pedido_ausente_abre_o_padrao_e_volta_quando_ele_aparece(monkeypatch):
+    """31/10: o receptor do K8 sumiu por horas; o serviço nem iniciava (ValueError) e o supervisor desistiu."""
+    from jarvis.voz import captura
+
+    conectados, abertos = [], []
+
+    def escolher(nome):
+        if nome in conectados:
+            return 7
+        raise ValueError(f"microfone não encontrado: {nome!r}")
+
+    class StreamFalso:
+        def __init__(self, device=None, **_kw):
+            abertos.append(device)
+
+        def start(self):
+            pass
+
+        abort = close = start
+
+    monkeypatch.setattr(captura, "escolher", escolher)
+    monkeypatch.setattr(captura.sd, "InputStream", StreamFalso)
+    monkeypatch.setattr(captura.sd, "_terminate", lambda: None)
+    monkeypatch.setattr(captura.sd, "_initialize", lambda: None)
+    mic = captura.Microfone(pedido="K8")
+    mic.abrir()
+    assert mic.reserva and abertos == [None]          # None = padrão do Windows
+    mic.reabrir()
+    assert mic.reserva and abertos == [None, None]    # ainda fora: continua no padrão, sem erro
+    conectados.append("K8")
+    mic.reabrir()
+    assert not mic.reserva and abertos == [None, None, 7]
+
+
+class MicrofoneReserva(MicrofoneQueTrava):
+    """Aberto no padrão do Windows; o pedido volta na primeira conferência."""
+
+    pedido, reserva = "K8", True
+
+    def reabrir(self):
+        self.tentativas += 1
+        self.reserva = False
+        self.reaberto.set()
+
+    def quadros(self, timeout=1.0):
+        while self._aberto:
+            time.sleep(0.01)
+            yield SALA
+
+
+def test_servico_confere_em_repouso_se_o_microfone_pedido_voltou(monkeypatch):
+    monkeypatch.setattr(mod, "CONFERIR_PEDIDO_S", 0.05)
+    mic = MicrofoneReserva()
+    srv = mod.Servico(EscutaFalsa(), ClienteSoBatimento(), mic, voz=VozMuda())
+    t = threading.Thread(target=srv.rodar, daemon=True)
+    t.start()
+    try:
+        assert mic.reaberto.wait(10), "o serviço não conferiu o microfone pedido"
+        time.sleep(0.2)                    # de volta ao pedido: não confere mais
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert mic.tentativas == 1 and not mic.reserva
