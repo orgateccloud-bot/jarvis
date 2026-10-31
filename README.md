@@ -181,6 +181,9 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 | `JARVIS_VOZ_DIR` | `D:\JARVIS-Voz` | Modelos de voz e gravações de teste (fora do repositório) |
 | `JARVIS_VOZ_MICROFONE` | o do Windows | Parte do nome do microfone (`--listar-microfones`) |
 | `JARVIS_VOZ_INTERROMPER` | `0` | `1` = modo fone: microfone aberto durante a fala, para "Jarvis, pare" |
+| `JARVIS_PAINEL` | `1` | `0` desliga o [painel fiscal](#painel-fiscal-card-tributário-e-card-do-cliente) (rotas e coleta) |
+| `JARVIS_FISCAL_INTERVALO_MIN` | `360` | Minutos entre as coletas das fontes oficiais |
+| `JARVIS_CLIENTES_INTERVALO_MIN` | `1440` | Minutos entre as leituras da planilha, do ERP e do SERPRO |
 
 > **Atenção: `JARVIS_PASTAS` substitui a lista padrão, não soma a ela.**
 >
@@ -199,6 +202,63 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 >
 > Caminhos relativos pedidos ao JARVIS (ex.: "Downloads") partem da sua pasta de usuário. Ainda assim, só são
 > aceitos se caírem dentro de uma das pastas permitidas.
+
+## Painel fiscal (card tributário e card do cliente)
+
+A coluna da esquerda do HUD mostra o card **Tributário** e o card **Cliente**; Neural, Sistema e Custo ficam na
+direita. Os dados não vão ao Claude.
+
+**Card tributário**, em quatro grupos:
+
+- **Prazos:** vencimentos da Agenda Tributária da Receita nos próximos 45 dias, filtrados pelas obrigações e
+  pelo regime do cliente escolhido.
+- **Legislação e reforma:** notícias da Receita, convênios ICMS do CONFAZ, resoluções do Comitê Gestor do IBS,
+  notícias da Economia GO e da SEFAZ-TO, mais os marcos fixos (EC 132/2023, LC 214/2025 e LC 227/2026).
+- **Situação do cliente:** regime, situação cadastral e certidões.
+- **Vencimentos e pendências internas:** honorários, fim de contrato e pendências do cliente.
+
+Cada item traz a data (vencimento, publicação, vigência ou data do ato) e a fonte. O item oficial tem link
+https; o interno mostra a origem do dado (banco do JARVIS, planilha, ERP). O card mostra a hora da última
+atualização.
+
+**Coleta:**
+
+- Fica agendada na API: fontes oficiais a cada `JARVIS_FISCAL_INTERVALO_MIN` (padrão 6 h) e fontes de clientes a
+  cada `JARVIS_CLIENTES_INTERVALO_MIN` (padrão 24 h).
+- O botão "Atualizar" do card coleta na hora.
+- Para conferir as fontes pelo terminal, use `python -m jarvis.painel coletar`.
+- Uma fonte que falha não apaga nada: o card avisa e mostra os últimos dados válidos, com a hora deles, e o erro
+  vai para `logs/jarvis.log`.
+
+**Onde configurar:**
+
+| O quê | Onde |
+|---|---|
+| Fontes oficiais (endereço, ligada, filtros) | [`config/fontes_fiscais.json`](config/fontes_fiscais.json) |
+| Marcos da reforma | [`config/marcos_reforma.json`](config/marcos_reforma.json) |
+| Clientes no banco do JARVIS (fonte principal) | `POST /painel/clientes` (ver `ClienteEntrada` em `jarvis/painel/contratos.py`) |
+| Planilha de clientes | `JARVIS_CLIENTES_PLANILHA` (CSV/XLSX) ou `JARVIS_CLIENTES_SHEETS_URL` |
+| ERP | `JARVIS_ERP_URL`, `JARVIS_ERP_TOKEN` e o formato em [`config/clientes_fontes.json`](config/clientes_fontes.json) |
+| Portais oficiais (CNPJ via SERPRO) | `JARVIS_SERPRO_CLIENTE` e as credenciais `SERPRO_*` no `.env` |
+
+**Precedência quando as fontes discordam** (a primeira vence; o card mostra a fonte de cada campo e avisa quando
+as fontes divergem):
+
+- cadastrais: portais > ERP > banco > planilha;
+- regime, obrigações e estados: banco > ERP > planilha > portais;
+- contrato, honorários e contato: banco > ERP > planilha;
+- certidões: portais > banco > planilha.
+
+**Premissas:**
+
+- **Planalto:** recusa conexão automática (conferido em 31/10/2026). Fica desligado, e o JARVIS não troca o
+  User-Agent para contornar o bloqueio.
+- **ERP:** não foi informado. O adaptador REST fica desligado até ser configurado.
+- **SERPRO:** a própria integração avisa que o mapeamento do JSON do CNPJ ainda precisa ser conferido no Swagger
+  do contrato.
+- **Certidões e e-CAC:** exigem contrato Integra Contador e e-CNPJ. Até lá, as certidões vêm do banco ou da
+  planilha.
+- **Documentos no log:** CNPJ e CPF só aparecem mascarados e com hash.
 
 ## Programas
 
