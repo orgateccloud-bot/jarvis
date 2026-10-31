@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 
 from ..contratos import ItemFiscal
-from ..http import Fetch
+from ..http import Fetch, FonteIndisponivel
 from .base import Coletor, absoluto, texto
 
 NOMES_MES = ["Janeiro", "Fevereiro", "Marco", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro",
@@ -90,11 +90,18 @@ class AgendaReceita(Coletor):
     def coletar(self, fetch: Fetch, hoje: date) -> list[ItemFiscal]:
         fim = hoje + timedelta(days=self.dias)
         itens: list[ItemFiscal] = []
-        for ano, mes in self._meses(hoje):
+        for n, (ano, mes) in enumerate(self._meses(hoje)):
             base = f"{self.url.rstrip('/')}/{ano}/{NOMES_MES[mes - 1]}"
-            dias = self.dias_do_mes(fetch(base), base)
+            try:
+                dias = self.dias_do_mes(fetch(base), base)
+            except FonteIndisponivel:
+                if n == 0:
+                    raise
+                dias = {}
             if not dias:
-                raise self._vazio(f"nenhum dia de vencimento no índice de {NOMES_MES[mes - 1]}/{ano}")
+                if n == 0:   # o mês atual é obrigatório; o seguinte a Receita publica só perto da virada
+                    raise self._vazio(f"nenhum dia de vencimento no índice de {NOMES_MES[mes - 1]}/{ano}")
+                continue
             for dia, url in sorted(dias.items()):
                 if hoje <= dia <= fim:
                     itens += self.itens_do_dia(fetch(url), dia, url)

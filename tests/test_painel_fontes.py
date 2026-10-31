@@ -77,6 +77,14 @@ def test_agenda_receita_le_os_dias_do_mes_e_respeita_a_janela():
     assert {i.data for i in itens} == esperado        # 05/11 e 10/11 já passaram
 
 
+def test_agenda_do_mes_seguinte_ainda_nao_publicada_nao_derruba_a_fonte():
+    c = coletor(cfg("receita_agenda"))
+    base = f"{AGENDA}/2026/Novembro"
+    fetch = fetch_de({f"{base}/": ler("agenda_dia_15_10_2026.html"), base: ler("agenda_mes_novembro_2026.html")})
+    itens = c.coletar(fetch, date(2026, 11, 12))      # dezembro: fora do ar (a Receita publica perto da virada)
+    assert itens and max(i.data for i in itens) == date(2026, 11, 30)
+
+
 def test_agenda_sem_dias_e_fonte_indisponivel():
     c = coletor(cfg("receita_agenda"))
     with pytest.raises(FonteIndisponivel, match="mudado de formato"):

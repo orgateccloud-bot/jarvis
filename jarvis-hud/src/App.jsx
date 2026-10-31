@@ -6,10 +6,12 @@ import { alvoSol } from './spike/arranjo.js'
 import './spike/spike.css'
 import TopBar from './components/TopBar.jsx'
 import { CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
+import { ClienteCard, TributarioCard } from './components/FiscalCards.jsx'
 import Transcript from './components/Transcript.jsx'
 import CommandDock from './components/CommandDock.jsx'
 import { BootIgnition, Caption, SunButton, Toasts } from './components/Overlays.jsx'
 import { useJarvis } from './hooks/useJarvis.js'
+import { usePainelFiscal } from './hooks/usePainelFiscal.js'
 import { useConversation } from './hooks/useConversation.js'
 import { useVozLocal } from './hooks/useVozLocal.js'
 import { FASE_DO_SERVICO, avisoDaVoz } from './lib/voice/servico.js'
@@ -29,6 +31,7 @@ export default function App() {
   const vozLocal = useVozLocal({ online: j.online, authOk: j.authOk })
   useEffect(() => { vozEventoRef.current = vozLocal.aoEvento }, [vozLocal.aoEvento])
   const aviso = avisoDaVoz(vozLocal.voz, vozLocal.doHud)
+  const fiscal = usePainelFiscal({ online: j.online, authOk: j.authOk })
   const { sendMessage, energyRef, approve, pushToast } = j
   const [mode, setMode] = useState('auto')
   const [panelsOpen, setPanelsOpen] = useState(false)
@@ -142,12 +145,16 @@ export default function App() {
         )}
         <div className="stage">
           <div className={`panels ${panelsOpen ? 'open' : ''}`}>
-            <aside className="side side-left" aria-label="Sistema e custos">
+            <aside className="side side-left" aria-label="Tributário e cliente">
+              <TributarioCard painel={fiscal.tributario} erro={fiscal.erro} atualizando={fiscal.atualizando}
+                onAtualizar={fiscal.atualizarAgora} />
+              <ClienteCard clientes={fiscal.clientes} clienteId={fiscal.clienteId} onEscolher={fiscal.escolher}
+                cliente={fiscal.cliente} erro={fiscal.erro} />
+            </aside>
+            <aside className="side side-right" aria-label="Estado neural, sistema e custos">
+              <NeuralCard neural={j.neural} />
               <VitalsCard vitals={j.vitals} history={j.history} />
               <CostCard costs={j.costs} />
-            </aside>
-            <aside className="side side-right" aria-label="Estado neural">
-              <NeuralCard neural={j.neural} />
             </aside>
           </div>
           <main className="center">
