@@ -109,6 +109,30 @@ def test_item_citado_pelo_numero_vem_primeiro(tmp_path, fts):
                                                                  "Tema 1001 (repercussão geral)"}
 
 
+@MOTORES
+def test_precedente_transversal_entra_em_qualquer_area(tmp_path, fts):
+    """A busca do agente tributário (area="tributario") também acha a SV 8, que mora na área juridico."""
+    root = tmp_path / "base"
+    (root / "juridico").mkdir(parents=True)
+    (root / "tributario").mkdir()
+    (root / "tributario" / "ctn.md").write_text("Art. 173. O direito de constituir o crédito tributário extingue-se "
+                                                "após cinco anos: decadência.\nArt. 174. b\nArt. 175. c\n",
+                                                encoding="utf-8")
+    catalogo(root / "_catalogo", "01.toml", fontes=[{"fid": "sv-stf"}, {"fid": "doutrina"}])
+    toml = (root / "_catalogo" / "01.toml").read_text(encoding="utf-8")
+    toml = toml.replace('id = "sv-stf"\n', 'id = "sv-stf"\ntransversal = true\n').replace(
+        'corte = "artigo"', 'corte = "sumula"')
+    (root / "_catalogo" / "01.toml").write_text(toml, encoding="utf-8")
+    (root / "juridico" / "sv-stf.md").write_text(SUMULAS, encoding="utf-8")
+    (root / "juridico" / "doutrina.md").write_text("### Nota\nDecadência do crédito tributário na doutrina.\n",
+                                                   encoding="utf-8")
+    kb = KnowledgeBase(root, fts=fts)
+    achados = {t.arquivo for _, t in kb.buscar("decadência do crédito tributário", area="tributario")}
+    assert achados == {"tributario/ctn.md", "juridico/sv-stf.md"}           # a doutrina (não transversal) fica de fora
+    assert {t.arquivo for _, t in kb.buscar("decadência", area="juridico")} == {"juridico/sv-stf.md",
+                                                                               "juridico/doutrina.md"}
+
+
 def test_reindexa_so_o_arquivo_alterado_e_remove_apagado(tmp_path):
     root = tmp_path / "base"
     (root / "a").mkdir(parents=True)

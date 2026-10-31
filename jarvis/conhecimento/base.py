@@ -53,10 +53,13 @@ def _br(iso: str) -> str:
     return data_br(date.fromisoformat(iso)) if iso else ""
 
 
-def selecionar(docs: list[Documento], f: Filtros) -> dict[str, str]:
-    """Documentos que entram na busca → aviso de vigência (vazio se nada a dizer). Padrão: só a versão atual."""
+def selecionar(docs: list[Documento], f: Filtros, transversais: frozenset[str] | set[str] = frozenset()
+               ) -> dict[str, str]:
+    """Documentos que entram na busca → aviso de vigência (vazio se nada a dizer). Padrão: só a versão atual.
+    Fontes transversais (ex.: súmulas e temas do STF/STJ) entram em qualquer filtro de área."""
     ok = [d for d in docs
-          if (not f.area or f.area == "geral" or d.area == f.area) and (not f.uf or d.uf.upper() == f.uf.upper())
+          if (not f.area or f.area == "geral" or d.area == f.area or d.fonte_id in transversais)
+          and (not f.uf or d.uf.upper() == f.uf.upper())
           and (not f.tipo or d.tipo == f.tipo) and (not f.esfera or d.esfera == f.esfera)]
     if f.vigente_em is None:
         return {d.caminho: "" for d in ok if d.atual}
@@ -219,6 +222,11 @@ class KnowledgeBase:
             if self.root.is_dir() else set()
         return sorted(set(self.carga.areas()) | pastas | {"geral"})
 
+    def areas_em_uso(self) -> list[str]:
+        """Áreas com texto indexado (a descrição do tool lista só estas: área vazia só gastaria token)."""
+        motor = self.sincronizar()
+        return sorted({d.area for d in motor.documentos() if d.atual}) if motor else []
+
     def _aviso(self, d: Documento, situacao: str, aviso_vigencia: str, hoje: date) -> str:
         avisos = [aviso_vigencia] if aviso_vigencia else []
         if any(s in norm(situacao) for s in NAO_VIGENTE):
@@ -238,7 +246,8 @@ class KnowledgeBase:
             if motor is None:
                 return []
             docs = {d.caminho: d for d in motor.documentos()}
-            permitidos = selecionar(list(docs.values()), Filtros(area, uf, tipo, esfera, vigente_em))
+            transversais = {f.id for f in self.carga.fontes() if f.transversal}
+            permitidos = selecionar(list(docs.values()), Filtros(area, uf, tipo, esfera, vigente_em), transversais)
             q = norm(consulta)
             chaves = chaves_citadas(consulta)
             candidatos = motor.buscar(termos_da_consulta(consulta), set(permitidos), 60, chaves)

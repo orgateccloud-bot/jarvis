@@ -29,9 +29,9 @@ class BuscaParams(BaseModel):
 
 
 def descricao(areas: list[str]) -> str:
-    texto = ("Busca leis, súmulas e precedentes na base local (áreas: {}). Filtros: area, uf, tipo, esfera, "
-             "vigente_em. Traz fonte, URL, data da captura e situação: cite-os e avise se pode estar desatualizado. "
-             "Sem o artigo certo, repita com as palavras da lei.")
+    texto = ("Busca leis, súmulas e temas do STF/STJ na base local (áreas: {}; súmulas e temas entram em "
+             "qualquer área). Filtros: area, uf, tipo, esfera, vigente_em. Cite fonte, URL e data da captura; "
+             "repita o aviso se houver. Sem o artigo certo, use as palavras da lei.")
     lista = [a for a in areas if a != "geral"]
     while lista and len(texto.format(", ".join(lista))) > LIMITE_DESCRICAO:
         lista.pop()

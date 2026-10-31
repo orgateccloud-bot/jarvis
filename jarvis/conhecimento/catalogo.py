@@ -56,6 +56,7 @@ class FonteCatalogo(BaseModel):
     obs: str = ""
     # opcionais (motor v2)
     area: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$")   # sobrepõe a área da biblioteca
+    transversal: bool = False                      # entra em qualquer filtro de área (precedentes do art. 927)
     arquivo: str | None = None                     # caminho na base; padrão <area>/<id>.md
     apelidos: list[str] = []                       # a pergunta que cita um apelido favorece esta fonte
     padrao_links: str | None = None                # lista_links: regex no endereço dos links do índice

@@ -75,7 +75,8 @@ def registry(apps_json: Path | None = None, knowledge: Any = None) -> dict[str, 
     from .tasks import TASK_TOOLS
 
     apps = app_tools(carregar_catalogo(apps_json or CATALOGO_PADRAO))
-    conhecimento = knowledge_tools(knowledge.areas()) if knowledge is not None else KNOWLEDGE_TOOLS
+    conhecimento = KNOWLEDGE_TOOLS if knowledge is None else knowledge_tools(knowledge.areas_em_uso()
+                                                                             or knowledge.areas())
     tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS, *conhecimento,
              *apps]
     return {t.name: t for t in tools}

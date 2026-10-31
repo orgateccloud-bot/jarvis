@@ -70,6 +70,9 @@ _AREAS = {
                    r"\b(icms|ipi|iss|issqn|pis|cofins|irpf|irpj|csll|ibs|cbs|ctn|itcmd|itcd|itbi|iptu|ipva|pgfn|darf)\b"],
     "oab": [r"\boab\b", r"\badvoca", r"\badvogad", r"\bexame de ordem", r"\bcodigo de etica", r"\bhonorarios?\b",
             r"\bsigilo profissional", r"\b8\.?906\b", r"\bestatuto da (advocacia|oab|ordem)"],
+    # precedentes da biblioteca jurídica (súmulas e temas do STF/STJ); empate com tributário fica com tributário
+    "juridico": [r"\bsumulas?\b", r"\bvinculante", r"\bjurisprudencia", r"\bprecedentes?\b", r"\brepercussao geral",
+                 r"\b(recursos?|temas?) repetitivos?", r"\btema \d+", r"\b(stf|stj|supremo)\b", r"\b(irdr|iac)\b"],
     "contabil": [r"\bcontab", r"\bbalanco", r"\bbalancete", r"\bdre\b", r"\b(livro )?razao contabil|\blivro razao", r"\bconcilia", r"\bsped\b",
                  r"\becd\b", r"\becf\b", r"\bescritura", r"\bdepreciac", r"\bnota fiscal", r"\bauditoria",
                  r"\bpgdas", r"\bplano de contas"],

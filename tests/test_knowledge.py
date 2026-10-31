@@ -73,6 +73,10 @@ def test_area_pelo_assunto_e_piso_no_intermediario():
     assert area_for("o advogado pode quebrar o sigilo profissional?") == "oab"
     assert area_for("como fecho o balancete do mes") == "contabil"
     assert area_for("qual a razao disso") is None and area_for("me conta uma curiosidade") is None
+    assert area_for("o que diz a sumula 603 do stj") == "juridico"
+    assert area_for("qual a tese do tema 1001 de repercussao geral") == "juridico"
+    assert area_for("a sumula vinculante 8 fala de decadencia tributaria") == "tributario"   # empate: tributário
+    assert decide("O que diz a súmula 603 do STJ?", BudgetState.NORMAL).route is Route.MEDIUM   # nunca no Haiku
     d = decide("O que o CTN diz sobre decadência?", BudgetState.NORMAL)
     assert d.area == "tributario" and d.route is Route.MEDIUM
     assert decide("/haiku o que é ICMS?", BudgetState.NORMAL).route is Route.SIMPLE      # forçado vale
