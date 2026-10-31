@@ -17,7 +17,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "bandit>=1.7"]
+# httpx: o TestClient do FastAPI precisa dele (o SDK da Anthropic 2.x usa o httpx2, não traz o httpx)
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "bandit>=1.7", "httpx>=0.27"]
+# Etapa 2, escuta por voz local (JARVIS_VOZ_LOCAL=1): pip install -e .[voz] e depois python -m jarvis.voz.baixar
+voz = ["numpy>=1.26", "onnxruntime>=1.18", "sounddevice>=0.5", "faster-whisper>=1.2", "httpx>=0.27",
+       "winrt-runtime>=3; sys_platform == 'win32'",
+       "winrt-Windows.Media.SpeechSynthesis; sys_platform == 'win32'",
+       "winrt-Windows.Storage.Streams; sys_platform == 'win32'"]
+# Whisper na GPU NVIDIA (CUDA 12): cuBLAS e cuDNN dos wheels oficiais, carregados por jarvis/voz/cuda.py
+voz-gpu = ["nvidia-cublas-cu12==12.9.2.10", "nvidia-cudnn-cu12==9.*"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -31,7 +39,10 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 # o teste de fumaça real (Menu Iniciar, registro e janelas desta máquina) só roda com: pytest -m windows_real
 addopts = "-m 'not windows_real'"
-markers = ["windows_real: lê o Windows de verdade; fora da execução padrão"]
+markers = [
+    "windows_real: lê o Windows de verdade; fora da execução padrão",
+    "voz_modelos: usa os modelos de voz baixados; pulado se faltarem (ex.: no CI)",
+]
 
 [tool.ruff]
 line-length = 110

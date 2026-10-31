@@ -87,6 +87,9 @@ export function useJarvis(callbacks = {}) {
         try {
           const greeting = !greetedRef.current
           for await (const ev of streamEvents({ greeting, signal: ctrl.signal })) {
+            // Etapa 2 (voz local): estado do serviço e "Ok Jarvis" (nova conversa) não viram mensagem
+            if (ev.kind === 'voz') { cb.current.onVoz?.(ev.texto); continue }
+            if (ev.kind === 'nova_conversa') { setMessages([]); continue }
             if (ev.kind === 'saudacao') greetedRef.current = true
             setMessages(m => [...m, {
               id: uid(), role: 'jarvis', kind: ev.kind === 'saudacao' ? 'saudacao' : 'aviso',

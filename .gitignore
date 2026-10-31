@@ -66,3 +66,7 @@ tmp/
 # JARVIS 4.0
 *.egg-info/
 jarvis-hud/dist/
+
+# Áudio: gravações de voz nunca entram no git (ficam em JARVIS_VOZ_DIR); só os WAVs sintéticos dos testes
+*.wav
+!tests/fixtures/voz/*.wav

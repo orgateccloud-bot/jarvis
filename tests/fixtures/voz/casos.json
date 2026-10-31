@@ -1,0 +1,407 @@
+{
+  "_leia": "Casos compartilhados entre o HUD (jarvis-hud/src/lib/voice, npm test) e o serviço de voz local (jarvis/voz/texto.py, pytest). Os dois lados precisam dar a mesma saída para cada entrada.",
+  "corrigirTermos": [
+    [
+      "Graves, que horas são?",
+      "Jarvis, que horas são?"
+    ],
+    [
+      "ok jarbas abre o chrome",
+      "ok Jarvis abre o chrome"
+    ],
+    [
+      "Jarvas me lembra amanhã",
+      "Jarvis me lembra amanhã"
+    ],
+    [
+      "Jarbas, me lembra de ligar amanhã",
+      "Jarvis, me lembra de ligar amanhã"
+    ],
+    [
+      "Ok, Javis.",
+      "Ok, Jarvis."
+    ],
+    [
+      "olá jervis tudo bem",
+      "olá Jarvis tudo bem"
+    ],
+    [
+      "Travis, pare.",
+      "Jarvis, pare."
+    ],
+    [
+      "os problemas são graves",
+      "os problemas são graves"
+    ],
+    [
+      "o Jarbas ligou ontem",
+      "o Jarbas ligou ontem"
+    ],
+    [
+      "nos confins do meio",
+      "nos confins do meio"
+    ],
+    [
+      "isso é tudo",
+      "isso é tudo"
+    ],
+    [
+      "são falhas graves no sistema",
+      "são falhas graves no sistema"
+    ],
+    [
+      "o que diz o c t n sobre decadência",
+      "o que diz o CTN sobre decadência"
+    ],
+    [
+      "desliga o dabliu esse ele",
+      "desliga o WSL"
+    ],
+    [
+      "desliga o w s l",
+      "desliga o WSL"
+    ],
+    [
+      "quanto é o icms e o ibs barra cbs",
+      "quanto é o ICMS e o IBS/CBS"
+    ],
+    [
+      "estudo para a prova da o a b",
+      "estudo para a prova da OAB"
+    ],
+    [
+      "o mei paga das",
+      "o MEI paga das"
+    ],
+    [
+      "bom dia senhor velozo",
+      "bom dia senhor Veloso"
+    ],
+    [
+      "consulta a p g f n",
+      "consulta a PGFN"
+    ],
+    [
+      "",
+      ""
+    ]
+  ],
+  "afterWakeWord": [
+    [
+      "Jarvis, que horas são?",
+      "que horas são?"
+    ],
+    [
+      "ok jarvis",
+      ""
+    ],
+    [
+      "Ok, Jarvis.",
+      ""
+    ],
+    [
+      "Ok Jarvis, que horas são?",
+      "que horas são?"
+    ],
+    [
+      "olá mundo",
+      null
+    ],
+    [
+      "Jarvis, me lembra de ligar amanhã",
+      "me lembra de ligar amanhã"
+    ]
+  ],
+  "isStopCommand": [
+    [
+      "Jarvis, pare.",
+      true
+    ],
+    [
+      "Jarvis, pare",
+      true
+    ],
+    [
+      "jarvis silêncio",
+      true
+    ],
+    [
+      "pare",
+      true
+    ],
+    [
+      "Jarvis para",
+      false
+    ],
+    [
+      "agora pare",
+      false
+    ],
+    [
+      "parede branca",
+      false
+    ],
+    [
+      "Jarvis, pare de falar sobre isso agora",
+      false
+    ],
+    [
+      "",
+      false
+    ]
+  ],
+  "paraFala": [
+    [
+      "O log está em D:\\JARVIS-Arquivo\\Gerados\\2026-10-30\\prompt_voz_eco.md.",
+      "O log está em prompt voz eco.md."
+    ],
+    [
+      "Veja https://www.receita.fazenda.gov.br/consulta?id=1 hoje",
+      "Veja receita.fazenda.gov.br hoje"
+    ],
+    [
+      "o arquivo ~/projetos/jarvis/config.json",
+      "o arquivo config.json"
+    ],
+    [
+      "rode \"npm test\" e `npm run build`",
+      "rode npm test e npm run build"
+    ],
+    [
+      "saldo de R$ 15.000,00 e R$ 2 mil",
+      "saldo de 15.000,00 reais e 2 mil reais"
+    ],
+    [
+      "alta de 3,5% no mês e 12 %",
+      "alta de 3,5 por cento no mês e 12 por cento"
+    ],
+    [
+      "e/ou 1/2 de 30/10/2026",
+      "e/ou 1/2 de 30/10/2026"
+    ],
+    [
+      "Caminho: C:\\a\\b\\c.txt; veja.",
+      "Caminho: c.txt; veja."
+    ],
+    [
+      "site www.planalto.gov.br/ccivil_03/leis/l5172.htm",
+      "site planalto.gov.br"
+    ]
+  ],
+  "divisor": [
+    [
+      [
+        "*O Sol perde **4 milhões** de toneladas por segundo. Mesmo assim, deve durar mais 5 bilhões de anos.\n\n| Café | Chá |\n|---|---|\n| forte | leve |\n\n```python\nprint(1)\n```\n- Primeiro item da lista com bastante texto\n- Segundo item\n\nEm resumo, o valor é 3.5 vezes maior."
+      ],
+      [
+        "O Sol perde 4 milhões de toneladas por segundo. Mesmo assim, deve durar mais 5 bilhões de anos.",
+        "Primeiro item da lista com bastante texto. Segundo item. Em resumo, o valor é 3.5 vezes maior."
+      ]
+    ],
+    [
+      [
+        "*Resultado: o balancete fechou; o saldo bate com o extrato do banco e não há diferenças a conciliar. Pronto."
+      ],
+      [
+        "Resultado: o balancete fechou; o saldo bate com o extrato do banco e não há diferenças a conciliar.",
+        "Pronto."
+      ]
+    ],
+    [
+      [
+        "*Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora, e não encontrei divergências."
+      ],
+      [
+        "Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora,",
+        "Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora, Conferi os lançamentos de janeiro a abril da transportadora, e não encontrei divergências."
+      ]
+    ],
+    [
+      [
+        "Sim. ",
+        "Feito. ",
+        "O lembrete está criado para amanhã."
+      ],
+      [
+        "Sim. Feito. O lembrete está criado para amanhã."
+      ]
+    ],
+    [
+      [
+        "*Caminho: C:\\a\\b\\c.txt; veja."
+      ],
+      [
+        "Caminho: c.txt; veja."
+      ]
+    ],
+    [
+      [
+        "Bom dia, Senhor. ",
+        "O disco C está com 82% de uso e o arquivo ficou em D:\\JARVIS-Arquivo\\Gerados\\relatorio_mensal.xlsx. ",
+        "Quer que eu mova os downloads antigos?"
+      ],
+      [
+        "Bom dia, Senhor. O disco C está com 82 por cento de uso e o arquivo ficou em relatorio mensal.xlsx.",
+        "Quer que eu mova os downloads antigos?"
+      ]
+    ]
+  ],
+  "simNao": [
+    [
+      "sim",
+      true,
+      false
+    ],
+    [
+      "sim pode abrir",
+      true,
+      false
+    ],
+    [
+      "Pode sim",
+      true,
+      false
+    ],
+    [
+      "ok",
+      true,
+      false
+    ],
+    [
+      "Ok, Jarvis",
+      true,
+      false
+    ],
+    [
+      "não",
+      false,
+      true
+    ],
+    [
+      "não, cancela",
+      false,
+      true
+    ],
+    [
+      "nao",
+      false,
+      true
+    ],
+    [
+      "cancelar",
+      false,
+      true
+    ],
+    [
+      "nem pensar",
+      false,
+      true
+    ],
+    [
+      "talvez",
+      false,
+      false
+    ],
+    [
+      "simplesmente não",
+      false,
+      false
+    ]
+  ],
+  "eco": [
+    {
+      "lembrar": [
+        "O script para iniciar no logon fica na pasta scripts do projeto.",
+        "Ele registra uma tarefa no Agendador do Windows."
+      ],
+      "terminou": true,
+      "passa_ms": 2000,
+      "ouvido": "o script para iniciar no logon",
+      "eco": true
+    },
+    {
+      "lembrar": [
+        "O script para iniciar no logon fica na pasta scripts do projeto.",
+        "Ele registra uma tarefa no Agendador do Windows."
+      ],
+      "terminou": true,
+      "passa_ms": 2000,
+      "ouvido": "fica na pasta scripts do projeto ele registra",
+      "eco": true
+    },
+    {
+      "lembrar": [
+        "O script para iniciar no logon fica na pasta scripts do projeto."
+      ],
+      "terminou": true,
+      "passa_ms": 2000,
+      "ouvido": "script iniciar logon pasta",
+      "eco": true
+    },
+    {
+      "lembrar": [
+        "O script para iniciar no logon fica na pasta scripts do projeto."
+      ],
+      "terminou": true,
+      "passa_ms": 1500,
+      "ouvido": "qual a previsão do tempo para amanhã",
+      "eco": false
+    },
+    {
+      "lembrar": [
+        "O script para iniciar no logon fica na pasta scripts do projeto."
+      ],
+      "terminou": true,
+      "passa_ms": 1500,
+      "ouvido": "onde fica o script de logon",
+      "eco": false
+    },
+    {
+      "lembrar": [
+        "O script para iniciar no logon fica na pasta scripts do projeto."
+      ],
+      "terminou": true,
+      "passa_ms": 8500,
+      "ouvido": "o script para iniciar no logon",
+      "eco": false
+    },
+    {
+      "lembrar": [
+        "Primeira frase sobre o balancete de setembro."
+      ],
+      "terminou": false,
+      "passa_ms": 60000,
+      "ouvido": "balancete de setembro",
+      "eco": true
+    },
+    {
+      "lembrar": [
+        "Confirma: abrir o Chrome? Diga sim ou não."
+      ],
+      "terminou": true,
+      "passa_ms": 1600,
+      "ouvido": "sim",
+      "resposta": true,
+      "eco": false
+    },
+    {
+      "lembrar": [
+        "Confirma: abrir o Chrome? Diga sim ou não."
+      ],
+      "terminou": true,
+      "passa_ms": 1600,
+      "ouvido": "sim ou não",
+      "resposta": true,
+      "eco": true
+    },
+    {
+      "lembrar": [
+        "Confirma: abrir o Chrome? Diga sim ou não."
+      ],
+      "terminou": true,
+      "passa_ms": 1600,
+      "ouvido": "confirma abrir o chrome",
+      "eco": true
+    }
+  ]
+}

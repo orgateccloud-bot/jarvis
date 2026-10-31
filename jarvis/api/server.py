@@ -31,7 +31,7 @@ from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
 from ..knowledge import KnowledgeBase
-from ..proactive.bus import EventBus, event_source
+from ..proactive.bus import EventBus, ProactiveEvent, event_source
 from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
 from ..tools import ToolContext, manifesto, registry
@@ -67,7 +67,7 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
 
 def create_app(settings: Settings | None = None, conversation: Conversation | None = None,
                monitor: Monitor | None = None, proactive: bool | None = None,
-               hud_dir: Path = HUD_DIST) -> FastAPI:
+               hud_dir: Path = HUD_DIST, iniciar_voz: bool = True) -> FastAPI:
     settings = settings or get_settings()
     token = settings.api_token()
     conv = conversation or build_conversation(settings)
@@ -76,11 +76,26 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     monitor = monitor or Monitor(conv.ledger, conv.tool_ctx.reminders, settings.user_name)
     proactive = settings.proactive if proactive is None else proactive
 
+    # Etapa 2: escuta por voz local. Com a flag em 0, nada disto existe (nem rota, nem processo).
+    voz_estado = supervisor = None
+    if settings.voz_local:
+        from .voz import EstadoVoz, Supervisor
+
+        def publicar_voz(kind: str, texto: str) -> None:
+            bus.publish(ProactiveEvent(kind=kind, titulo="voz", texto=texto, falar=False))
+
+        voz_estado = EstadoVoz(ao_mudar=lambda estado: publicar_voz("voz", estado))
+        supervisor = Supervisor(voz_estado) if iniciar_voz else None
+
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
-        task = asyncio.create_task(run_monitor(monitor, bus)) if proactive else None
+        tasks = [asyncio.create_task(run_monitor(monitor, bus))] if proactive else []
+        if supervisor:
+            tasks.append(asyncio.create_task(supervisor.rodar()))
         yield
-        if task:
+        if supervisor:
+            supervisor.parar()
+        for task in tasks:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await task
@@ -99,6 +114,12 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
         given = (authorization or "").removeprefix("Bearer ").strip()
         if not given or not hmac.compare_digest(given, token):
             raise HTTPException(status_code=401, detail="token inválido")
+
+    if voz_estado is not None:
+        from .voz import rotas
+
+        app.include_router(rotas(voz_estado, conv, require_token, publicar_voz))
+        app.state.voz = voz_estado
 
     @app.get("/health")
     async def health():

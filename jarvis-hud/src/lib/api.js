@@ -40,6 +40,14 @@ export class HttpError extends Error {
   }
 }
 
+export async function postJson(path, body = {}) {
+  const res = await authFetch(path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new HttpError(res.status)
+  return res.json()
+}
+
 export async function getJson(path, { auth = true } = {}) {
   const res = auth ? await authFetch(path) : await fetch(`${API}${path}`)
   if (!res.ok) throw new HttpError(res.status)

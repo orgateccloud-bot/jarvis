@@ -11,7 +11,8 @@ from pydantic import BaseModel, Field
 
 
 class ProactiveEvent(BaseModel):
-    kind: Literal["saudacao", "alerta_ram", "alerta_disco", "alerta_cpu", "orcamento", "lembrete", "info"]
+    kind: Literal["saudacao", "alerta_ram", "alerta_disco", "alerta_cpu", "orcamento", "lembrete", "info",
+                  "voz", "nova_conversa"]  # os dois últimos só existem com JARVIS_VOZ_LOCAL=1 (Etapa 2)
     nivel: Literal["info", "aviso", "critico"] = "info"
     titulo: str
     texto: str

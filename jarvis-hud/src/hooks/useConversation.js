@@ -4,6 +4,7 @@ import { createEchoFilter } from '../lib/voice/echo.js'
 import { createSentenceSplitter } from '../lib/voice/sentences.js'
 import { routeHeard } from '../lib/voice/route.js'
 import { corrigirTermos } from '../lib/voice/termos.js'
+import { acaoDoSol, modoDoServico } from '../lib/voice/servico.js'
 
 const SILENCE_MS = 12000
 const WAKE_KEY = 'jarvis-ouvir-jarvis'
@@ -20,11 +21,14 @@ const writeFlag = (key, v) => { try { localStorage.setItem(key, v ? '1' : '0') }
  *   wake    — ouvindo em segundo plano só pela palavra "Jarvis" (opcional, desligado por padrão)
  *   active  — conversa aberta: ouve → envia → fala em streaming → volta a ouvir; 12 s de silêncio encerra
  *
- * deps: { send(text, opts) → Promise, approve(id, ok), energyRef, busy }
+ * deps: { send(text, opts) → Promise, approve(id, ok), energyRef, busy, externo }
+ *   externo: { estado, comando(acao) } quando o serviço de voz local é o dono do microfone e do alto-falante
+ *   (Etapa 2): aí o navegador não ouve nem fala; o sol, o mudo e o Esc viram comandos para o serviço.
  */
 export function useConversation(deps) {
   const d = useRef(deps)
   useEffect(() => { d.current = deps })
+  const externo = deps.externo || null
   const engine = useMemo(() => {
     const e = createWebSpeechEngine()
     e.setHalfDuplex(!readFlag(BARGE_KEY))
@@ -64,7 +68,7 @@ export function useConversation(deps) {
   }, [engine, restMode])
 
   const say = useCallback(text => {
-    if (mutedRef.current) return
+    if (mutedRef.current || d.current.externo) return  // o serviço local fala por ele mesmo
     echo.remember(text)
     engine.speak(text)
   }, [engine, echo])
@@ -129,8 +133,10 @@ export function useConversation(deps) {
   }, [engine, echo, onResult, armSilence])
 
   // liga/desliga o microfone conforme o modo; em "wake" pausa quando a aba fica oculta (privacidade)
+  const externoAtivo = !!externo
   useEffect(() => {
     const apply = () => {
+      if (externoAtivo) { engine.stopListening(); engine.cancel(); return }  // um só dono do microfone
       const hiddenWake = mode === 'wake' && document.hidden
       if (mode === 'off' || hiddenWake) engine.stopListening()
       else engine.listen()
@@ -139,12 +145,14 @@ export function useConversation(deps) {
     if (mode === 'active') armSilence()
     document.addEventListener('visibilitychange', apply)
     return () => document.removeEventListener('visibilitychange', apply)
-  }, [mode, engine, armSilence])
+  }, [mode, engine, armSilence, externoAtivo])
 
   useEffect(() => () => { engine.stopListening(); engine.cancel(); clearTimeout(silenceTimer.current) }, [engine])
 
   /** Abre/fecha a conversa (clique no sol ou no microfone). Se estiver falando, só interrompe. */
   const toggle = useCallback(() => {
+    const ext = d.current.externo
+    if (ext) { ext.comando(acaoDoSol(ext.estado)); return }
     if (engine.speaking) { engine.cancel(); return }
     setError('')
     setMode(m => (m === 'active' ? restMode() : 'active'))
@@ -174,6 +182,7 @@ export function useConversation(deps) {
       const next = !v
       writeFlag(MUTE_KEY, next)
       if (next) engine.cancel()
+      d.current.externo?.comando(next ? 'mudo' : 'som')
       return next
     })
   }, [engine])
@@ -186,10 +195,16 @@ export function useConversation(deps) {
     }
   })
 
+  // com o serviço local no comando, o estado mostrado é o dele (ouvindo, processando, falando)
+  const ext = externo
   return {
-    supported: engine.supported, mode, wakeEnabled, muted, bargeIn, speaking, caption, error,
-    listening: mode === 'active' && !speaking,
-    toggle, toggleWake, toggleMute, toggleBargeIn, ask, say, stop: () => engine.cancel(),
+    supported: ext ? { ...engine.supported, listen: true } : engine.supported,
+    mode: ext ? modoDoServico(ext.estado) : mode,
+    speaking: ext ? ext.estado === 'falando' : speaking,
+    wakeEnabled, muted, bargeIn, caption: ext ? '' : caption, error,
+    listening: ext ? ext.estado === 'ouvindo' : mode === 'active' && !speaking,
+    toggle, toggleWake, toggleMute, toggleBargeIn, ask, say,
+    stop: () => { if (d.current.externo) d.current.externo.comando('parar'); else engine.cancel() },
     clearApproval: () => { pendingApproval.current = null },
   }
 }

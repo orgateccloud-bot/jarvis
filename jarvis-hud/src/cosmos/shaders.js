@@ -18,7 +18,8 @@ uniform float uGiant;    // 0..1 — estrela gigante (Opus)
 uniform vec3  uTint;     // tonalidade da galáxia
 uniform vec2  uSun;      // centro do sol (uv)
 uniform float uSunR;     // raio do sol (uv)
-uniform float uFlameLim; // SPIKE: limite da região das chamas, em raios (4,5 = como no main)
+uniform float uFlameLim; // SPIKE: limite da regiao das chamas, em raios (4,5 = como no main)
+uniform float uWave;    // 0..1: onda de voz que atravessa o sol enquanto ele fala
 // limites de laço vindos de uniforms: impedem o desenrolamento e deixam a compilação (ANGLE/D3D) muito mais rápida
 uniform int   uOct;      // oitavas do fbm (5)
 uniform int   uLayers;   // camadas do campo profundo (4)
@@ -193,6 +194,22 @@ vec3 sunColor(vec2 g, out float occl){
   return col;
 }
 
+// ── 4. onda de voz: linha luminosa que atravessa o sol na horizontal enquanto ele fala ──
+// amplitude sintética (a síntese de voz do navegador não entrega o áudio); só uma faixa estreita é calculada
+vec3 voiceWave(vec2 g){
+  float ax = abs(g.x);
+  const float span = 1.05;
+  if (uWave < 0.002 || ax > span || abs(g.y) > 0.1) return vec3(0.0);
+  float env = smoothstep(span, span * 0.6, ax) * (0.35 + 0.65 * exp(-ax * ax * 4.0));
+  float y = uWave * 0.06 * env
+          * (0.6 * sin(g.x * 23.0 - uTime * 9.0) + 0.4 * sin(g.x * 41.0 + uTime * 13.0))
+          * (0.55 + 0.45 * sin(g.x * 6.0 + uTime * 2.3));
+  float d = abs(g.y - y);
+  float core = exp(-d * d * 60000.0);
+  float glow = exp(-d * 220.0) * 0.45;
+  return mix(vec3(1.0, 0.5, 0.15), vec3(1.0, 0.95, 0.85), core) * (core * 1.3 + glow) * uWave;
+}
+
 vec3 aces(vec3 x){ return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 
 void main(){
@@ -204,6 +221,7 @@ void main(){
   float occl;
   vec3 sun = sunColor(g, occl);
   col = mix(col, sun, occl) + sun * (1.0 - occl);
+  col += voiceWave(g);
 
   // clarão da ignição
   col += vec3(1.0, 0.9, 0.75) * exp(-length(g) * 7.0) * smoothstep(0.0, 0.12, uBoot) * smoothstep(0.5, 0.12, uBoot) * 3.0;

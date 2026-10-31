@@ -11,16 +11,24 @@ import CommandDock from './components/CommandDock.jsx'
 import { BootIgnition, Caption, SunButton, Toasts } from './components/Overlays.jsx'
 import { useJarvis } from './hooks/useJarvis.js'
 import { useConversation } from './hooks/useConversation.js'
+import { useVozLocal } from './hooks/useVozLocal.js'
+import { FASE_DO_SERVICO, avisoDaVoz } from './lib/voice/servico.js'
 import { ROUTE_TO_TIER, TIERS } from './lib/tiers.js'
 
 const REST_AFTER_MS = 30000 // depois de 30 s em espera, o sol volta a ser o Sol (G2V)
 
 export default function App() {
   const sayRef = useRef(null)
+  const vozEventoRef = useRef(null)
   const j = useJarvis({
-    // avisos e lembretes falados (a voz respeita o modo mudo)
+    // avisos e lembretes falados (a voz respeita o modo mudo; com a voz local, quem fala é o serviço)
     onProactive: ev => { if (ev.falar) sayRef.current?.(ev.texto) },
+    onVoz: estado => vozEventoRef.current?.(estado),
   })
+  // Etapa 2: com JARVIS_VOZ_LOCAL=1 o serviço local é o dono do microfone e do alto-falante (Decisão A)
+  const vozLocal = useVozLocal({ online: j.online, authOk: j.authOk })
+  useEffect(() => { vozEventoRef.current = vozLocal.aoEvento }, [vozLocal.aoEvento])
+  const aviso = avisoDaVoz(vozLocal.voz, vozLocal.doHud)
   const { sendMessage, energyRef, approve, pushToast } = j
   const [mode, setMode] = useState('auto')
   const [panelsOpen, setPanelsOpen] = useState(false)
@@ -63,7 +71,8 @@ export default function App() {
     return sendMessage(msg, { display: text, mode: mode === 'auto' ? null : mode, ...opts })
   }, [mode, sendMessage])
 
-  const conv = useConversation({ send, approve, energyRef, busy: j.busy })
+  const externo = vozLocal.ativo ? { estado: vozLocal.voz.estado, comando: vozLocal.comando } : null
+  const conv = useConversation({ send, approve, energyRef, busy: j.busy, externo })
   const { say, ask, stop, clearApproval, error: voiceError } = conv
   useEffect(() => { sayRef.current = say }, [say])
 
@@ -80,9 +89,9 @@ export default function App() {
   useEffect(() => { if (voiceError) pushToast(voiceError, 'danger') }, [voiceError, pushToast])
 
   // fase visual: a voz manda quando está falando; senão o stream; senão a escuta
-  const phase = conv.speaking ? 'speaking'
+  const phase = (externo && FASE_DO_SERVICO[externo.estado]) || (conv.speaking ? 'speaking'
     : j.phase !== 'idle' ? j.phase
-      : conv.mode === 'active' ? 'listening' : 'idle'
+      : conv.mode === 'active' ? 'listening' : 'idle')
 
   // o sol mantém a classe de quem respondeu e, em repouso, volta a G2V
   useEffect(() => {
@@ -114,6 +123,15 @@ export default function App() {
           <div className="offline glass" role="alert">
             <strong>Núcleo offline.</strong> A API do JARVIS não responde em 127.0.0.1:8000.
             Rode <code>start-jarvis.bat</code> (ou <code>.venv\Scripts\python -m jarvis</code>) — o HUD reconecta sozinho.
+          </div>
+        )}
+        {j.online && j.authOk && aviso && (
+          <div className="offline glass" role="alert">
+            <strong>{aviso.titulo}</strong> {aviso.texto}{' '}
+            <button className="chip" type="button"
+              onClick={aviso.acao === 'pegar' ? vozLocal.pegarMicrofone : vozLocal.devolver}>
+              {aviso.botao}
+            </button>
           </div>
         )}
         {j.online && !j.authOk && (

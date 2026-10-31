@@ -60,7 +60,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       return
     }
     const names = ['uRes', 'uTime', 'uExpand', 'uSpin', 'uListen', 'uThink', 'uSpeak', 'uEnergy',
-      'uAlert', 'uBoot', 'uTemp', 'uGiant', 'uTint', 'uSun', 'uSunR', 'uFlameLim']
+      'uAlert', 'uBoot', 'uTemp', 'uGiant', 'uTint', 'uSun', 'uSunR', 'uFlameLim', 'uWave']
     // recursos de GPU: criados na montagem e recriados do zero no webglcontextrestored
     let vs, fs, prog, buf, tex, parallel
     let U = null
@@ -178,6 +178,8 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       gl.uniform2f(U.uSun, mobile ? 0 : sol.x, mobile ? 0.17 : sol.y)
       gl.uniform1f(U.uSunR, r)
       gl.uniform1f(U.uFlameLim, flameLim(r))
+      // onda de voz: aparece falando e pulsa com a energia de cada trecho
+      gl.uniform1f(U.uWave, cur.speak * (0.25 + 0.75 * cur.energy))
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
 
