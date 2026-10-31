@@ -22,6 +22,15 @@ from jarvis.voz.fala import VozLocal
 BATIMENTO_S = 1.0
 
 
+def texto_para_log(texto: str) -> str:
+    """O texto transcrito só vai para o log com JARVIS_VOZ_LOG_TEXTO=1, com CPF/CNPJ mascarados."""
+    if os.getenv("JARVIS_VOZ_LOG_TEXTO", "0") != "1":
+        return f"<{len(texto)} caracteres>"
+    from jarvis.core.privacy import sanitizar
+
+    return repr(sanitizar(texto)[:200])
+
+
 class Servico:
     def __init__(self, escuta: Escuta, cliente: Cliente, microfone: Microfone, interromper: bool = False,
                  pai: int | None = None, voz: VozLocal | None = None):
@@ -99,8 +108,8 @@ class Servico:
                         logger.info("voz: o microfone voltou a captar som")
                 if ev := self.escuta.processar(q):
                     acao = self.conversa.ouvido(ev)
-                    logger.info("voz: comando={} ação={} latência={:.2f}s whisper={:.3f}s", ev.comando.tipo,
-                                acao, ev.latencia_s, ev.transcricao.segundos)
+                    logger.info("voz: comando={} ação={} texto={} latência={:.2f}s whisper={:.3f}s", ev.comando.tipo,
+                                acao, texto_para_log(ev.transcricao.texto), ev.latencia_s, ev.transcricao.segundos)
         self.mic.fechar()
         self.voz.encerrar()
 

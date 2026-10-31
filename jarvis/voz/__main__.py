@@ -37,14 +37,6 @@ def _logs() -> None:
     logger.add(ROOT / "logs" / "voz.log", level="INFO", rotation="10 MB", retention="30 days", encoding="utf-8")
 
 
-def _texto_para_log(texto: str) -> str:
-    if os.getenv("JARVIS_VOZ_LOG_TEXTO", "0") != "1":
-        return f"<{len(texto)} caracteres>"
-    from jarvis.core.privacy import sanitizar
-
-    return repr(sanitizar(texto)[:200])
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m jarvis.voz", description="Escuta por voz local do JARVIS.")
     ap.add_argument("--listar-microfones", action="store_true")
@@ -71,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     from jarvis.voz.ativacao import Ativacao
     from jarvis.voz.baixar import verificar, verificar_whisper
     from jarvis.voz.escuta import Escuta
+    from jarvis.voz.servico import texto_para_log
     from jarvis.voz.transcricao import criar_transcritor
 
     p = pastas()
@@ -110,7 +103,7 @@ def main(argv: list[str] | None = None) -> int:
                     eventos.append(ev)
                     logger.info("fala: comando={} texto={} fala={:.2f}s espera_fim={:.2f}s whisper={:.3f}s "
                                 "latencia={:.2f}s sem_fala={:.2f} atalho={}", ev.comando.tipo,
-                                _texto_para_log(ev.transcricao.texto), ev.duracao_fala_s, ev.espera_fim_s,
+                                texto_para_log(ev.transcricao.texto), ev.duracao_fala_s, ev.espera_fim_s,
                                 ev.transcricao.segundos, ev.latencia_s, ev.transcricao.no_speech_prob, ev.atalho)
     except KeyboardInterrupt:
         pass
