@@ -22,7 +22,7 @@ class Lancamento(_Contrato):
     """Uma linha de extrato ou razão. Fica no PC: só agregados e grupos mascarados vão ao Claude."""
 
     data: date
-    valor: float
+    valor: float = Field(allow_inf_nan=False)
     memo: str = Field(default="", max_length=500)
     nome: str = Field(default="", max_length=200)
     contraparte: str = Field(default="", max_length=200)
