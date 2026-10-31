@@ -14,14 +14,17 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
 from jarvis.voz.cliente import ApiIndisponivel
 from jarvis.voz.comando import LIMIAR_SEM_FALA
 from jarvis.voz.eco import FiltroDeEco
-from jarvis.voz.escuta import Evento
 from jarvis.voz.texto import NAO, SIM, DivisorDeFrases, corrigir_termos, e_comando_de_parar, sem_acento
+
+if TYPE_CHECKING:  # a escuta puxa numpy e onnxruntime; a lógica da conversa roda sem eles (CI sem o extra [voz])
+    from jarvis.voz.escuta import Evento
 
 JANELA_S = 12.0   # useConversation.js:8 (SILENCE_MS)
 CAUDA_S = 1.5     # webspeech.js:12 (TAIL_MS): o reconhecimento entrega o fim da frase com atraso; o eco assenta

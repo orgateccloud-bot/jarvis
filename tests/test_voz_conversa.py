@@ -5,6 +5,7 @@ Pergunta → frases faladas; "Pois não?" e a janela de 12 s; half-duplex com ca
 """
 
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,9 +13,6 @@ from jarvis.voz.cliente import ApiIndisponivel
 from jarvis.voz.comando import classificar
 from jarvis.voz.conversa import CAUDA_S, JANELA_S, Conversa
 from jarvis.voz.eco import FiltroDeEco
-from jarvis.voz.escuta import Evento
-from jarvis.voz.fala import VozLocal
-from jarvis.voz.transcricao import Transcricao
 
 
 class Relogio:
@@ -57,8 +55,9 @@ class ClienteFalso:
 
 
 def _ev(texto, duracao=1.5, sem_fala=0.05):
-    return Evento(classificar(texto, duracao, sem_fala), Transcricao(texto, sem_fala, -0.3, 0.34), duracao, 0.72,
-                  1.06, False)
+    """O que a Escuta entrega (Evento), sem precisar do numpy: a conversa só lê o comando e a transcrição."""
+    return SimpleNamespace(comando=classificar(texto, duracao, sem_fala), duracao_fala_s=duracao,
+                           transcricao=SimpleNamespace(texto=texto, no_speech_prob=sem_fala))
 
 
 @pytest.fixture
@@ -187,13 +186,16 @@ def test_comandos_do_hud(ambiente):
 
 
 def test_voz_local_fila_callbacks_e_cancelamento():
+    np = pytest.importorskip("numpy")
+    from jarvis.voz.fala import VozLocal
+
     eventos, liberar = [], threading.Event()
 
     def tocar(audio, taxa, cancelado):
         eventos.append(("tocou", int(audio[0])))
         liberar.wait(2)
 
-    voz = VozLocal(sintetizar_fabrica=lambda: (lambda t: (__import__("numpy").full(10, len(t), "int16"), 16000)),
+    voz = VozLocal(sintetizar_fabrica=lambda: (lambda t: (np.full(10, len(t), "int16"), 16000)),
                    tocar=tocar, ao_comecar=lambda: eventos.append("comecou"),
                    ao_terminar=lambda: eventos.append("terminou"), na_frase=lambda t: eventos.append(("frase", t)))
     voz.falar("Bom dia.")
