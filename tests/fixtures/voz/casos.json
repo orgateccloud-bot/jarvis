@@ -1,0 +1,45 @@
+{
+  "_leia": "Casos compartilhados entre o HUD (jarvis-hud/src/lib/voice, npm test) e o serviço de voz local (jarvis/voz/texto.py, pytest). Os dois lados precisam dar a mesma saída para cada entrada.",
+  "corrigirTermos": [
+    ["Graves, que horas são?", "Jarvis, que horas são?"],
+    ["ok jarbas abre o chrome", "ok Jarvis abre o chrome"],
+    ["Jarvas me lembra amanhã", "Jarvis me lembra amanhã"],
+    ["Jarbas, me lembra de ligar amanhã", "Jarvis, me lembra de ligar amanhã"],
+    ["Ok, Javis.", "Ok, Jarvis."],
+    ["olá jervis tudo bem", "olá Jarvis tudo bem"],
+    ["Travis, pare.", "Jarvis, pare."],
+    ["os problemas são graves", "os problemas são graves"],
+    ["o Jarbas ligou ontem", "o Jarbas ligou ontem"],
+    ["nos confins do meio", "nos confins do meio"],
+    ["isso é tudo", "isso é tudo"],
+    ["são falhas graves no sistema", "são falhas graves no sistema"],
+    ["o que diz o c t n sobre decadência", "o que diz o CTN sobre decadência"],
+    ["desliga o dabliu esse ele", "desliga o WSL"],
+    ["desliga o w s l", "desliga o WSL"],
+    ["quanto é o icms e o ibs barra cbs", "quanto é o ICMS e o IBS/CBS"],
+    ["estudo para a prova da o a b", "estudo para a prova da OAB"],
+    ["o mei paga das", "o MEI paga das"],
+    ["bom dia senhor velozo", "bom dia senhor Veloso"],
+    ["consulta a p g f n", "consulta a PGFN"],
+    ["", ""]
+  ],
+  "afterWakeWord": [
+    ["Jarvis, que horas são?", "que horas são?"],
+    ["ok jarvis", ""],
+    ["Ok, Jarvis.", ""],
+    ["Ok Jarvis, que horas são?", "que horas são?"],
+    ["olá mundo", null],
+    ["Jarvis, me lembra de ligar amanhã", "me lembra de ligar amanhã"]
+  ],
+  "isStopCommand": [
+    ["Jarvis, pare.", true],
+    ["Jarvis, pare", true],
+    ["jarvis silêncio", true],
+    ["pare", true],
+    ["Jarvis para", false],
+    ["agora pare", false],
+    ["parede branca", false],
+    ["Jarvis, pare de falar sobre isso agora", false],
+    ["", false]
+  ]
+}

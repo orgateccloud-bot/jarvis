@@ -38,6 +38,7 @@ class Disparo:
     score: float
     voz: float   # probabilidade de voz no trecho da palavra (VAD)
     quadro: int  # índice do quadro de 80 ms em que o score passou do limiar
+    voz_recente: tuple[float, ...] = ()  # VAD dos últimos quadros (o mais novo por último): acha o começo da fala
 
 
 class Ativacao:
@@ -101,7 +102,7 @@ class Ativacao:
         voz = self.vad.voz_na_palavra()
         if voz < self.limiar_vad:
             return None
-        d = Disparo(s, voz, self._n)
+        d = Disparo(s, voz, self._n, tuple(self.vad.historico))
         self.reset()
         return d
 

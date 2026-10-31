@@ -1,10 +1,13 @@
 """python -m jarvis.voz: serviço de escuta local.
 
-Fase 2a: escuta o microfone e só registra no log cada ativação ("Jarvis"); ainda não transcreve nem responde.
+Fase 2b: ativação ("Jarvis") → recorte da fala (VAD) → Whisper local → comando (Decisão B). Só registra no log;
+ainda não pergunta à API nem responde (fase 2c).
 
     python -m jarvis.voz --listar-microfones
-    python -m jarvis.voz [--microfone "K8"] [--limiar 0.3]
-    python -m jarvis.voz --medir 600          roda 10 min e imprime CPU, RAM, quadros e disparos (JSON)
+    python -m jarvis.voz [--microfone "K8"] [--limiar 0.3] [--cpu]
+    python -m jarvis.voz --medir 600          roda 10 min e imprime CPU, RAM, quadros, disparos e latências (JSON)
+
+O texto transcrito só vai para o log com JARVIS_VOZ_LOG_TEXTO=1, e passa por sanitizar() (CPF/CNPJ mascarados).
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import statistics
 import sys
 import time
 
@@ -20,7 +24,7 @@ from loguru import logger
 
 from jarvis.config import ROOT
 from jarvis.voz import offline
-from jarvis.voz.config import LIMIAR_ATIVACAO, MODELOS_ATIVACAO, pastas
+from jarvis.voz.config import LIMIAR_ATIVACAO, MODELOS_ATIVACAO, WHISPER, pastas
 
 
 def _logs() -> None:
@@ -31,12 +35,21 @@ def _logs() -> None:
     logger.add(ROOT / "logs" / "voz.log", level="INFO", rotation="10 MB", retention="30 days", encoding="utf-8")
 
 
+def _texto_para_log(texto: str) -> str:
+    if os.getenv("JARVIS_VOZ_LOG_TEXTO", "0") != "1":
+        return f"<{len(texto)} caracteres>"
+    from jarvis.core.privacy import sanitizar
+
+    return repr(sanitizar(texto)[:200])
+
+
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="python -m jarvis.voz", description="Escuta local do JARVIS (fase 2a).")
+    ap = argparse.ArgumentParser(prog="python -m jarvis.voz", description="Escuta local do JARVIS (fase 2b).")
     ap.add_argument("--listar-microfones", action="store_true")
     ap.add_argument("--microfone", default=os.getenv("JARVIS_VOZ_MICROFONE", ""),
                     help="parte do nome do microfone (padrão: o do Windows)")
     ap.add_argument("--limiar", type=float, default=LIMIAR_ATIVACAO)
+    ap.add_argument("--cpu", action="store_true", help="Whisper na CPU mesmo com GPU")
     ap.add_argument("--medir", type=float, default=0, metavar="SEGUNDOS")
     args = ap.parse_args(argv)
     _logs()
@@ -50,42 +63,52 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     from jarvis.voz.ativacao import Ativacao
-    from jarvis.voz.baixar import verificar
+    from jarvis.voz.baixar import verificar, verificar_whisper
+    from jarvis.voz.escuta import Escuta
+    from jarvis.voz.transcricao import criar_transcritor
 
     p = pastas()
-    if erros := verificar(p, list(MODELOS_ATIVACAO)):
+    if erros := verificar(p, list(MODELOS_ATIVACAO)) + verificar_whisper(p, WHISPER):
         for e in erros:
             logger.error("modelo de voz: {}", e)
         return 2
 
-    atv = Ativacao(p.ativacao, limiar=args.limiar)
     proc = psutil.Process()
+    transcritor = criar_transcritor(p.whisper(WHISPER), "cpu" if args.cpu else None)
+    escuta = Escuta(Ativacao(p.ativacao, limiar=args.limiar), transcritor)
     proc.cpu_percent(None)
-    t0, quadros, disparos = time.monotonic(), 0, 0
+    t0, quadros, eventos = time.monotonic(), 0, []
     mic = Microfone(escolher(args.microfone))
     try:
         with mic:
-            logger.info("ouvindo só a palavra de ativação (limiar {:.2f})", args.limiar)
+            logger.info("ouvindo (ativação {:.2f}; Whisper {})", args.limiar, transcritor.config)
             for q in mic.quadros():
                 if args.medir and time.monotonic() - t0 >= args.medir:
                     break
                 if q is None:
                     continue
                 quadros += 1
-                if d := atv.processar(q):
-                    disparos += 1
-                    logger.info("ativação: score={:.3f}", d.score)  # nenhum áudio é gravado
+                if ev := escuta.processar(q):
+                    eventos.append(ev)
+                    logger.info("fala: comando={} texto={} fala={:.2f}s espera_fim={:.2f}s whisper={:.3f}s "
+                                "latencia={:.2f}s sem_fala={:.2f}", ev.comando.tipo, _texto_para_log(ev.transcricao.texto),
+                                ev.duracao_fala_s, ev.espera_fim_s, ev.transcricao.segundos, ev.latencia_s,
+                                ev.transcricao.no_speech_prob)
     except KeyboardInterrupt:
         pass
 
     if args.medir:
         cpu_nucleo = proc.cpu_percent(None)  # média desde o início, em % de UM núcleo
         mem = proc.memory_full_info()
+        lat = [e.latencia_s for e in eventos]
         print(json.dumps({
             "segundos": round(time.monotonic() - t0, 1),
+            "whisper": transcritor.config,
             "quadros": quadros,
             "quadros_perdidos": mic.perdidos,
-            "disparos": disparos,
+            "disparos": escuta.disparos,
+            "comandos": {t: sum(e.comando.tipo == t for e in eventos) for t in {e.comando.tipo for e in eventos}},
+            "latencia_mediana_s": round(statistics.median(lat), 3) if lat else None,
             "cpu_pct_de_um_nucleo": round(cpu_nucleo, 2),
             "cpu_pct_do_total": round(cpu_nucleo / psutil.cpu_count(), 2),
             "ram_rss_mb": round(mem.rss / 2**20),

@@ -16,7 +16,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from jarvis.voz.config import MODELOS_ATIVACAO, Pastas, pastas
+from jarvis.voz.config import ARQUIVOS_WHISPER, MODELOS_ATIVACAO, MODELOS_WHISPER, Pastas, pastas
 
 
 def sha256(path: Path) -> str:
@@ -33,13 +33,13 @@ def ler_manifesto(p: Pastas) -> dict:
     return json.loads(p.manifesto.read_text(encoding="utf-8"))
 
 
-def verificar(p: Pastas, nomes: list[str]) -> list[str]:
+def verificar(p: Pastas, nomes: list[str], subpasta: str = "openwakeword") -> list[str]:
     """Problemas encontrados nos modelos pedidos (faltando, fora do manifesto ou com hash diferente)."""
     manifesto = ler_manifesto(p)
     erros = []
     for nome in nomes:
-        arq = p.ativacao / nome
-        reg = manifesto.get(f"openwakeword/{nome}")
+        arq = p.modelos / subpasta / nome
+        reg = manifesto.get(f"{subpasta}/{nome}")
         if not arq.exists():
             erros.append(f"{nome}: ausente (rode python -m jarvis.voz.baixar)")
         elif not reg:
@@ -72,6 +72,31 @@ def baixar(p: Pastas, saida=print) -> dict:
     return manifesto
 
 
+def verificar_whisper(p: Pastas, nome: str) -> list[str]:
+    return verificar(p, ARQUIVOS_WHISPER, subpasta=p.whisper(nome).name)
+
+
+def baixar_whisper(p: Pastas, nome: str, saida=print) -> dict:
+    """Baixa um Whisper convertido do Hugging Face (só os arquivos de ARQUIVOS_WHISPER) e registra no manifesto."""
+    from huggingface_hub import HfApi, snapshot_download
+
+    repo, destino = MODELOS_WHISPER[nome], p.whisper(nome)
+    manifesto = ler_manifesto(p)
+    if not verificar_whisper(p, nome):
+        saida(f"ok      {destino.name}")
+        return manifesto
+    revisao = HfApi().model_info(repo).sha
+    snapshot_download(repo, revision=revisao, local_dir=destino, allow_patterns=ARQUIVOS_WHISPER)
+    for arquivo in ARQUIVOS_WHISPER:
+        arq = destino / arquivo
+        manifesto[f"{destino.name}/{arquivo}"] = {
+            "url": f"https://huggingface.co/{repo}/resolve/{revisao}/{arquivo}", "sha256": sha256(arq),
+            "bytes": arq.stat().st_size, "baixado_em": datetime.now().isoformat(timespec="seconds")}
+    p.manifesto.write_text(json.dumps(manifesto, indent=2, ensure_ascii=False), encoding="utf-8")
+    saida(f"baixado {destino.name} ({sum((destino / a).stat().st_size for a in ARQUIVOS_WHISPER) / 2**20:.0f} MB)")
+    return manifesto
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m jarvis.voz.baixar", description=__doc__.splitlines()[0])
     ap.add_argument("--listar", action="store_true", help="só lista o que está baixado (sem rede)")
@@ -82,7 +107,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{chave}  {reg['bytes'] / 2**20:.1f} MB  {reg['sha256'][:12]}  {reg['baixado_em']}")
         return 0
     baixar(p)
-    erros = verificar(p, list(MODELOS_ATIVACAO))
+    for nome in MODELOS_WHISPER:
+        baixar_whisper(p, nome)
+    erros = verificar(p, list(MODELOS_ATIVACAO)) + [e for n in MODELOS_WHISPER for e in verificar_whisper(p, n)]
     for e in erros:
         print("ERRO", e, file=sys.stderr)
     return 1 if erros else 0

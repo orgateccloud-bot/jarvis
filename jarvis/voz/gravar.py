@@ -77,8 +77,12 @@ def gravar(destino: Path, microfone: str | None) -> None:
             for i, frase in enumerate(frases):
                 n += 1
                 nome = f"{cat}_{i:02d}_{rep}.wav"
-                input(f"[{n}/{total}] Enter e diga: \u201c{frase}\u201d ")
-                audio = sd.rec(int(SEGUNDOS * TAXA), samplerate=TAXA, channels=1, dtype="int16", device=dispositivo)
+                input(f"[{n}/{total}] Enter, espere o \u201cfale\u201d e diga: \u201c{frase}\u201d ")
+                # a grava\u00e7\u00e3o come\u00e7a ANTES do aviso: na 1\u00aa rodada, falas ditas logo ap\u00f3s o Enter sa\u00edram cortadas
+                audio = sd.rec(int((SEGUNDOS + 0.5) * TAXA), samplerate=TAXA, channels=1, dtype="int16",
+                               device=dispositivo)
+                sd.sleep(500)
+                print("   fale")
                 sd.wait()
                 salvar_wav(destino / nome, audio[:, 0])
                 indice[nome] = {"categoria": cat, "frase": frase}

@@ -2,13 +2,14 @@
 
     .venv\\Scripts\\python scripts\\gerar_wavs_teste.py
 
-Saída: tests/fixtures/voz/<nome>.wav, 16 kHz, mono, 16 bits (o formato do serviço de voz). Silêncio e ruído não
-viram arquivo: os testes geram na hora, com semente fixa.
+Saída: tests/fixtures/voz/<nome>.wav, 16 kHz, mono, 16 bits (o formato do serviço de voz), e textos.json com o
+texto de cada um (referência do acerto do Whisper). Silêncio e ruído não viram arquivo: os testes geram na hora.
 """
 
 from __future__ import annotations
 
 import base64
+import json
 
 # só o pwsh do sistema, com argumentos fixos e sem shell
 import subprocess  # nosec B404
@@ -70,6 +71,8 @@ def main() -> int:
     for nome in FRASES:
         wav = DESTINO / f"{nome}.wav"
         print(f"{wav.name}  {wav.stat().st_size / 1024:.0f} KB")
+    textos = {nome: texto for nome, (_voz, texto) in FRASES.items()}
+    (DESTINO / "textos.json").write_text(json.dumps(textos, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return 0
 
 
