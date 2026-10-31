@@ -68,7 +68,7 @@ async def test_consultar_injeta_trechos_e_valida_fontes(montar):
                            "jarvis_conversa")
     assert r.estado == "concluida" and r.modelo == "claude-opus-5-5"
     call = fake.calls[0]
-    assert call["output_config"]["effort"] == "medium" and call["output_config"]["format"]["type"] == "json_schema"
+    assert call["output_config"]["effort"] == "low" and call["output_config"]["format"]["type"] == "json_schema"
     assert "agente tributário do JARVIS" in call["system"] and "J.A.R.V.I.S." not in call["system"]
     assert '<trecho id="T1"' in _enviado(fake) and "Art. 173" in _enviado(fake)
     assert "<cronograma>" not in _enviado(fake)                    # a pergunta não fala da Reforma
@@ -128,7 +128,7 @@ async def test_valores_do_cenario_vem_do_codigo(montar):
     assert r.saida["calculo"] == json.loads(json.dumps(reforma.calcular(p), default=str))
     assert r.saida["analise"] == "A carga sobe para 99%."            # o comentário do modelo fica separado
     assert "8,65% hoje para 28,00%" in r.resumo and "99" not in r.resumo and "99" not in r.resumo_voz
-    assert '"total": 280000.0' in _enviado(fake) and fake.calls[0]["output_config"]["effort"] == "high"
+    assert '"total": 280000.0' in _enviado(fake) and fake.calls[0]["output_config"]["effort"] == "low"
 
 
 async def test_laudo_salvo_no_arquivo(montar, tmp_path):

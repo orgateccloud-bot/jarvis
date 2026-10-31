@@ -184,12 +184,13 @@ O JARVIS comanda agentes subordinados; o usuário comanda o JARVIS. A cadeia é 
 | Tarefa | Claude? | O que faz |
 |---|---|---|
 | `analisar_lancamentos` | não (US$ 0) | Classifica lançamentos de um CSV (`;`, vírgula decimal) e calcula o índice heurístico de risco de autuação (5 a 99%, fórmula do MiniSaaS) com cada fator e os grupos de fracionamento. |
-| `consultar` | Opus 5.5, `medium` | Responde com os trechos da base local, cita lei e artigo e compara com o pós-Reforma quando couber; fonte citada fora dos trechos é marcada. |
-| `comparar_cenarios` | Opus 5.5, `high` | A calculadora local aplica o cronograma da EC 132/2023 e da LC 214/2025 (`jarvis/agentes/tributario/regras/cronograma_reforma.json`); o Claude só comenta. A alíquota de referência (28%) é estimativa. Não cobre o Simples Nacional. |
-| `laudo` | Opus 5.5, `high` | Base normativa, cenários, probabilidade de autuação (índice calculado pelo sistema, nunca pelo modelo) e resumo executivo, salvo em `.md` em `JARVIS-Arquivo\Agentes\tributario\`. |
+| `consultar` | Opus 5.5, `low` | Responde com os trechos da base local, cita lei e artigo e compara com o pós-Reforma quando couber; fonte citada fora dos trechos é marcada. |
+| `comparar_cenarios` | Opus 5.5, `low` | A calculadora local aplica o cronograma da EC 132/2023 e da LC 214/2025 (`jarvis/agentes/tributario/regras/cronograma_reforma.json`); o Claude só comenta. A alíquota de referência (28%) é estimativa. Não cobre o Simples Nacional. |
+| `laudo` | Opus 5.5, `low` | Base normativa, cenários, probabilidade de autuação (índice calculado pelo sistema, nunca pelo modelo) e resumo executivo, salvo em `.md` em `JARVIS-Arquivo\Agentes\tributario\`. |
 
 O agente roda só no Opus (decisão do usuário): trocar o modelo para outra família é recusado, e uma configuração
-antiga é migrada para o Opus 5.5 no boot. Uma chamada ao Claude por tarefa (cerca de US$ 0,04 a 0,18), pelo
+antiga é migrada para o Opus 5.5 no boot. O effort padrão é `low` em todas as tarefas; a configuração do agente pode
+subi-lo (pelo JARVIS, com aprovação). Uma chamada ao Claude por tarefa (cerca de US$ 0,03 a 0,12), pelo
 gateway: CPF, CNPJ e nomes mascarados antes de sair, teto conferido no pior caso (gasto do mês + 12 mil tokens de
 saída) contra o teto geral e o subteto do agente, effort `low` no modo economia e custo no mesmo ledger (`/costs`
 mostra `por_origem`). No teto, as tarefas com Claude param e a análise de lançamentos continua.

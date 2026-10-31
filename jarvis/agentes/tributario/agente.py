@@ -48,7 +48,8 @@ class AgenteTributario(Agente):
     }
     com_claude = frozenset({"consultar", "comparar_cenarios", "laudo"})
     modelos = ("claude-opus",)   # decisão do usuário (31/10/2026): o agente tributário roda só no Opus
-    EFFORT: ClassVar[dict[str, str]] = {"consultar": "medium", "comparar_cenarios": "high", "laudo": "high"}
+    # decisão do usuário (31/10/2026): effort baixo em todas; a configuração do agente pode subir (com aprovação)
+    EFFORT: ClassVar[dict[str, str]] = {"consultar": "low", "comparar_cenarios": "low", "laudo": "low"}
 
     @classmethod
     def config_padrao(cls) -> ConfigAgente:
