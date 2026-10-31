@@ -51,9 +51,11 @@ class FimDeFala:
         self.ultima_voz = len(self.quadros) - 1 if i is not None else None
         self.silencio = 0
 
-    def adicionar(self, quadro: np.ndarray) -> bool:
+    def adicionar(self, quadro: np.ndarray, prob: float | None = None) -> bool:
+        """prob: VAD do quadro, se o chamador já calculou (rodar o VAD duas vezes no mesmo quadro corromperia o
+        estado interno dele)."""
         self.quadros.append(quadro)
-        if self.vad(quadro) >= self.limiar:
+        if (self.vad(quadro) if prob is None else prob) >= self.limiar:
             self.silencio = 0
             self.ultima_voz = len(self.quadros) - 1
             if self.primeira_voz is None:

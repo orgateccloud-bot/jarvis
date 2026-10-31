@@ -60,8 +60,11 @@ def e_comando_de_parar(texto: str) -> bool:
     return bool(t) and len(t.split()) <= 3 and bool(_PARAR.match(t))
 
 
+def sem_acento(texto: str) -> str:
+    t = unicodedata.normalize("NFD", texto or "")
+    return "".join(c for c in t if unicodedata.category(c) != "Mn")
+
+
 def palavras(texto: str) -> list[str]:
     """Minúsculas, sem acento e sem pontuação (mesma normalização do filtro de eco)."""
-    t = unicodedata.normalize("NFD", (texto or "").lower())
-    t = "".join(c for c in t if unicodedata.category(c) != "Mn")
-    return re.sub(r"[^\w]+|_", " ", t).split()
+    return re.sub(r"[^\w]+|_", " ", sem_acento((texto or "").lower())).split()

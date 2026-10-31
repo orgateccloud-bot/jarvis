@@ -4,9 +4,11 @@
 - "Jarvis" sozinho → "Pois não?";
 - "Jarvis, pare" → interrompe;
 - "Jarvis, X" e "Ok Jarvis, X" → pergunta X (o "Ok" na frente de um pedido NÃO zera a conversa);
-- sem o vocativo no começo → nada: o modelo de ativação disparou com outra coisa (2ª etapa contra falsos disparos).
+- sem o vocativo no começo → nada: a fala não era para o JARVIS.
 
-A decisão é feita no texto do Whisper, não no modelo de ativação (que só conhece "jarvis").
+Com o Whisper como ativação (31/10), toda fala curta passa por aqui; por isso o vocativo precisa ser a 1ª palavra,
+ou vir logo depois de um chamamento ("ok", "ei", "oi", "olá", "e aí"). Na voz do usuário, aceitar "Jarvis" até a
+3ª palavra trazia "O Jarvis já chegou?" (ouvido no lugar de "O Jarbas já chegou?") como pergunta.
 """
 
 from __future__ import annotations
@@ -14,12 +16,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from jarvis.voz.texto import corrigir_termos, depois_do_vocativo, e_comando_de_parar, palavras
+from jarvis.voz.texto import corrigir_termos, depois_do_vocativo, e_comando_de_parar, palavras, sem_acento
 
 NOVA_CONVERSA = {"ok", "okay", "oquei", "okei"}
 MAX_NOVA_S = 2.0           # "Ok Jarvis" dito como comando é curto; mais que isso é outra coisa
 LIMIAR_SEM_FALA = 0.6      # no_speech_prob do Whisper acima disso = o trecho não tinha fala (SUPOSIÇÃO, ver 2b)
-PALAVRAS_ANTES = 2         # o vocativo pode vir depois de até 2 palavras ("e aí, Jarvis"; resto do áudio de antes)
+CHAMAMENTOS = [("ok",), ("okay",), ("oquei",), ("okei",), ("ei",), ("hey",), ("oi",), ("ola",), ("e", "ai")]
 
 Tipo = Literal["nova_conversa", "so_jarvis", "parar", "pergunta", "nada"]
 
@@ -39,14 +41,21 @@ def classificar(transcricao: str, duracao_fala_s: float, no_speech_prob: float =
         return Comando("nada")
     if len(pal) == 2 and pal[0] in NOVA_CONVERSA and pal[1] == "jarvis" and duracao_fala_s <= MAX_NOVA_S:
         return Comando("nova_conversa", negar_aprovacao=aprovacao_pendente)
-    if "jarvis" not in pal[:PALAVRAS_ANTES + 1]:
+    if not comeca_pelo_vocativo(pal):
         return Comando("nada")
-    if e_comando_de_parar(depois_do_prefixo(texto)):
+    # sem acento: o Whisper escreve "Jarvis, parê!" (medido na voz do usuário); o HUD não precisa disso
+    if e_comando_de_parar(sem_acento(depois_do_prefixo(texto))):
         return Comando("parar")
     resto = depois_do_vocativo(texto) or ""
     if len(resto) <= 2:
         return Comando("so_jarvis")
     return Comando("pergunta", resto)
+
+
+def comeca_pelo_vocativo(pal: list[str]) -> bool:
+    if pal[:1] == ["jarvis"]:
+        return True
+    return any(tuple(pal[:len(c)]) == c and pal[len(c):len(c) + 1] == ["jarvis"] for c in CHAMAMENTOS)
 
 
 def depois_do_prefixo(texto: str) -> str:

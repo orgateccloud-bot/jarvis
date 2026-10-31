@@ -52,8 +52,10 @@ def test_jarvis_sozinho_parar_e_falso_disparo():
     assert classificar("Jarvis.", 0.6).tipo == "so_jarvis"
     assert classificar("Jarvis, pare.", 0.9).tipo == "parar"
     assert classificar("Travis, pare.", 0.9).tipo == "parar"
+    assert classificar("Jarvis, parê!", 0.9).tipo == "parar"           # grafia do Whisper na voz do usuário
     # o modelo disparou, mas o Whisper não ouviu o vocativo no começo: descarta
-    for fala in ["Os problemas são graves.", "Que horas são?", "o filme do homem de ferro com o jarvis", ""]:
+    for fala in ["Os problemas são graves.", "Que horas são?", "o filme do homem de ferro com o jarvis", "",
+                 "O Jarvis já chegou?", "Então o Jarvis falou"]:   # o vocativo precisa abrir a fala
         assert classificar(fala, 1.5).tipo == "nada"
 
 

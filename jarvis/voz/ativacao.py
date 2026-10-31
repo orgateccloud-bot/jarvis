@@ -93,15 +93,17 @@ class Ativacao:
         self._n += 1
         return 0.0 if self._n <= _AQUECIMENTO else s
 
+    def confirma(self, score: float) -> bool:
+        """O score do quadro passou do limiar E o VAD ouviu voz no trecho da palavra (ruído não tem voz)."""
+        return score >= self.limiar and self.vad.voz_na_palavra() >= self.limiar_vad
+
     def processar(self, quadro: np.ndarray) -> Disparo | None:
         """Um Disparo quando o score passa do limiar com voz no trecho; aí os buffers são zerados (debounce)."""
         s = self.score(quadro)
         self.vad(quadro)  # roda sempre: o histórico do VAD precisa estar em dia quando o score subir
-        if s < self.limiar:
+        if not self.confirma(s):
             return None
         voz = self.vad.voz_na_palavra()
-        if voz < self.limiar_vad:
-            return None
         d = Disparo(s, voz, self._n, tuple(self.vad.historico))
         self.reset()
         return d

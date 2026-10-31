@@ -1,7 +1,7 @@
 """Grava a voz do usuário para medir a ativação (e, na fase 2b, o acerto do Whisper). Fica FORA do git.
 
     python -m jarvis.voz.gravar              grava ~60 frases curtas (Enter antes de cada uma, 3 s cada)
-    python -m jarvis.voz.gravar --avaliar    mede a ativação nas gravações, por categoria e por limiar
+    python -m jarvis.voz.gravar --avaliar    roda a escuta completa nas gravações e compara com o esperado
 
 Destino: JARVIS_VOZ_DIR\\gravacoes (padrão D:\\JARVIS-Voz\\gravacoes), com indice.json (arquivo → frase).
 """
@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 
 from jarvis.voz import offline
-from jarvis.voz.config import QUADRO, TAXA, pastas
+from jarvis.voz.config import TAXA, pastas
 
 SEGUNDOS = 3.0
 # categoria → (frases, repetições). "negativo" inclui as palavras que o reconhecimento confunde com "Jarvis".
@@ -43,9 +43,6 @@ ROTEIRO = {
         "O jardim está bonito hoje.",
     ], 3),
 }
-LIMIARES = (0.2, 0.3, 0.4, 0.5)
-
-
 def salvar_wav(path: Path, audio: np.ndarray) -> None:
     with wave.open(str(path), "wb") as w:
         w.setnchannels(1)
@@ -90,25 +87,41 @@ def gravar(destino: Path, microfone: str | None) -> None:
     print(f"{n} gravações em {destino} (fora do git).")
 
 
+def esperado(categoria: str, frase: str) -> str | None:
+    """O comando que a frase do roteiro deve gerar (None = nenhum: a fala não é para o JARVIS)."""
+    if categoria == "negativo":
+        return None
+    return {"Jarvis.": "so_jarvis", "Ok, Jarvis.": "nova_conversa", "Jarvis, pare.": "parar"}.get(frase, "pergunta")
+
+
 def avaliar(origem: Path) -> dict:
+    """Roda a escuta completa (VAD → Whisper → comando) em cada gravação e compara com o esperado."""
     from jarvis.voz.ativacao import Ativacao
+    from jarvis.voz.config import WHISPER
+    from jarvis.voz.escuta import Escuta
+    from jarvis.voz.transcricao import criar_transcritor
 
     indice = json.loads((origem / "indice.json").read_text(encoding="utf-8"))
-    atv = Ativacao(pastas().ativacao)
+    p = pastas()
+    escuta = Escuta(Ativacao(p.ativacao), criar_transcritor(p.whisper(WHISPER)))
+    escuta.transcritor.transcrever(np.zeros(TAXA, dtype=np.int16))  # aquecimento
     pad = np.zeros(TAXA, dtype=np.int16)  # 1 s de silêncio antes e depois, como numa escuta contínua
-    maximos: dict[str, list[tuple[str, float]]] = {}
+    rel: dict[str, dict] = {}
+    latencias = []
     for nome, reg in sorted(indice.items()):
-        a = np.concatenate([pad, ler_wav(origem / nome), pad])
-        a = a[: len(a) // QUADRO * QUADRO]
-        maximos.setdefault(reg["categoria"], []).append((reg["frase"], max(atv.scores_do_clip(a))))
-    rel = {}
-    for cat, itens in maximos.items():
-        rel[cat] = {f"limiar_{lim}": round(sum(s >= lim for _, s in itens) / len(itens), 3) for lim in LIMIARES}
-        rel[cat]["n"] = len(itens)
-        por_frase: dict[str, list[float]] = {}
-        for frase, s in itens:
-            por_frase.setdefault(frase, []).append(round(s, 3))
-        rel[cat]["scores_por_frase"] = por_frase
+        eventos = escuta.processar_clip(np.concatenate([pad, ler_wav(origem / nome), pad]))
+        latencias += [e.latencia_s for e in eventos]
+        obtidos = [e.comando.tipo for e in eventos if e.comando.tipo != "nada"]
+        alvo = esperado(reg["categoria"], reg["frase"])
+        ok = obtidos == ([] if alvo is None else [alvo])
+        cat = rel.setdefault(reg["categoria"], {"acertos": 0, "n": 0, "erros": []})
+        cat["acertos"] += ok
+        cat["n"] += 1
+        if not ok:
+            cat["erros"].append({"arquivo": nome, "frase": reg["frase"], "obtido": obtidos,
+                                 "ouviu": [e.transcricao.texto for e in eventos]})
+    latencias.sort()
+    rel["latencia_mediana_s"] = round(latencias[len(latencias) // 2], 3) if latencias else None
     return rel
 
 

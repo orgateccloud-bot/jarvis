@@ -1,11 +1,11 @@
 """python -m jarvis.voz: serviço de escuta local.
 
-Fase 2b: ativação ("Jarvis") → recorte da fala (VAD) → Whisper local → comando (Decisão B). Só registra no log;
-ainda não pergunta à API nem responde (fase 2c).
+Fase 2b: recorte da fala (VAD) → Whisper local, que também é a ativação ("Jarvis" no começo da fala) → comando
+(Decisão B). Só registra no log; ainda não pergunta à API nem responde (fase 2c).
 
     python -m jarvis.voz --listar-microfones
     python -m jarvis.voz [--microfone "K8"] [--limiar 0.3] [--cpu]
-    python -m jarvis.voz --medir 600          roda 10 min e imprime CPU, RAM, quadros, disparos e latências (JSON)
+    python -m jarvis.voz --medir 600          roda 10 min e imprime CPU, RAM, falas, comandos e latências (JSON)
 
 O texto transcrito só vai para o log com JARVIS_VOZ_LOG_TEXTO=1, e passa por sanitizar() (CPF/CNPJ mascarados).
 """
@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
     mic = Microfone(escolher(args.microfone))
     try:
         with mic:
-            logger.info("ouvindo (ativação {:.2f}; Whisper {})", args.limiar, transcritor.config)
+            logger.info("ouvindo (ativação pelo Whisper {}; atalho hey_jarvis {:.2f})", transcritor.config, args.limiar)
             for q in mic.quadros():
                 if args.medir and time.monotonic() - t0 >= args.medir:
                     break
@@ -91,9 +91,9 @@ def main(argv: list[str] | None = None) -> int:
                 if ev := escuta.processar(q):
                     eventos.append(ev)
                     logger.info("fala: comando={} texto={} fala={:.2f}s espera_fim={:.2f}s whisper={:.3f}s "
-                                "latencia={:.2f}s sem_fala={:.2f}", ev.comando.tipo, _texto_para_log(ev.transcricao.texto),
-                                ev.duracao_fala_s, ev.espera_fim_s, ev.transcricao.segundos, ev.latencia_s,
-                                ev.transcricao.no_speech_prob)
+                                "latencia={:.2f}s sem_fala={:.2f} atalho={}", ev.comando.tipo,
+                                _texto_para_log(ev.transcricao.texto), ev.duracao_fala_s, ev.espera_fim_s,
+                                ev.transcricao.segundos, ev.latencia_s, ev.transcricao.no_speech_prob, ev.atalho)
     except KeyboardInterrupt:
         pass
 
@@ -106,8 +106,11 @@ def main(argv: list[str] | None = None) -> int:
             "whisper": transcritor.config,
             "quadros": quadros,
             "quadros_perdidos": mic.perdidos,
-            "disparos": escuta.disparos,
-            "comandos": {t: sum(e.comando.tipo == t for e in eventos) for t in {e.comando.tipo for e in eventos}},
+            "falas": escuta.contagem.falas,
+            "falas_curtas_demais": escuta.contagem.curtas_demais,
+            "falas_longas_sem_atalho": escuta.contagem.longas_sem_atalho,
+            "transcritas": escuta.contagem.transcritas,
+            "comandos": escuta.contagem.comandos,
             "latencia_mediana_s": round(statistics.median(lat), 3) if lat else None,
             "cpu_pct_de_um_nucleo": round(cpu_nucleo, 2),
             "cpu_pct_do_total": round(cpu_nucleo / psutil.cpu_count(), 2),
