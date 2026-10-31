@@ -12,7 +12,7 @@ de uma base local.
 | Área | O que faz |
 |---|---|
 | **Roteamento de modelos** | Classificador determinístico (sem LLM): Haiku 5.5 para o simples (esforço `low`), Sonnet 5.5 para o intermediário (`high`), Opus 5.5 para o complexo (`xhigh`) e Fable 5.1 só para o topo da complexidade (`high`, calibrado em ~5% das perguntas). Respostas por regra (hora, data, status) custam zero. Prefixos `/haiku`, `/sonnet`, `/opus`, `/fable` forçam a camada. |
-| **Custo controlado** | Teto mensal (padrão US$ 15): a 80% entra em modo economia, a 100% o Claude pausa. Cache de prompt, resumo automático (compaction) a partir de 60 mil tokens e conversa nova após 30 min parada. Ledger em SQLite com preço oficial por modelo. |
+| **Custo controlado** | Teto mensal (padrão US$ 30): a 80% entra em modo economia, a 100% o Claude pausa. Cache de prompt, resumo automático (compaction) a partir de 60 mil tokens e conversa nova após 30 min parada. Ledger em SQLite com preço oficial por modelo. |
 | **Ferramentas com aprovação** | Status e hardware do PC, processos, abrir programas (lista em `config/apps.json`, editores numa pasta), listar programas instalados e janelas abertas, encerrar processos, ler/buscar arquivos, lembretes (únicos e recorrentes), gestão de disco (analisar, mover reversível, Lixeira), telas do Windows e comandos de lista fixa (`wsl --shutdown`, `ipconfig /flushdns`). Toda ação com efeito mostra um card no HUD e espera "sim". |
 | **Memória** | Ferramenta `memory_20250818` com back-end local (`dados/memories/`): perfil, preferências e decisões sobrevivem entre conversas. CPF/CNPJ mascarados antes de gravar; apagar vai para `.lixeira/`. |
 | **Especialista multiárea** | Base local de leis (CTN, LC 123/2006, Estatuto da OAB, baixadas do Planalto sem trechos revogados) e documentos do usuário, cortados por artigo, com busca BM25 em Python puro. Perguntas tributárias, de OAB ou contábeis sobem no mínimo para o Sonnet e citam lei e artigo. |
@@ -171,7 +171,7 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 
 | Variável | Padrão | Para quê |
 |---|---|---|
-| `JARVIS_BUDGET_USD` | `15` | Teto mensal com o Claude |
+| `JARVIS_BUDGET_USD` | `30` | Teto mensal com o Claude |
 | `JARVIS_MODELO_SIMPLES/MEDIO/COMPLEXO` | Haiku/Sonnet/Opus 5.5 | Modelos de cada camada |
 | `JARVIS_SESSAO_OCIOSA_MIN` | `30` | Minutos parados até começar uma conversa nova |
 | `JARVIS_PASTAS` | pastas pessoais | O que as ferramentas de arquivo podem ler e de onde podem mover (**substitui** o padrão; veja abaixo) |
