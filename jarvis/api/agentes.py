@@ -13,7 +13,7 @@ from fastapi import Path as Caminho
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..agentes.contratos import ID_AGENTE, AtualizacaoAgente, PedidoTarefa
+from ..agentes.contratos import ID_AGENTE, AtualizacaoAgente, ConfigInvalida, PedidoTarefa
 from ..tools import ToolError
 
 TAREFA_ID = r"^[a-f0-9]{16}$"
@@ -80,12 +80,17 @@ def rotas_agentes(orq, exigir_token, tool_ctx) -> APIRouter:
 
     @r.post("/{agente_id}/config")
     async def atualizar(mudanca: AtualizacaoAgente, agente_id: str = Depends(agente)):
-        return orq.atualizar(agente_id, mudanca, "usuario_api")
+        try:
+            return orq.atualizar(agente_id, mudanca, "usuario_api")
+        except ConfigInvalida as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
 
     @r.post("/{agente_id}/config/reverter")
     async def reverter(corpo: Reversao, agente_id: str = Depends(agente)):
         try:
             return orq.reverter(agente_id, corpo.versao, "usuario_api", corpo.motivo)
+        except ConfigInvalida as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
         except KeyError as e:
             raise HTTPException(status_code=404, detail=f"versão {corpo.versao} inexistente") from e
 

@@ -86,6 +86,9 @@ def test_post_config_versiona(settings):
     r = client.post("/agentes/tributario/config", headers=AUTH, json={"teto_mensal_usd": 10, "motivo": "teste"})
     assert r.json() == {"agente": "tributario", "versao": 2, "mudou": {"teto_mensal_usd": {"de": 30.0, "para": 10.0}}}
     assert client.post("/agentes/tributario/config", headers=AUTH, json={"teto_mensal_usd": 10}).status_code == 422
+    so_opus = client.post("/agentes/tributario/config", headers=AUTH,
+                          json={"modelo": "claude-sonnet-5-5", "motivo": "baratear"})
+    assert so_opus.status_code == 422 and "só roda em claude-opus" in so_opus.json()["detail"]
     assert client.post("/agentes/tributario/config/reverter", headers=AUTH,
                        json={"versao": 1, "motivo": "voltar"}).json()["versao"] == 3
     assert client.post("/agentes/tributario/config/reverter", headers=AUTH,

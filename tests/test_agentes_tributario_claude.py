@@ -7,7 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.agentes.contratos import AtualizacaoAgente, Lancamento, ParametrosCenario, PedidoTarefa
+from jarvis.agentes.contratos import (
+    AtualizacaoAgente,
+    ConfigAgente,
+    ConfigInvalida,
+    Lancamento,
+    ParametrosCenario,
+    PedidoTarefa,
+)
 from jarvis.agentes.orquestrador import Orquestrador
 from jarvis.agentes.registro import Registro
 from jarvis.agentes.tributario import reforma
@@ -59,7 +66,7 @@ async def test_consultar_injeta_trechos_e_valida_fontes(montar):
     r = await orq.comandar("tributario", PedidoTarefa(tarefa="consultar", pedido="qual o prazo de decadência do "
                                                                                  "crédito tributário?"),
                            "jarvis_conversa")
-    assert r.estado == "concluida" and r.modelo == "claude-sonnet-5-5"
+    assert r.estado == "concluida" and r.modelo == "claude-opus-5-5"
     call = fake.calls[0]
     assert call["output_config"]["effort"] == "medium" and call["output_config"]["format"]["type"] == "json_schema"
     assert "agente tributário do JARVIS" in call["system"] and "J.A.R.V.I.S." not in call["system"]
@@ -166,3 +173,34 @@ async def test_instrucoes_extras_entram_no_system(montar):
     r = await orq.comandar("tributario", PedidoTarefa(tarefa="consultar", pedido="prazo?"), "usuario_api")
     assert r.versao_config == 2 and "Cite sempre o CTN." in fake.calls[0]["system"]
     assert fake.calls[0]["output_config"]["effort"] == "high"
+
+
+async def test_so_opus(montar):
+    """Decisão do usuário: o agente tributário roda só no Opus; trocar de modelo é recusado."""
+    orq, fake = montar(CONSULTA)
+    estado = orq.observar("tributario")
+    assert estado.config.modelo == "claude-opus-5-5" and estado.versao_config == 1
+    with pytest.raises(ConfigInvalida, match="só roda em claude-opus"):
+        orq.atualizar("tributario", AtualizacaoAgente(modelo="claude-sonnet-5-5", motivo="baratear"), "usuario_api")
+    assert orq.atualizar("tributario", AtualizacaoAgente(modelo="claude-opus-5", motivo="testar"), "x")["versao"] == 2
+    assert orq.observar("tributario").config.modelo == "claude-opus-5"
+    await orq.comandar("tributario", PedidoTarefa(tarefa="consultar", pedido="prazo?"), "usuario_api")
+    assert fake.calls[0]["model"] == "claude-opus-5"
+
+
+def test_config_antiga_migra_para_opus(tmp_path):
+    reg = Registro(tmp_path / "j.db")
+    reg.criar("tributario", "tributario", ConfigAgente(teto_mensal_usd=12))   # v1 de antes da regra: Sonnet
+
+    def boot():
+        return Orquestrador(reg, AuditChain(tmp_path / "audit.jsonl"), CostLedger(tmp_path / "j.db", 30.0),
+                            client=None, salt="s", pasta=tmp_path / "Agentes")
+
+    orq = boot()
+    versoes = reg.versoes("tributario")
+    assert [v.config.modelo for v in versoes] == ["claude-sonnet-5-5", "claude-opus-5-5"]
+    assert versoes[1].origem == "sistema" and versoes[1].config.teto_mensal_usd == 12   # o resto não muda
+    with pytest.raises(ConfigInvalida):
+        orq.reverter("tributario", 1, "usuario_api", "voltar ao Sonnet")
+    boot()
+    assert len(reg.versoes("tributario")) == 2                                      # migra uma vez só

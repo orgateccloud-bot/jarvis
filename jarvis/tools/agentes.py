@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..agentes.contratos import (
     ID_AGENTE,
     AtualizacaoAgente,
+    ConfigInvalida,
     ParametrosCenario,
     PedidoTarefa,
     Regra,
@@ -183,17 +184,20 @@ def gerenciar_agente(p: GerenciarParams, ctx: ToolContext) -> str:
     orq = _orquestrador(ctx)
     if p.agente not in orq.ids():
         raise ToolError(f"Agente desconhecido: {p.agente}. Ativos: {', '.join(orq.ids())}")
-    if p.acao == "atualizar":
-        out = orq.atualizar(p.agente, _mudanca(p), "jarvis_conversa")
-    elif p.acao == "reverter":
-        if p.versao is None:
-            raise ToolError("Para reverter, informe a versão.")
-        try:
-            out = orq.reverter(p.agente, p.versao, "jarvis_conversa", p.motivo)
-        except KeyError as e:
-            raise ToolError(f"Versão {p.versao} não existe.") from e
-    else:
-        out = orq.pausar(p.agente, p.acao == "pausar")
+    try:
+        if p.acao == "atualizar":
+            out = orq.atualizar(p.agente, _mudanca(p), "jarvis_conversa")
+        elif p.acao == "reverter":
+            if p.versao is None:
+                raise ToolError("Para reverter, informe a versão.")
+            try:
+                out = orq.reverter(p.agente, p.versao, "jarvis_conversa", p.motivo)
+            except KeyError as e:
+                raise ToolError(f"Versão {p.versao} não existe.") from e
+        else:
+            out = orq.pausar(p.agente, p.acao == "pausar")
+    except ConfigInvalida as e:
+        raise ToolError(str(e)) from e
     return json.dumps(out, ensure_ascii=False)
 
 

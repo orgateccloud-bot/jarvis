@@ -47,7 +47,12 @@ class AgenteTributario(Agente):
                  "resumo executivo; salvo em .md (usa o Claude).",
     }
     com_claude = frozenset({"consultar", "comparar_cenarios", "laudo"})
+    modelos = ("claude-opus",)   # decisão do usuário (31/10/2026): o agente tributário roda só no Opus
     EFFORT: ClassVar[dict[str, str]] = {"consultar": "medium", "comparar_cenarios": "high", "laudo": "high"}
+
+    @classmethod
+    def config_padrao(cls) -> ConfigAgente:
+        return ConfigAgente(modelo="claude-opus-5-5")
 
     # ---------- apoio ----------
     def _gateway(self):

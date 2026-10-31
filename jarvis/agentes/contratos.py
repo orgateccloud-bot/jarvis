@@ -19,6 +19,10 @@ class TarefaRecusada(Exception):
     A mensagem é escrita pelo código, nunca pelo modelo: pode ir para o HUD e ser falada."""
 
 
+class ConfigInvalida(ValueError):
+    """A configuração pedida não serve para este agente (ex.: modelo fora dos permitidos); nada é gravado."""
+
+
 class _Contrato(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

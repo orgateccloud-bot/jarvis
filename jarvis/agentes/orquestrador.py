@@ -24,6 +24,7 @@ from ..proactive.bus import ProactiveEvent
 from .base import Agente
 from .contratos import (
     AtualizacaoAgente,
+    ConfigInvalida,
     EstadoAgente,
     Ordem,
     Origem,
@@ -84,6 +85,13 @@ class Orquestrador:
                 continue
             if self.registro.criar(tipo, tipo, cls.config_padrao()):
                 logger.info(f"agentes: {tipo} criado (configuração v1)")
+            _, config = self.registro.config(tipo)
+            if not cls.aceita_modelo(config.modelo):   # configuração de antes da regra de modelos do agente
+                padrao = cls.config_padrao().modelo
+                versao = self.registro.nova_versao(
+                    tipo, config.model_copy(update={"modelo": padrao}), "sistema",
+                    f"o {cls.nome} roda só em {', '.join(cls.modelos)}: {config.modelo} trocado por {padrao}")
+                logger.info(f"agentes: {tipo} migrado para {padrao} (v{versao})")
             gateway = GatewayClaude(client, self.ledger, tipo, salt,
                                     lambda agente_id=tipo: self.registro.config(agente_id)[1].teto_mensal_usd)
             recursos = Recursos(claude=gateway if client is not None else None, conhecimento=conhecimento,
@@ -241,6 +249,7 @@ class Orquestrador:
         """Nova versão da configuração (append-only). Sem mudança de fato, nada é gravado."""
         agente = self._agente(agente_id)
         versao, atual = self.registro.config(agente_id)
+        self._conferir_modelo(agente, mudanca.aplicar(atual).modelo)
         diff = mudanca.diff(atual)
         if diff:
             versao = self.registro.nova_versao(agente_id, mudanca.aplicar(atual), origem, mudanca.motivo)
@@ -249,8 +258,16 @@ class Orquestrador:
                                                f"{', '.join(diff)}."))
         return {"agente": agente_id, "versao": versao, "mudou": diff}
 
+    @staticmethod
+    def _conferir_modelo(agente: Agente, modelo: str) -> None:
+        if not agente.aceita_modelo(modelo):
+            raise ConfigInvalida(f"o {agente.nome} só roda em {', '.join(agente.modelos)}; {modelo} não é aceito")
+
     def reverter(self, agente_id: str, versao: int, origem: str, motivo: str) -> dict:
         agente = self._agente(agente_id)
+        alvo = next((v for v in self.registro.versoes(agente_id) if v.versao == versao), None)
+        if alvo is not None:
+            self._conferir_modelo(agente, alvo.config.modelo)
         nova = self.registro.reverter(agente_id, versao, origem, motivo)
         self.publicar(ProactiveEvent(kind="agente", titulo=agente.nome, falar=False,
                                      texto=f"Configuração do {agente.nome} revertida para a da v{versao} (v{nova})."))

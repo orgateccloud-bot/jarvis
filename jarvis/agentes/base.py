@@ -18,6 +18,7 @@ class Agente(ABC):
     versao_codigo: ClassVar[str]
     tarefas: ClassVar[dict[str, str]]                  # nome → descrição (manifesto do JARVIS e /agentes)
     com_claude: ClassVar[frozenset[str]] = frozenset()  # as que chamam o Claude (param no teto)
+    modelos: ClassVar[tuple[str, ...]] = ()            # prefixos de modelo aceitos; vazio = qualquer um
 
     def __init__(self, agente_id: str, recursos: Recursos):
         self.id = agente_id
@@ -26,6 +27,10 @@ class Agente(ABC):
     @classmethod
     def config_padrao(cls) -> ConfigAgente:
         return ConfigAgente()
+
+    @classmethod
+    def aceita_modelo(cls, modelo: str) -> bool:
+        return not cls.modelos or modelo.startswith(cls.modelos)
 
     async def executar(self, pedido: PedidoTarefa, config: ConfigAgente) -> SaidaTarefa:
         """Despacha para tarefa_<nome>; tarefa fora do catálogo é recusada."""
