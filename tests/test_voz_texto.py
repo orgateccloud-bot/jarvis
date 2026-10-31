@@ -7,7 +7,16 @@ from pathlib import Path
 import pytest
 
 from jarvis.voz.comando import classificar
-from jarvis.voz.texto import corrigir_termos, depois_do_vocativo, e_comando_de_parar
+from jarvis.voz.eco import FiltroDeEco
+from jarvis.voz.texto import (
+    NAO,
+    SIM,
+    DivisorDeFrases,
+    corrigir_termos,
+    depois_do_vocativo,
+    e_comando_de_parar,
+    para_fala,
+)
 
 CASOS = json.loads((Path(__file__).parent / "fixtures" / "voz" / "casos.json").read_text(encoding="utf-8"))
 
@@ -63,3 +72,36 @@ def test_ok_jarvis_com_aprovacao_pendente_nega_e_nunca_aprova():
     c = classificar("Ok, Jarvis.", 1.0, aprovacao_pendente=True)
     assert c.tipo == "nova_conversa" and c.negar_aprovacao
     assert not classificar("Ok, Jarvis.", 1.0).negar_aprovacao
+
+
+@pytest.mark.parametrize(("entrada", "saida"), CASOS["paraFala"])
+def test_paridade_para_fala(entrada, saida):
+    assert para_fala(entrada) == saida
+
+
+@pytest.mark.parametrize(("trechos", "frases"), CASOS["divisor"])
+def test_paridade_divisor_de_frases(trechos, frases):
+    saida = []
+    d = DivisorDeFrases(saida.append)
+    for t in trechos:
+        for pedaco in (t[1:] if t.startswith("*") else [t]):  # "*" = chega caractere a caractere
+            d.push(pedaco)
+    d.flush()
+    assert saida == frases
+
+
+@pytest.mark.parametrize(("texto", "sim", "nao"), CASOS["simNao"])
+def test_paridade_sim_nao(texto, sim, nao):
+    assert (bool(SIM.match(texto)), bool(NAO.match(texto))) == (sim, nao)
+
+
+@pytest.mark.parametrize("caso", CASOS["eco"], ids=lambda c: c["ouvido"][:30])
+def test_paridade_filtro_de_eco(caso):
+    agora = [1_000_000.0]
+    f = FiltroDeEco(agora_ms=lambda: agora[0])
+    for linha in caso["lembrar"]:
+        f.lembrar(linha)
+    if caso["terminou"]:
+        f.terminou()
+    agora[0] += caso["passa_ms"]
+    assert f.e_eco(caso["ouvido"], resposta=caso.get("resposta", False)) is caso["eco"]
