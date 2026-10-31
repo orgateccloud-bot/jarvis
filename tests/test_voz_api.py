@@ -138,3 +138,31 @@ def test_resumo_mostra_o_estado_vivo(estado):
     e = EstadoVoz(relogio=lambda: 10.0)
     e.batimento(estado)
     assert e.resumo() == {"ativo": True, "estado": estado, "dono": "servico", "situacao": "iniciando"}
+
+
+def test_mudanca_de_estado_e_nova_conversa_viram_eventos_para_o_hud(settings):
+    client, _ = _app(settings, voz_local=True)
+    eventos = []
+    client.app.state.bus.publish = eventos.append  # registra o que iria para o HUD
+    client.post("/voz/estado", json={"estado": "ouvindo"}, headers=AUTH)
+    client.post("/voz/estado", json={"estado": "ouvindo"}, headers=AUTH)     # igual: não repete
+    client.post("/voz/estado", json={"estado": "falando"}, headers=AUTH)
+    client.post("/sessions/hud/nova", headers=AUTH)
+    assert [(e.kind, e.texto, e.falar) for e in eventos] == [
+        ("voz", "ouvindo", False), ("voz", "falando", False), ("nova_conversa", "hud", False)]
+
+
+def test_processo_de_voz_usa_o_mesmo_python_da_api_sem_janela(monkeypatch):
+    """Na tarefa de logon a API roda em pythonw.exe: o serviço de voz herda o mesmo executável (sem console) e
+    morre junto com ela (--pai)."""
+    import os
+    import subprocess
+    import sys
+
+    chamadas = []
+    sup = Supervisor(EstadoVoz(), popen=lambda *a, **k: chamadas.append((a, k)) or ProcFalso(vive=True))
+    assert sup.comando == [sys.executable, "-m", "jarvis.voz", "--pai", str(os.getpid())]
+    sup._iniciar()
+    (argv,), kw = chamadas[0]
+    assert argv == sup.comando and kw["stdout"] == subprocess.DEVNULL and "shell" not in kw
+    assert kw["creationflags"] == getattr(subprocess, "CREATE_NO_WINDOW", 0)

@@ -51,8 +51,10 @@ class Comando(BaseModel):
 class EstadoVoz:
     """Fonte única de quem é o dono do microfone e de como está o serviço."""
 
-    def __init__(self, relogio: Callable[[], float] = time.monotonic):
+    def __init__(self, relogio: Callable[[], float] = time.monotonic,
+                 ao_mudar: Callable[[str], None] = lambda _estado: None):
         self.relogio = relogio
+        self.ao_mudar = ao_mudar  # avisa o HUD (evento "voz") quando o estado do serviço muda
         self.estado = "iniciando"
         self.ultimo: float | None = None
         self.hud_ate = 0.0
@@ -66,6 +68,8 @@ class EstadoVoz:
         return self.ultimo is not None and self.relogio() - self.ultimo <= BATIMENTO_VIVO_S
 
     def batimento(self, estado: str) -> dict:
+        if estado != self.estado or not self.vivo():
+            self.ao_mudar(estado)
         self.estado, self.ultimo = estado, self.relogio()
         comandos, self.comandos = self.comandos, []
         return {"dono": self.dono(), "comandos": comandos}
@@ -134,7 +138,8 @@ class Supervisor:
                 self.proc.kill()
 
 
-def rotas(estado: EstadoVoz, conv, exigir_token) -> APIRouter:
+def rotas(estado: EstadoVoz, conv, exigir_token, publicar: Callable[[str, str], None] = lambda _k, _t: None
+          ) -> APIRouter:
     r = APIRouter(dependencies=[Depends(exigir_token)])
 
     @r.get("/voz")
@@ -158,6 +163,7 @@ def rotas(estado: EstadoVoz, conv, exigir_token) -> APIRouter:
     @r.post("/sessions/{session_id}/nova")
     async def nova(session_id: str = Caminho(pattern=r"^[A-Za-z0-9_-]{1,64}$")):  # mesmo formato do ChatRequest
         arquivada = await conv.nova_conversa(session_id)
+        publicar("nova_conversa", session_id)  # o HUD aberto limpa a transcrição
         return {"ok": True, "arquivada": arquivada}
 
     return r

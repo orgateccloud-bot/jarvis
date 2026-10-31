@@ -18,7 +18,7 @@ de uma base local.
 | **Especialista multiárea** | Base local de leis (CTN, LC 123/2006, Estatuto da OAB, baixadas do Planalto sem trechos revogados) e documentos do usuário, cortados por artigo, com busca BM25 em Python puro. Perguntas tributárias, de OAB ou contábeis sobem no mínimo para o Sonnet e citam lei e artigo. |
 | **Web e arquivos gerados** | Busca e leitura de páginas (Sonnet/Opus). Arquivos que o sandbox de código gera (CSV, PDF, gráficos) são baixados pela Files API para `JARVIS-Arquivo\Gerados\<data>\`. |
 | **Proatividade** | Monitores de RAM, CPU, disco e orçamento; lembretes; saudação; avisos por voz, no HUD e por notificação do Windows. |
-| **HUD e voz** | React 19 + Vite com cena WebGL2 (galáxia e sol cuja classe estelar muda com o modelo). Voz pelo navegador: mãos livres, palavra de ativação "Jarvis", aprovação por "sim/não" e correção de termos (siglas fiscais, variantes do nome). |
+| **HUD e voz** | React 19 + Vite com cena WebGL2 (galáxia e sol cuja classe estelar muda com o modelo). Voz pelo navegador: mãos livres, palavra de ativação "Jarvis", aprovação por "sim/não" e correção de termos (siglas fiscais, variantes do nome). Ou, com `JARVIS_VOZ_LOCAL=1`, [voz local](#voz-local-sem-o-hud): escuta com o HUD fechado e sem áudio na nuvem. |
 | **Privacidade** | CPF/CNPJ mascarados e nomes pseudonimizados antes de qualquer envio à nuvem; trilha de auditoria encadeada por hash (`dados/audit.jsonl`). |
 
 ## Arquitetura
@@ -119,6 +119,52 @@ parar a instância em execução: `Stop-ScheduledTask -TaskName JARVIS`.
 | `GET /costs` | Gasto do dia e do mês |
 | `GET /audit/verify` | Confere a cadeia de auditoria |
 
+## Voz local (sem o HUD)
+
+Com `JARVIS_VOZ_LOCAL=1`, a API sobe e supervisiona o serviço `python -m jarvis.voz`: o JARVIS escuta e
+responde falando com o HUD fechado, e o áudio não sai do PC. A única chamada à nuvem continua sendo a pergunta ao
+Claude, feita pela API. Com a flag em `0` (padrão), nada disto existe: nem rota, nem processo.
+
+**Instalar uma vez:**
+
+```bat
+.venv\Scripts\pip install -e .[voz,voz-gpu]
+.venv\Scripts\python -m jarvis.voz.baixar
+```
+
+O `baixar` traz os modelos (cerca de 610 MB) para `D:\JARVIS-Voz\modelos` (`JARVIS_VOZ_DIR`) e grava um manifesto
+com SHA-256. Em execução nada é baixado: os modelos carregam da pasta local e o processo de voz só consegue abrir
+conexões para `127.0.0.1`. O `[voz-gpu]` traz o cuBLAS e o cuDNN da NVIDIA (cerca de 2 GB); sem GPU NVIDIA, use só
+`[voz]` e o Whisper roda na CPU, mais devagar.
+
+**Como funciona:**
+
+| Etapa | O que faz |
+|---|---|
+| Escuta | Microfone a 16 kHz; o VAD Silero recorta cada fala. |
+| Ativação | Toda fala curta (até 8 s) vai ao Whisper `small` na GPU (`int8_float16`, cerca de 0,35 s). Ela só vale se começar por "Jarvis" ou por "Ok", "Ei" ou "Oi" seguido de "Jarvis". |
+| Comando | "Jarvis, X" pergunta X; "Jarvis" sozinho responde "Pois não?" e deixa a conversa aberta por 12 s, sem precisar repetir o nome; "Ok, Jarvis" sozinho arquiva a conversa e começa outra ("Nova conversa."); "Jarvis, pare" interrompe. |
+| Resposta | A mesma pergunta do HUD (`/chat/stream`, sessão `hud`), falada frase a frase com a mesma voz do HUD: "Microsoft Daniel", rate 1.05, pitch 0.92. |
+| Confirmação | "Confirma: ...? Diga sim ou não." e a resposta por voz. "Ok, Jarvis" com uma confirmação pendente nega e nunca aprova. |
+| Half-duplex | O microfone fica mudo enquanto o JARVIS fala e por mais 1,5 s. Com fone, `JARVIS_VOZ_INTERROMPER=1` mantém o microfone aberto para "Jarvis, pare" interromper. |
+
+**Com o HUD aberto:** o serviço continua sendo o dono do microfone e do alto-falante. O HUD não ouve nem fala:
+mostra o estado do serviço no sol (ouvindo, pensando, falando), e o sol, o mudo e o Esc viram comandos para o
+serviço. Se o serviço parar, o HUD mostra "Escuta local parada" e oferece o microfone do navegador; o Chrome envia
+esse áudio ao servidor dele, por isso só com o seu clique, e até você devolver.
+
+**Diagnóstico:**
+
+```bat
+.venv\Scripts\python -m jarvis.voz --listar-microfones
+.venv\Scripts\python -m jarvis.voz --sem-api          :: só escuta e registra em logs\voz.log
+.venv\Scripts\python -m jarvis.voz.gravar             :: grava ~60 frases suas (fora do git)
+.venv\Scripts\python -m jarvis.voz.gravar --avaliar   :: mede o acerto nas suas gravações
+```
+
+O log da voz (`logs\voz.log`) guarda só métricas; o texto transcrito só entra com `JARVIS_VOZ_LOG_TEXTO=1`, com CPF
+e CNPJ mascarados. A tarefa de logon da seção anterior já cobre a voz: a API sobe o serviço sozinha.
+
 ## Configuração
 
 Todas as opções estão comentadas em [`.env.example`](.env.example). As principais:
@@ -131,6 +177,10 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 | `JARVIS_PASTAS` | pastas pessoais | O que as ferramentas de arquivo podem ler e de onde podem mover (**substitui** o padrão; veja abaixo) |
 | `JARVIS_ARQUIVO` | `D:\JARVIS-Arquivo` | Destino reversível dos movimentos e dos arquivos gerados |
 | `JARVIS_CONHECIMENTO` | `D:\JARVIS-Conhecimento` | Base de leis e documentos (uma subpasta por área) |
+| `JARVIS_VOZ_LOCAL` | `0` | `1` liga a [voz local](#voz-local-sem-o-hud) (a API sobe o serviço de voz) |
+| `JARVIS_VOZ_DIR` | `D:\JARVIS-Voz` | Modelos de voz e gravações de teste (fora do repositório) |
+| `JARVIS_VOZ_MICROFONE` | o do Windows | Parte do nome do microfone (`--listar-microfones`) |
+| `JARVIS_VOZ_INTERROMPER` | `0` | `1` = modo fone: microfone aberto durante a fala, para "Jarvis, pare" |
 
 > **Atenção: `JARVIS_PASTAS` substitui a lista padrão, não soma a ela.**
 >
@@ -194,6 +244,12 @@ Os testes usam um Claude simulado: nenhum chama a API real nem gasta dinheiro. O
 de verdade (Menu Iniciar, registro e janelas) fica fora da execução padrão. Para rodá-lo:
 `.venv\Scripts\python -m pytest -m windows_real -v`. O CI do GitHub roda tudo isso a
 cada push.
+
+Os testes da voz local usam WAVs sintéticos (vozes Daniel e Maria do Windows, `scripts/gerar_wavs_teste.py`), nunca
+gravações de pessoas, e não chamam o Claude: a integração sobe a API com um Claude simulado. Os que precisam dos
+modelos (marcador `voz_modelos`) são pulados quando eles não estão baixados, como no CI. A paridade do texto falado
+com o HUD é conferida pelos mesmos casos dos dois lados (`tests/fixtures/voz/casos.json`, gerado por
+`node scripts/gerar_casos_voz.mjs`).
 
 ## Estrutura
 

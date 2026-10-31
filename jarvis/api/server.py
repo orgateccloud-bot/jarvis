@@ -31,7 +31,7 @@ from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
 from ..knowledge import KnowledgeBase
-from ..proactive.bus import EventBus, event_source
+from ..proactive.bus import EventBus, ProactiveEvent, event_source
 from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
 from ..tools import ToolContext, manifesto, registry
@@ -81,7 +81,10 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     if settings.voz_local:
         from .voz import EstadoVoz, Supervisor
 
-        voz_estado = EstadoVoz()
+        def publicar_voz(kind: str, texto: str) -> None:
+            bus.publish(ProactiveEvent(kind=kind, titulo="voz", texto=texto, falar=False))
+
+        voz_estado = EstadoVoz(ao_mudar=lambda estado: publicar_voz("voz", estado))
         supervisor = Supervisor(voz_estado) if iniciar_voz else None
 
     @contextlib.asynccontextmanager
@@ -115,7 +118,7 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     if voz_estado is not None:
         from .voz import rotas
 
-        app.include_router(rotas(voz_estado, conv, require_token))
+        app.include_router(rotas(voz_estado, conv, require_token, publicar_voz))
         app.state.voz = voz_estado
 
     @app.get("/health")
