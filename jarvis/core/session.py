@@ -32,6 +32,29 @@ MAX_STEPS = 6          # iterações do loop agêntico por turno
 MAX_JSON_RETRIES = 2   # reemissões quando a entrada de ferramenta chega ilegível
 
 
+def fechar_ferramentas_orfas(history: list[dict]) -> int:
+    """Tira os server_tool_use (code_execution, web_search...) que ficaram sem o bloco de resultado.
+
+    Uma resposta cortada (pause_turn no último passo, max_tokens, conexão que caiu) pode gravar a chamada sem o
+    resultado; a partir daí a API recusa a conversa inteira com 400 ("tool use ... was found without a
+    corresponding ..._tool_result block") e o JARVIS para de responder. Só vale fora de um turno em andamento:
+    no meio do loop, o pause_turn precisa da chamada pendente para retomar. Devolve quantos blocos tirou.
+    """
+    tirados = 0
+    for m in history:
+        if m.get("role") != "assistant" or not isinstance(m.get("content"), list):
+            continue
+        com_resultado = {b.get("tool_use_id") for b in m["content"] if str(b.get("type", "")).endswith("_tool_result")}
+        orfaos = [b for b in m["content"] if b.get("type") == "server_tool_use" and b.get("id") not in com_resultado]
+        if not orfaos:
+            continue
+        m["content"] = [b for b in m["content"] if b not in orfaos]
+        if all(b.get("type") == "thinking" for b in m["content"]):  # sobrou só o pensamento (ou nada)
+            m["content"].append({"type": "text", "text": "(a ferramenta foi interrompida antes do resultado)"})
+        tirados += len(orfaos)
+    return tirados
+
+
 class SessionStore:
     """Persiste cada histórico em dados/sessions/<id>.json. Depois de `idle` sem uso, a conversa é arquivada em
     dados/sessions/arquivo/ e começa outra vazia: o histórico não cresce sem fim (custo) e a continuidade fica
@@ -51,6 +74,8 @@ class SessionStore:
             self._cache[session_id] = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
             if path.exists():
                 self._last[session_id] = datetime.fromtimestamp(path.stat().st_mtime)
+            if n := fechar_ferramentas_orfas(self._cache[session_id]):  # conversa gravada antes da correção
+                logger.warning(f"sessão {session_id}: {n} ferramenta(s) de servidor sem resultado removida(s)")
         return self._cache[session_id]
 
     def rollover_if_idle(self, session_id: str) -> bool:
@@ -178,6 +203,9 @@ class Conversation:
                 history.append({"role": "assistant", "content": [{"type": "text", "text": notice}]})
             completed = True
         finally:
+            # fim do turno: nenhuma chamada de ferramenta de servidor pode ficar sem resultado no histórico
+            if n := fechar_ferramentas_orfas(history):
+                logger.warning(f"turno terminou com {n} ferramenta(s) de servidor sem resultado; removida(s)")
             if not completed:
                 # turno interrompido (cliente desconectou, erro): fecha o histórico de forma válida
                 self._close_dangling(history)
