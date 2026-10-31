@@ -190,14 +190,16 @@ O JARVIS comanda agentes subordinados; o usuário comanda o JARVIS. A cadeia é 
 
 O agente roda só no Opus (decisão do usuário): trocar o modelo para outra família é recusado, e uma configuração
 antiga é migrada para o Opus 5.5 no boot. O effort padrão é `low` em todas as tarefas; a configuração do agente pode
-subi-lo (pelo JARVIS, com aprovação). Uma chamada ao Claude por tarefa (cerca de US$ 0,03 a 0,12), pelo
+subi-lo (pelo JARVIS, com aprovação). Uma chamada ao Claude por tarefa (medido em 31/10/2026: consultar US$ 0,04 a
+0,05, comparar cenários US$ 0,05, laudo US$ 0,09), pelo
 gateway: CPF, CNPJ e nomes mascarados antes de sair, teto conferido no pior caso (gasto do mês + 12 mil tokens de
 saída) contra o teto geral e o subteto do agente, effort `low` no modo economia e custo no mesmo ledger (`/costs`
 mostra `por_origem`). No teto, as tarefas com Claude param e a análise de lançamentos continua.
 
 **Como acionar:** por voz ou texto, "Jarvis, pede ao agente tributário…" (o turno do JARVIS também vai ao Opus 5.5,
-com esforço baixo, inclusive no modo economia, e delega: cerca de US$ 0,02 com o cache de prompt quente e
-US$ 0,10 a 0,12 com ele frio); ou direto pela API:
+com esforço baixo, inclusive no modo economia, e delega). Medido: uma consulta pela voz custa US$ 0,15 com o cache
+de prompt frio (o JARVIS grava cerca de 19 mil tokens de prefixo) e US$ 0,08 com ele quente, e a primeira palavra
+sai em cerca de 20 s, quando o agente termina. Ou direto pela API, sem o custo do JARVIS:
 
 ```bat
 curl -H "Authorization: Bearer %JARVIS_TOKEN%" http://127.0.0.1:8000/agentes
