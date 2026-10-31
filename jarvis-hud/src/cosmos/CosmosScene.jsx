@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react'
 import { FRAG, VERT } from './shaders.js'
 import { fpsAlvo, proximoQuadro } from './pacing.js'
 import { TIERS, hexToRgb } from '../lib/tiers.js'
+import { TRANSICAO_MS, flameLim } from '../spike/params.js'
+
+const SOL_MAIN = { x: 0, y: 0.13, r: 0.105 }
+const easeInOutCubic = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2)
 
 function shader(gl, type, src) {
   const s = gl.createShader(type)
@@ -43,10 +47,10 @@ function noiseTexture(gl) {
  * energyRef: ref 0..1 "chutado" a cada trecho/palavra; decai sozinho
  * statsRef: opcional, recebe { fps, scale } para diagnóstico
  */
-export default function CosmosScene({ state = 'idle', tier = 'regras', alert = false, energyRef, statsRef }) {
+export default function CosmosScene({ state = 'idle', tier = 'regras', alert = false, energyRef, statsRef, sun = SOL_MAIN }) {
   const canvasRef = useRef(null)
-  const target = useRef({ state, tier, alert })
-  target.current = { state, tier, alert }
+  const target = useRef({ state, tier, alert, sun })
+  target.current = { state, tier, alert, sun }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -56,7 +60,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       return
     }
     const names = ['uRes', 'uTime', 'uExpand', 'uSpin', 'uListen', 'uThink', 'uSpeak', 'uEnergy',
-      'uAlert', 'uBoot', 'uTemp', 'uGiant', 'uTint', 'uSun', 'uSunR', 'uWave']
+      'uAlert', 'uBoot', 'uTemp', 'uGiant', 'uTint', 'uSun', 'uSunR', 'uFlameLim', 'uWave']
     // recursos de GPU: criados na montagem e recriados do zero no webglcontextrestored
     let vs, fs, prog, buf, tex, parallel
     let U = null
@@ -133,6 +137,21 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       temp: t0.temp, giant: t0.giant, tint: hexToRgb(t0.galaxy),
       expand: 0, spin: 0, clock: 0,
     }
+    // SPIKE: o sol anda entre repouso e modo palco por interpolação no tempo (mesma curva e duração do CSS dos painéis)
+    const sol = { ...target.current.sun, de: null, para: target.current.sun, t0: 0 }
+    const moverSol = now => {
+      const alvo = target.current.sun
+      if (alvo !== sol.para) Object.assign(sol, { de: { x: sol.x, y: sol.y, r: sol.r }, para: alvo, t0: now })
+      if (!sol.de) return false
+      const p = Math.min(1, (now - sol.t0) / TRANSICAO_MS)
+      const e = easeInOutCubic(p)
+      sol.x = lerp(sol.de.x, sol.para.x, e)
+      sol.y = lerp(sol.de.y, sol.para.y, e)
+      sol.r = lerp(sol.de.r, sol.para.r, e)
+      if (p >= 1) sol.de = null
+      return p < 1
+    }
+
     let raf = 0
     let last = performance.now()
     let marca = last // cadência do limite de quadros (pacing.js)
@@ -155,8 +174,10 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       gl.uniform1f(U.uTemp, cur.temp)
       gl.uniform1f(U.uGiant, cur.giant)
       gl.uniform3fv(U.uTint, cur.tint)
-      gl.uniform2f(U.uSun, 0, mobile ? 0.17 : 0.13)
-      gl.uniform1f(U.uSunR, mobile ? 0.085 : 0.105)
+      const r = mobile ? 0.085 : sol.r
+      gl.uniform2f(U.uSun, mobile ? 0 : sol.x, mobile ? 0.17 : sol.y)
+      gl.uniform1f(U.uSunR, r)
+      gl.uniform1f(U.uFlameLim, flameLim(r))
       // onda de voz: aparece falando e pulsa com a energia de cada trecho
       gl.uniform1f(U.uWave, cur.speak * (0.25 + 0.75 * cur.energy))
       gl.drawArrays(gl.TRIANGLES, 0, 3)
@@ -177,8 +198,8 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
         raf = requestAnimationFrame(frame)
         return
       }
-      // limite de quadros: 30 fps em repouso e escutando, 60 fps pensando ou falando
-      const fps = fpsAlvo(target.current.state)
+      // limite de quadros: 30 fps em repouso e escutando, 60 fps pensando, falando ou com o sol em movimento
+      const fps = moverSol(now) ? 60 : fpsAlvo(target.current.state)
       const prox = proximoQuadro(now, marca, fps)
       if (prox === null) {
         raf = requestAnimationFrame(frame)
