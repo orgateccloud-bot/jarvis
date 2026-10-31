@@ -1,5 +1,5 @@
 """Fase 2b, de ponta a ponta com WAVs sintéticos: recorte da fala (VAD) → Whisper local (que também é a ativação)
-→ comando. "Ok Jarvis" × "Jarvis, ..." (Decisão B), eco, silêncio, ruído e fala longa.
+→ comando. "Ok Jarvis" × "Jarvis, ..." (Decisão B), eco, silêncio, ruído e pedido no meio de conversa.
 
 Sem API e sem rede: a trava de rede fica ligada e nenhuma tentativa pode ser contada. Precisa do extra [voz], do
 faster-whisper e dos modelos (senão é pulado).
@@ -79,15 +79,26 @@ def test_silencio_e_ruido_nao_viram_comando(escuta):
     assert escuta.processar_clip(rng.normal(0, 3000, TAXA * 5).clip(-32768, 32767).astype(np.int16)) == []
 
 
-def test_fala_longa_so_vai_ao_whisper_se_o_modelo_pronto_disparou(escuta, monkeypatch):
-    from jarvis.voz import escuta as mod
+def _aparado(nome: str):
+    """O WAV sem o silêncio que o SAPI deixa nas pontas: as pausas montadas no teste ficam exatas."""
+    with wave.open(str(FIXTURES / f"{nome}.wav"), "rb") as w:
+        x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
+    som = np.flatnonzero(np.abs(x) > 300)
+    return x[som[0]:som[-1] + 1]
 
-    monkeypatch.setattr(mod, "MAX_CURTA_S", 2.0)
-    antes = escuta.contagem.longas_sem_atalho
-    assert escuta.processar_clip(_clip("eco_disco_daniel")) == []        # 4,4 s de fala, sem "hey jarvis"
-    assert escuta.contagem.longas_sem_atalho == antes + 1
-    eventos = escuta.processar_clip(_clip("ok_jarvis_que_horas_daniel"))  # 2,6 s, mas o atalho disparou
-    assert eventos[0].atalho and _comandos(eventos) == [("pergunta", "que horas são?")]
+
+def test_pedido_emendado_na_conversa_ao_redor_e_ouvido(escuta):
+    """31/10: com gente conversando perto, o "Jarvis, que horas são?" emendou na fala dos outros sem a pausa de
+    560 ms, o trecho passou de 8 s e era descartado sem transcrever. Agora vai ao Whisper, e só a frase do pedido
+    segue (a conversa dos outros não vai para a API)."""
+    pausa, pad = np.zeros(int(TAXA * 0.2), dtype=np.int16), np.zeros(TAXA, dtype=np.int16)
+    clip = np.concatenate([pad, _aparado("eco_disco_daniel"), pausa, _aparado("jarvis_que_horas_daniel"), pausa,
+                           _aparado("eco_custo_maria"), pad])   # outra voz continua falando logo depois
+    antes = escuta.contagem.longas
+    eventos = escuta.processar_clip(clip)
+    assert len(eventos) == 1 and eventos[0].duracao_fala_s > 8          # um trecho só, longo
+    assert escuta.contagem.longas == antes + 1
+    assert _comandos(eventos) == [("pergunta", "que horas são?")], eventos[0].transcricao.texto
 
 
 def test_transcricao_adiantada_e_aproveitada_e_pausa_curta_a_descarta(escuta):
@@ -96,17 +107,9 @@ def test_transcricao_adiantada_e_aproveitada_e_pausa_curta_a_descarta(escuta):
     assert ev.adiantada and escuta.contagem.adiantadas == antes[0] + 1        # começou no silêncio e valeu
 
     # "Jarvis." + pausa de 400 ms (mais que o adiantamento, menos que o fim) + "Jarvis, que horas são?"
-    with wave.open(str(FIXTURES / "jarvis_daniel.wav"), "rb") as w:
-        nome = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
     pausa, pad = np.zeros(int(TAXA * 0.4), dtype=np.int16), np.zeros(TAXA, dtype=np.int16)
-    with wave.open(str(FIXTURES / "jarvis_que_horas_daniel.wav"), "rb") as w:
-        pedido = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
 
-    def aparar(x):  # tira o silêncio que o SAPI deixa nas pontas: a pausa fica exatamente em 400 ms
-        som = np.flatnonzero(np.abs(x) > 300)
-        return x[som[0]:som[-1] + 1]
-
-    eventos = escuta.processar_clip(np.concatenate([pad, aparar(nome), pausa, aparar(pedido), pad]))
+    eventos = escuta.processar_clip(np.concatenate([pad, _aparado("jarvis_daniel"), pausa, _aparado("jarvis_que_horas_daniel"), pad]))
     assert escuta.contagem.descartadas > antes[1]                             # o texto adiantado ficou velho
     assert len(eventos) == 1 and "que horas" in eventos[0].transcricao.texto  # uma fala só, inteira
 

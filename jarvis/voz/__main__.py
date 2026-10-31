@@ -119,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
             "quadros_perdidos": mic.perdidos,
             "falas": escuta.contagem.falas,
             "falas_curtas_demais": escuta.contagem.curtas_demais,
-            "falas_longas_sem_atalho": escuta.contagem.longas_sem_atalho,
+            "falas_longas": escuta.contagem.longas,
             "transcritas": escuta.contagem.transcritas,
             "comandos": escuta.contagem.comandos,
             "latencia_mediana_s": round(statistics.median(lat), 3) if lat else None,

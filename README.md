@@ -54,10 +54,11 @@ copy .env.example .env
 cd jarvis-hud && npm ci && npm run build && cd ..
 ```
 
-Edite o `.env` (ao menos a credencial da Anthropic). Opcional, para a base de leis:
+Edite o `.env` (ao menos a credencial da Anthropic). Opcional, para a base de leis (ver
+[Base de conhecimento](#base-de-conhecimento)):
 
 ```bat
-.venv\Scripts\python -m jarvis.knowledge baixar
+.venv\Scripts\python -m jarvis.conhecimento atualizar
 ```
 
 ## Uso
@@ -213,6 +214,46 @@ vira aviso falado no HUD e o resultado fica em `GET /agentes/tarefas/{id}`. `GET
 recalcula o sha256 do resultado e confere o selo na trilha de auditoria. A paridade do núcleo fiscal com o MiniSaaS
 roda com `pytest -m mini` (precisa do Mini na máquina e do pandas).
 
+## Base de conhecimento
+
+A ferramenta `buscar_conhecimento` é a porta única da base (o JARVIS e os agentes leem por ela). Filtros: `area`,
+`uf`, `tipo`, `esfera` e `vigente_em`; cada trecho traz fonte, URL, data da captura, situação e aviso de
+desatualização. A coleta e a indexação não usam a API do Claude.
+
+```
+D:\JARVIS-Conhecimento\
+  _catalogo\*.toml        fontes por biblioteca (só dados); só "aprovado" é baixado, e só o Senhor aprova
+  <área>\<fonte-id>.md    texto capturado, com cabeçalho v2 (fonte, data, vigência, situação, hash)
+  _versoes\<fonte-id>\    versões anteriores, com a vigência fechada (consultadas com vigente_em)
+  _entrada\               páginas salvas à mão pelo navegador (adaptador manual ou site que recusa o coletor)
+  _indice\base.db         índice SQLite FTS5 (incremental; a RAM do JARVIS não cresce com a base)
+  _relatorios\AAAA-MM-DD.md  novos, alterados, sem mudança, falhas e recusas de cada coleta
+```
+
+```bat
+.venv\Scripts\python -m jarvis.conhecimento validar                 :: confere os catálogos
+.venv\Scripts\python -m jarvis.conhecimento status
+.venv\Scripts\python -m jarvis.conhecimento atualizar --seco        :: mostra o que faria, sem gravar
+.venv\Scripts\python -m jarvis.conhecimento atualizar [--biblioteca juridico] [--fonte sv-stf] [--forcar]
+.venv\Scripts\python -m jarvis.conhecimento buscar "súmula vinculante 8" --area juridico
+```
+
+Incluir uma fonte é editar o TOML (sem código): `id`, `titulo`, `tipo`, `esfera`, `uf`, `url`, `adaptador`
+(`html_simples`, `pdf`, `lista_links`, `tabela`, `zip`, `pasta_local`, `manual`), `situacao`, `frequencia`, `corte`
+(`artigo`, `anexo`, `sumula`, `ementa`, `secao`, `pagina`). A coleta só acessa os domínios de `[seguranca]` do
+catálogo, a 1 requisição a cada 2 s por site. Se um site recusar o coletor, salve a página pelo navegador em
+`_entrada\<fonte-id>.htm` e rode de novo. Na biblioteca interna (`esfera = "interno"`), CPF, CNPJ e os nomes de
+`_catalogo\pii_nomes.txt` são mascarados antes de indexar.
+
+Atualização semanal (o Senhor cria; o JARVIS não agenda sozinho), por exemplo aos domingos às 7h, num prompt aberto
+na pasta do projeto:
+
+```bat
+schtasks /Create /TN "JARVIS Conhecimento" /SC WEEKLY /D SUN /ST 07:00 /TR "\"%CD%\.venv\Scripts\python.exe\" -m jarvis.conhecimento atualizar"
+```
+
+Cada fonte respeita a própria `frequencia` (uma fonte mensal conferida há 10 dias fica "em dia").
+
 ## Configuração
 
 Todas as opções estão comentadas em [`.env.example`](.env.example). As principais:
@@ -304,7 +345,7 @@ com o HUD é conferida pelos mesmos casos dos dois lados (`tests/fixtures/voz/ca
 ## Estrutura
 
 ```
-jarvis/            núcleo Python (api, core, tools, proactive, knowledge, agentes)
+jarvis/            núcleo Python (api, core, tools, proactive, conhecimento, voz, agentes)
 jarvis-hud/        interface React + WebGL2 e voz
 tests/             testes do núcleo (Claude simulado)
 _legado/           versões 1 a 3, arquivadas com plano de volta (LEIA-ME.md)

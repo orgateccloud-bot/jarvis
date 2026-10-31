@@ -24,6 +24,7 @@ HUD_DIST = ROOT / "jarvis-hud" / "dist"
 # Só quem abre o HUD por um nome local recebe o token: um site que aponte o próprio domínio para 127.0.0.1
 # (DNS rebinding) chega com outro Host e recebe a página sem ele.
 HOSTS_LOCAIS = {"127.0.0.1", "localhost", "[::1]"}
+from ..conhecimento.base import KnowledgeBase
 from ..core.approvals import Approvals
 from ..core.audit import AuditChain
 from ..core.contracts import ApprovalDecision, ChatRequest
@@ -31,7 +32,6 @@ from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
-from ..knowledge import KnowledgeBase
 from ..proactive.bus import EventBus, ProactiveEvent, event_source
 from ..proactive.monitors import Monitor, run_monitor
 from ..proactive.reminders import ReminderStore
@@ -64,7 +64,7 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
     knowledge = KnowledgeBase(settings.knowledge_dir())
     claude_client = claude_client or anthropic.AsyncAnthropic()
     agentes = build_orquestrador(settings, audit, ledger, agent_client or claude_client, salt, knowledge)
-    tools = registry()
+    tools = registry(knowledge=knowledge)
     if agentes is not None:
         from ..tools.agentes import ferramentas_agentes
 

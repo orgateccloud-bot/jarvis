@@ -2,8 +2,9 @@
 
 Ativação pelo Whisper (decisão de 31/10, depois das gravações do usuário): o modelo pronto "hey jarvis" só pegou
 8 de 28 falas com "Jarvis" na voz dele; o Whisper, com a dica "Jarvis", ouviu o vocativo em 23 de 28. Então toda
-fala curta (até MAX_CURTA_S) é transcrita e só vale se começar pelo vocativo (comando.classificar). O modelo pronto
-fica como atalho: uma fala mais longa só é transcrita se ele disparou nela.
+fala é transcrita e só vale se o vocativo abrir uma frase (comando.classificar). Até 31/10 as falas com mais de 8 s
+só iam ao Whisper se o modelo pronto disparasse, e com conversa ao redor o pedido emendado nelas se perdia sem deixar
+rastro; hoje o modelo pronto só marca `atalho` no Evento.
 
 Fase 2b: devolve o Evento e o chamador só registra no log. Na 2c o Evento vira pergunta à API e resposta falada.
 """
@@ -18,14 +19,13 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from jarvis.voz.ativacao import Ativacao
-from jarvis.voz.comando import Comando, classificar
+from jarvis.voz.comando import FALA_CURTA_S, Comando, classificar
 from jarvis.voz.config import QUADRO
 from jarvis.voz.fala_fim import SEG_QUADRO, SILENCIO_MS, FimDeFala
 from jarvis.voz.transcricao import Transcricao, Transcritor
 
 PREROLL = 6           # quadros antes da 1ª voz (480 ms): o VAD demora um pouco a subir no começo da fala
 MIN_FALA_S = 0.3      # mais curto que isso é estalo, tosse ou batida: nem vai ao Whisper
-MAX_CURTA_S = 8.0     # falas mais longas (conversa, TV) só vão ao Whisper se o modelo pronto disparou nelas
 # Transcrição adiantada: com este silêncio o Whisper já começa, em paralelo com a espera do fim da fala; se a
 # pessoa voltar a falar, o resultado é descartado. Na voz do usuário (31/10) o Whisper levava ~0,55 s e a espera
 # 0,72 s, em sequência (~1,27 s); adiantado, o Whisper fica escondido dentro da espera.
@@ -47,7 +47,7 @@ class Evento:
 class Contagem:
     falas: int = 0          # trechos de voz recortados pelo VAD
     curtas_demais: int = 0
-    longas_sem_atalho: int = 0
+    longas: int = 0         # transcritas com mais de FALA_CURTA_S (conversa ao redor emendada)
     transcritas: int = 0
     adiantadas: int = 0     # transcrições que começaram no silêncio e foram aproveitadas
     descartadas: int = 0    # adiantadas jogadas fora porque a pessoa voltou a falar
@@ -68,7 +68,7 @@ class Escuta:
         self._adiantada: tuple[Future, int | None] | None = None  # (resultado, último quadro com voz naquele ponto)
 
     def processar(self, quadro: np.ndarray) -> Evento | None:
-        s = self.ativacao.score(quadro)   # modelo pronto: só o atalho para falas longas
+        s = self.ativacao.score(quadro)   # modelo pronto: só marca `atalho` no Evento
         p = self.ativacao.vad(quadro)     # um VAD por quadro, compartilhado com o recorte da fala
         if not self.gravando:
             self._preroll.append((quadro, p))
@@ -88,8 +88,7 @@ class Escuta:
         return None
 
     def _vale_transcrever(self) -> bool:
-        d = self.fim.duracao_fala_s
-        return d >= MIN_FALA_S and (d <= MAX_CURTA_S or self._atalho)
+        return self.fim.duracao_fala_s >= MIN_FALA_S
 
     def descartar(self) -> None:
         """Joga fora a fala em andamento: o microfone vai ficar mudo (half-duplex) e o JARVIS vai falar."""
@@ -114,9 +113,7 @@ class Escuta:
         if duracao < MIN_FALA_S:
             c.curtas_demais += 1
             return None
-        if duracao > MAX_CURTA_S and not atalho:
-            c.longas_sem_atalho += 1
-            return None
+        c.longas += duracao > FALA_CURTA_S
         t0 = time.monotonic()
         futuro = adiantada[0] if adiantada else self._fila.submit(self.transcritor.transcrever, audio)
         tr = futuro.result()

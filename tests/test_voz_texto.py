@@ -68,6 +68,20 @@ def test_jarvis_sozinho_parar_e_falso_disparo():
         assert classificar(fala, 1.5).tipo == "nada"
 
 
+@pytest.mark.parametrize(("fala", "duracao", "esperado"), [
+    ("Tá bom. Jarvis, que horas são?", 3.0, ("pergunta", "que horas são?")),             # emendou sem pausa
+    ("Ele vem na segunda, né? Jarvis, que horas são? Mas ele vem cedo.", 9.5, ("pergunta", "que horas são?")),
+    ("Jarvis, que horas são? Tá, mas ele vem na segunda.", 9.5, ("pergunta", "que horas são?")),  # longa: só a frase
+    ("Jarvis, abra o Chrome. Depois pesquise o clima.", 4.0,
+     ("pergunta", "abra o Chrome. Depois pesquise o clima.")),                           # curta: o pedido inteiro
+    ("Ele falou isso. O Jarvis já chegou? Não sei.", 9.5, ("nada", "")),                 # no meio da frase: não
+    ("Vou ali. Jarvis, pare.", 3.0, ("parar", "")),
+])
+def test_vocativo_pode_abrir_qualquer_frase_e_so_ela_segue(fala, duracao, esperado):
+    c = classificar(fala, duracao)
+    assert (c.tipo, c.texto) == esperado
+
+
 def test_ok_jarvis_com_aprovacao_pendente_nega_e_nunca_aprova():
     c = classificar("Ok, Jarvis.", 1.0, aprovacao_pendente=True)
     assert c.tipo == "nova_conversa" and c.negar_aprovacao
