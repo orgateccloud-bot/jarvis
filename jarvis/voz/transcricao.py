@@ -19,6 +19,9 @@ class Transcricao:
 
 
 DICA = "Jarvis"  # hotwords: medido na 2b, o small sem a dica ouvia "Javes" e "já avise" na voz Daniel
+# Teto de tokens pela duração do áudio. Com ruído o Whisper às vezes entra em laço ("dois, três, dois, três..." levou
+# 2,5 s em 31/10, e a fila do Whisper é uma só); fala rápida em português dá uns 6 tokens/s, então 10/s é folga.
+TOKENS_POR_S, TOKENS_FOLGA, TOKENS_MAX = 10, 16, 300
 
 
 class Transcritor:
@@ -40,11 +43,12 @@ class Transcritor:
     def transcrever(self, audio: np.ndarray) -> Transcricao:
         """audio: int16 a 16 kHz, mono."""
         x = audio.astype(np.float32) / 32768.0
+        tokens = min(TOKENS_MAX, TOKENS_FOLGA + int(TOKENS_POR_S * len(x) / 16000))
         t0 = time.perf_counter()
         # beam 1 e temperatura fixa: sem as novas tentativas do Whisper, a latência fica previsível
         segmentos, _ = self.modelo.transcribe(x, language="pt", beam_size=1, temperature=0.0, vad_filter=False,
                                               condition_on_previous_text=False, without_timestamps=True,
-                                              hotwords=self.dica, chunk_length=self.janela)
+                                              hotwords=self.dica, chunk_length=self.janela, max_new_tokens=tokens)
         segmentos = list(segmentos)  # o gerador só decodifica quando é percorrido
         texto = " ".join(s.text.strip() for s in segmentos).strip()
         return Transcricao(
