@@ -336,6 +336,7 @@
 .boot-out { opacity: 0; }
 .boot-brand {
   font-family: var(--font-brand); font-size: clamp(34px, 6vw, 64px); letter-spacing: 0.12em; color: #fff;
+  max-width: calc(100vw - 32px); text-align: center;
   text-shadow: 0 0 30px rgba(255, 200, 120, 0.6);
   animation: rise 900ms var(--ease) both;
 }

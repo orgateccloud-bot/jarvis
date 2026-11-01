@@ -79,7 +79,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
 
         tools |= {t.name: t for t in ferramentas_agentes(agentes.catalogo())}
     return Conversation(
-        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools)),
+        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools),
+                           assistente=settings.assistente),
         rules=RuleResponder(settings.user_name),
         ledger=ledger,
         audit=audit,
@@ -109,7 +110,8 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     agentes = conv.tool_ctx.agentes if conv.tool_ctx else None
     if agentes is not None:
         agentes.publicar = bus.publish   # Etapa 3: fim de tarefa, falha, recusa e configuração vão ao HUD
-    monitor = monitor or Monitor(conv.ledger, conv.tool_ctx.reminders, settings.user_name)
+    monitor = monitor or Monitor(conv.ledger, conv.tool_ctx.reminders, settings.user_name,
+                                 assistente=settings.assistente)
     proactive = settings.proactive if proactive is None else proactive
 
     # Etapa 2: escuta por voz local. Com a flag em 0, nada disto existe (nem rota, nem processo).

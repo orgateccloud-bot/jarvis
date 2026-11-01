@@ -1,5 +1,12 @@
 # J.A.R.V.I.S. 4.0
 
+> **Este é o JARVIS Tributário** (branch `jarvis-tributario`, pasta `D:\01_Projetos_Ativos\jarvis-tributario`,
+> porta **8002**). Em 31/10/2026 o projeto foi separado em dois: o JARVIS principal (branch `main`, porta 8000,
+> com a voz local) e este, com a camada de agentes (Etapa 3: agente tributário) e o painel fiscal do HUD. O nome
+> vem de `JARVIS_ASSISTENTE` (padrão "JARVIS Tributário") no prompt e na saudação, e de
+> `jarvis-hud/src/lib/marca.js` no HUD. O `start-jarvis.bat` deste branch sobe na 8002 e sem a voz local, para não
+> disputar o microfone com o principal.
+
 Assistente pessoal para Windows, conversacional e proativo, que roda no próprio PC e usa **só modelos Claude**
 (Anthropic). Conversa por texto ou voz num HUD cinematográfico, executa ações reais no computador sempre com
 aprovação humana, lembra do usuário entre conversas e responde perguntas jurídicas e fiscais citando lei e artigo

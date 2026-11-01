@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TIERS } from '../lib/tiers.js'
+import { NOME } from '../lib/marca.js'
 
 const PHASE = { idle: 'Em espera', listening: 'Ouvindo', thinking: 'Pensando', speaking: 'Respondendo' }
 
@@ -26,7 +27,7 @@ export default function TopBar({ phase, convMode, tier, online, muted, onToggleM
     <header className="topbar">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true" />
-        <span className="brand-name">JARVIS</span>
+        <span className="brand-name">{NOME}</span>
         <span className="brand-sub">v4 · Claude</span>
       </div>
 
