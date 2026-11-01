@@ -38,8 +38,10 @@ def _gb(v: float) -> str:
 
 class Monitor:
     def __init__(self, ledger: CostLedger, reminders: ReminderStore, user_name: str = "Senhor",
-                 sampler: Callable[[], dict] = sample_system, clock: Callable[[], datetime] = datetime.now):
+                 sampler: Callable[[], dict] = sample_system, clock: Callable[[], datetime] = datetime.now,
+                 assistente: str = "Sistemas"):
         self.ledger = ledger
+        self.assistente = assistente
         self.reminders = reminders
         self.user = user_name
         self.sampler = sampler
@@ -115,7 +117,7 @@ class Monitor:
         extra = f" Atenção: {' e '.join(alertas)}." if alertas else " Todos os sistemas estáveis."
         if pend:
             extra += f" Você tem {len(pend)} lembrete(s) pendente(s)."
-        return ProactiveEvent(kind="saudacao", titulo=saud, texto=f"{saud}, {self.user}. Sistemas online.{extra}")
+        return ProactiveEvent(kind="saudacao", titulo=saud, texto=f"{saud}, {self.user}. {self.assistente} online.{extra}")
 
 
 async def run_monitor(monitor: Monitor, bus: EventBus, interval_s: float = 15.0, toast: bool = True) -> None:

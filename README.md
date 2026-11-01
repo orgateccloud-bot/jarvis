@@ -1,5 +1,12 @@
 # J.A.R.V.I.S. 4.0
 
+> **Este é o JARVIS-TRILHUM** (branch `jarvis-trilhum`, pasta `D:\01_Projetos_Ativos\jarvis-trilhum`, porta
+> **8003**), voltado aos estudos do Trilhum. Desde 01/11/2026 o projeto tem três JARVIS: o principal (branch
+> `main`, porta 8000, com a voz local), o Tributário (`jarvis-tributario`, porta 8002) e este, que parte do
+> principal. O nome vem de `JARVIS_ASSISTENTE` (padrão "JARVIS-TRILHUM") no prompt e na saudação, e de
+> `jarvis-hud/src/lib/marca.js` no HUD. O `start-jarvis.bat` deste branch sobe na 8003 e sem a voz local, para não
+> disputar o microfone com o principal.
+
 Assistente pessoal para Windows, conversacional e proativo, que roda no próprio PC e usa **só modelos Claude**
 (Anthropic). Conversa por texto ou voz num HUD cinematográfico, executa ações reais no computador sempre com
 aprovação humana, lembra do usuário entre conversas e responde perguntas jurídicas e fiscais citando lei e artigo
