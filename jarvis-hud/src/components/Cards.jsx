@@ -1,18 +1,29 @@
 import { Ring, Sparkline } from './Gauges.jsx'
 import { MODEL_TO_TIER, ROUTE_LABEL, ROUTE_TO_TIER, TIERS } from '../lib/tiers.js'
+import { useCard } from '../hooks/useCards.js'
 
 const level = v => (v >= 90 ? 'var(--danger)' : v >= 75 ? 'var(--warn)' : 'var(--aurora-3)')
 const usd = v => `US$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const pct = v => `${(v ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
 
-export function Card({ title, aside, children, className = '' }) {
+// Minimizado, o card fica só com o título (e o `aside`, que já resume o conteúdo). A chave é o `id` ou o título.
+export function Card({ title, aside, children, className = '', id }) {
+  const { minimizado, alternar } = useCard(id || title)
   return (
-    <section className={`card glass ${className}`}>
+    <section className={`card glass ${className} ${minimizado ? 'minimizado' : ''}`}>
       <header className="card-head">
         <h2>{title}</h2>
-        {aside}
+        <div className="card-acoes">
+          {aside}
+          <button type="button" className="card-min" onClick={alternar} aria-expanded={!minimizado}
+            aria-label={minimizado ? `Mostrar o card ${title}` : `Minimizar o card ${title}`}
+            title={minimizado ? 'Mostrar' : 'Minimizar'}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+        </div>
       </header>
-      {children}
+      {!minimizado && children}
     </section>
   )
 }

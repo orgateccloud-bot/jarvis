@@ -15,6 +15,7 @@ import { useJarvis } from './hooks/useJarvis.js'
 import { usePainelFiscal } from './hooks/usePainelFiscal.js'
 import { useConversation } from './hooks/useConversation.js'
 import { useVozLocal } from './hooks/useVozLocal.js'
+import { CardsContexto, useCardsMinimizados } from './hooks/useCards.js'
 import { FASE_DO_SERVICO, avisoDaVoz } from './lib/voice/servico.js'
 import { ROUTE_TO_TIER, TIERS } from './lib/tiers.js'
 
@@ -36,6 +37,7 @@ export default function App() {
   const { sendMessage, energyRef, approve, pushToast } = j
   const [mode, setMode] = useState('auto')
   const [panelsOpen, setPanelsOpen] = useState(false)
+  const cards = useCardsMinimizados()
   const [resting, setResting] = useState(true)
   const devStats = useRef(null) // só em dev: expõe window.__cosmosStill para capturas determinísticas
 
@@ -122,6 +124,8 @@ export default function App() {
           wake={conv.wakeEnabled} onToggleWake={conv.toggleWake} voiceSupported={conv.supported.listen}
           bargeIn={conv.bargeIn} onToggleBargeIn={conv.toggleBargeIn}
           panelsOpen={panelsOpen} onTogglePanels={() => setPanelsOpen(o => !o)}
+          cardsMinimizados={cards.todosMinimizados} onToggleCards={cards.alternarTodosCards}
+          podeLimpar={j.messages.length > 0} onLimpar={j.limparTela}
         />
         {j.online === false && (
           <div className="offline glass" role="alert">
@@ -145,19 +149,21 @@ export default function App() {
           </div>
         )}
         <div className="stage">
-          <div className={`panels ${panelsOpen ? 'open' : ''}`}>
-            <aside className="side side-left" aria-label="Tributário e cliente">
-              <TributarioCard painel={fiscal.tributario} erro={fiscal.erro} atualizando={fiscal.atualizando}
-                onAtualizar={fiscal.atualizarAgora} />
-              <ClienteCard clientes={fiscal.clientes} clienteId={fiscal.clienteId} onEscolher={fiscal.escolher}
-                cliente={fiscal.cliente} erro={fiscal.erro} />
-            </aside>
-            <aside className="side side-right" aria-label="Estado neural, sistema e custos">
-              <NeuralCard neural={j.neural} />
-              <VitalsCard vitals={j.vitals} history={j.history} />
-              <CostCard costs={j.costs} />
-            </aside>
-          </div>
+          <CardsContexto.Provider value={cards}>
+            <div className={`panels ${panelsOpen ? 'open' : ''}`}>
+              <aside className="side side-left" aria-label="Tributário e cliente">
+                <TributarioCard painel={fiscal.tributario} erro={fiscal.erro} atualizando={fiscal.atualizando}
+                  onAtualizar={fiscal.atualizarAgora} />
+                <ClienteCard clientes={fiscal.clientes} clienteId={fiscal.clienteId} onEscolher={fiscal.escolher}
+                  cliente={fiscal.cliente} erro={fiscal.erro} />
+              </aside>
+              <aside className="side side-right" aria-label="Estado neural, sistema e custos">
+                <NeuralCard neural={j.neural} />
+                <VitalsCard vitals={j.vitals} history={j.history} />
+                <CostCard costs={j.costs} />
+              </aside>
+            </div>
+          </CardsContexto.Provider>
           <main className="center">
             <Transcript messages={j.messages} onDecide={decide} />
             <CommandDock
