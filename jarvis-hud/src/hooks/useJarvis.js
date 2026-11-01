@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { decideApproval, getJson, streamChat, streamEvents } from '../lib/api.js'
 import { ROUTE_TO_TIER } from '../lib/tiers.js'
+import { mensagensQueFicam } from '../lib/telaLimpa.js'
 
 const HISTORY = 60
 let seq = 0
@@ -196,8 +197,11 @@ export function useJarvis(callbacks = {}) {
     }
   }, [pushToast, flashAlert])
 
+  // tela limpa: tira as mensagens da tela; o histórico da sessão na API continua (o contexto do JARVIS não muda)
+  const limparTela = useCallback(() => setMessages(mensagensQueFicam), [])
+
   return {
     phase, messages, busy, neural, vitals, history, costs, online, authOk,
-    toasts, dismissToast, pushToast, alertFlash, energyRef, sendMessage, approve,
+    toasts, dismissToast, pushToast, alertFlash, energyRef, sendMessage, approve, limparTela,
   }
 }

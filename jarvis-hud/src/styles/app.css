@@ -70,6 +70,7 @@
 .icon-btn:hover { color: var(--text); border-color: var(--hairline-strong); }
 .icon-btn:active { transform: scale(0.94); }
 .icon-btn[aria-pressed='true'] { color: var(--warn); }
+.icon-btn:disabled { opacity: 0.4; cursor: default; transform: none; }
 .panels-btn { display: none; }
 .clock { color: var(--text-muted); font-size: 13px; margin-left: 4px; }
 
@@ -131,6 +132,19 @@
 .card-head h2 {
   font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-muted);
 }
+/* tela limpa: minimizado, o card fica só com o título e o resumo do `aside` */
+.card-acoes { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.card-min {
+  display: grid; place-items: center; flex: none;
+  width: 22px; height: 22px; border-radius: 6px;
+  background: transparent; border: 1px solid transparent; color: var(--text-faint); cursor: pointer;
+  transition: color var(--fast), border-color var(--fast);
+}
+.card-min:hover, .card-min:focus-visible { color: var(--text); border-color: var(--hairline); }
+.card-min svg { transition: transform var(--fast); }
+.card.minimizado { padding-bottom: 14px; }
+.card.minimizado .card-head { margin-bottom: 0; }
+.card.minimizado .card-min svg { transform: rotate(-90deg); }
 .muted { color: var(--text-muted); }
 .small { font-size: 12px; }
 
@@ -376,6 +390,7 @@
   .status { justify-self: center; padding: 6px 12px; }
   .brand-sub, .net-label, .clock { display: none; }
   .panels-btn { display: grid; }
+  .cards-btn { display: none; } /* aqui os cards já ficam na gaveta; cada um ainda minimiza pelo próprio botão */
   .stage { grid-template-columns: minmax(0, 1fr); }
   .center { grid-column: 1; }
   .panels {
@@ -395,6 +410,10 @@
   .status-sep, .status-model { display: none; }
   .modes { display: none; } /* no celular o modo fica no Auto; prefixos /opus etc. continuam valendo */
   .msg-user { max-width: 88%; }
+  /* a barra não cabe inteira: o nome fica no título da aba e na abertura, e os botões encolhem */
+  .brand-name { display: none; }
+  .topbar-right { gap: 6px; }
+  .topbar-right .icon-btn { width: 30px; height: 30px; }
 }
 
 /* ---------- conversa por voz: sol clicável e legenda ---------- */

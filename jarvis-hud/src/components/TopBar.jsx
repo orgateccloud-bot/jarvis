@@ -18,7 +18,7 @@ const Icon = ({ d, label }) => (
 )
 
 export default function TopBar({ phase, convMode, tier, online, muted, onToggleMute, wake, onToggleWake, voiceSupported,
-  bargeIn, onToggleBargeIn, panelsOpen, onTogglePanels }) {
+  bargeIn, onToggleBargeIn, panelsOpen, onTogglePanels, cardsMinimizados, onToggleCards, podeLimpar, onLimpar }) {
   const now = useClock()
   const t = TIERS[tier] || TIERS.regras
   const label = phase === 'idle' && convMode === 'wake' ? 'Aguardando “Jarvis”' : PHASE[phase] || phase
@@ -58,6 +58,17 @@ export default function TopBar({ phase, convMode, tier, online, muted, onToggleM
               <rect x="3" y="15" width="4" height="6" rx="1.5" /><rect x="17" y="15" width="4" height="6" rx="1.5" /></>} />
           </button>
         )}
+        <button className="icon-btn" onClick={onLimpar} disabled={!podeLimpar}
+          title="Limpar a conversa da tela (o JARVIS continua lembrando; para recomeçar do zero, “Ok, Jarvis”)">
+          <Icon label="limpar a conversa" d={<><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1.1-4.6A8 8 0 1 1 21 12z" />
+            <path d="m10 10 4 4m0-4-4 4" /></>} />
+        </button>
+        <button className="icon-btn cards-btn" onClick={onToggleCards} aria-pressed={cardsMinimizados}
+          title={cardsMinimizados ? 'Mostrar os cards' : 'Minimizar os cards'}>
+          {cardsMinimizados
+            ? <Icon label="mostrar os cards" d={<><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M8 12h8M12 8v8" /></>} />
+            : <Icon label="minimizar os cards" d={<><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M8 12h8" /></>} />}
+        </button>
         <button className="icon-btn" onClick={onToggleMute} aria-pressed={muted}
           title={muted ? 'Ativar voz do JARVIS' : 'Silenciar voz do JARVIS'}>
           {muted
