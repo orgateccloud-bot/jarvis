@@ -119,62 +119,27 @@ def area_note(area: str) -> str:
     )
 
 
-def delegacao_note(agente: str) -> str:
-    """Orientação do turno quando o usuário pede algo a um agente: o JARVIS delega e relata, não responde sozinho."""
-    return (
-        f"[delegação ao agente {agente}] Use comandar_agente (agente={agente}) com o pedido do usuário; não responda "
-        "a pergunta por conta própria. Depois relate o resultado em poucas frases. Se a tarefa ficar em andamento, "
-        "diga que o aviso chega quando terminar e não consulte o status de novo neste turno."
-    )
-
-
-# Restrições de JSON Schema que a saída estruturada não aceita (o Pydantic valida depois, no cliente)
-_SEM_SUPORTE = {"minLength", "maxLength", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf",
-                "minItems", "maxItems", "pattern", "default", "title"}
-
-
-def formato_json(modelo: type) -> dict:
-    """output_config.format a partir de um modelo Pydantic: sem as restrições não suportadas e com
-    additionalProperties false em todo objeto. Os nomes dos campos (chaves de "properties") nunca são filtrados."""
-
-    def limpar(no, nomes: bool = False):
-        if isinstance(no, list):
-            return [limpar(v) for v in no]
-        if not isinstance(no, dict):
-            return no
-        if nomes:  # chaves de properties/$defs são nomes de campos e de modelos, não palavras do esquema
-            return {k: limpar(v) for k, v in no.items()}
-        out = {k: limpar(v, nomes=k in ("properties", "$defs")) for k, v in no.items() if k not in _SEM_SUPORTE}
-        if out.get("type") == "object":
-            out["additionalProperties"] = False
-        return out
-
-    return {"type": "json_schema", "schema": limpar(modelo.model_json_schema())}
-
-
 # Modelos sem fallback de recusa no servidor: a sessão escala para a camada acima.
 NO_SERVER_FALLBACK = {"claude-haiku-5-5"}
 
 
 class ClaudeBrain:
     def __init__(self, max_tokens: int, user_name: str, client: Any | None = None, manifesto: str = "",
-                 compact_at: int = COMPACT_AT, system: str | None = None):
+                 compact_at: int = COMPACT_AT):
         self.max_tokens = max_tokens
-        # system próprio: os agentes (Etapa 3) usam o prompt deles, não a persona do JARVIS
-        self.system = system or SYSTEM_PROMPT.format(nome=user_name, manifesto=manifesto or "- (sem ferramentas)")
+        self.system = SYSTEM_PROMPT.format(nome=user_name, manifesto=manifesto or "- (sem ferramentas)")
         self.compact_at = compact_at
         self.client = client or anthropic.AsyncAnthropic()
 
     def request(self, messages: list[dict], model: str, effort: str,
-                tools: list[dict] | None = None, tool_choice: dict | None = None,
-                formato: dict | None = None) -> dict[str, Any]:
+                tools: list[dict] | None = None, tool_choice: dict | None = None) -> dict[str, Any]:
         params: dict[str, Any] = {
             "model": model,
             "max_tokens": self.max_tokens,
             "system": self.system,
             "messages": messages,
             "thinking": {"type": "adaptive", "display": "summarized"},
-            "output_config": {"effort": effort, **({"format": formato} if formato else {})},
+            "output_config": {"effort": effort},
             "cache_control": {"type": "ephemeral"},
             "context_management": {"edits": [
                 {"type": "compact_20260112", "trigger": {"type": "input_tokens", "value": self.compact_at}},
@@ -191,9 +156,8 @@ class ClaudeBrain:
         return params
 
     async def stream(self, messages: list[dict], model: str, effort: str, tools: list[dict] | None = None,
-                     tool_choice: dict | None = None, formato: dict | None = None
-                     ) -> AsyncIterator[StreamEvent | TurnOutcome]:
-        params = self.request(messages, model, effort, tools, tool_choice, formato)
+                     tool_choice: dict | None = None) -> AsyncIterator[StreamEvent | TurnOutcome]:
+        params = self.request(messages, model, effort, tools, tool_choice)
         try:
             async with self.client.beta.messages.stream(**params) as stream:
                 async for event in stream:

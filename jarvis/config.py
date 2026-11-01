@@ -18,11 +18,6 @@ def _env(name: str, default: str) -> str:
     return os.getenv(name, default).strip()
 
 
-def var_chave_agente(agente_id: str) -> str:
-    """Variável da chave da Anthropic só de um agente: JARVIS_AGENTE_<ID>_API_KEY."""
-    return f"JARVIS_AGENTE_{agente_id.upper()}_API_KEY"
-
-
 class Settings(BaseModel):
     host: str = Field(default_factory=lambda: _env("JARVIS_HOST", "127.0.0.1"))
     port: int = Field(default_factory=lambda: int(_env("JARVIS_PORT", "8000")))
@@ -46,19 +41,6 @@ class Settings(BaseModel):
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
     # Etapa 2: escuta por voz local (microfone → "Jarvis" → Whisper → fala), sem o HUD. Desligada por padrão.
     voz_local: bool = Field(default_factory=lambda: _env("JARVIS_VOZ_LOCAL", "0") == "1")
-    # Painel fiscal do HUD (card tributário e card do cliente). Ligado por padrão; 0 desliga rotas e coleta.
-    painel: bool = Field(default_factory=lambda: _env("JARVIS_PAINEL", "1") != "0")
-    fiscal_intervalo_min: int = Field(default_factory=lambda: int(_env("JARVIS_FISCAL_INTERVALO_MIN", "360")))
-    clientes_intervalo_min: int = Field(default_factory=lambda: int(_env("JARVIS_CLIENTES_INTERVALO_MIN", "1440")))
-    # Etapa 3: agentes subordinados ativos (separados por vírgula); vazio ou 0 desliga a camada inteira
-    agentes: list[str] = Field(default_factory=lambda: [
-        a.strip() for a in _env("JARVIS_AGENTES", "tributario").split(",") if a.strip() and a.strip() != "0"])
-    agentes_espera_s: float = Field(default_factory=lambda: float(_env("JARVIS_AGENTES_ESPERA_S", "20")))
-
-    def chave_agente(self, agente_id: str) -> str:
-        """Chave da Anthropic só do agente ("" = usa a do JARVIS). Lida do ambiente na hora: não é campo, então não
-        aparece no repr nem no model_dump."""
-        return _env(var_chave_agente(agente_id), "")
 
     def tool_roots(self) -> list[Path]:
         """Pastas que as ferramentas podem ler: JARVIS_PASTAS (separadas por ;) ou as pastas pessoais."""
@@ -82,17 +64,9 @@ class Settings(BaseModel):
         """Base de conhecimento do especialista (leis e documentos): JARVIS_CONHECIMENTO ou D:\\JARVIS-Conhecimento."""
         return Path(_env("JARVIS_CONHECIMENTO", "D:\\JARVIS-Conhecimento"))
 
-    def agentes_dir(self) -> Path:
-        """Entregas dos agentes (laudos), uma subpasta por agente: <JARVIS_ARQUIVO>\\Agentes."""
-        return self.archive_dir() / "Agentes"
-
     def voz_dir(self) -> Path:
         """Modelos de voz e gravações de teste, fora do repositório: JARVIS_VOZ_DIR ou D:\\JARVIS-Voz."""
         return Path(_env("JARVIS_VOZ_DIR", "D:\\JARVIS-Voz"))
-
-    def fontes_fiscais(self) -> Path:
-        """Fontes oficiais do card tributário: JARVIS_FONTES_FISCAIS ou config/fontes_fiscais.json."""
-        return Path(_env("JARVIS_FONTES_FISCAIS", str(ROOT / "config" / "fontes_fiscais.json")))
 
     def move_roots(self) -> list[Path]:
         """De onde o JARVIS pode mover/mandar para a Lixeira: pastas pessoais, nunca o projeto nem o arquivo."""

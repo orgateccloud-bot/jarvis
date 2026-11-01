@@ -24,8 +24,6 @@ voz = ["numpy>=1.26", "onnxruntime>=1.18", "sounddevice>=0.5", "faster-whisper>=
        "winrt-runtime>=3; sys_platform == 'win32'",
        "winrt-Windows.Media.SpeechSynthesis; sys_platform == 'win32'",
        "winrt-Windows.Storage.Streams; sys_platform == 'win32'"]
-# Painel fiscal: ler a planilha de clientes em .xlsx (CSV e Google Sheets não precisam disto)
-painel = ["openpyxl>=3.1"]
 # Whisper na GPU NVIDIA (CUDA 12): cuBLAS e cuDNN dos wheels oficiais, carregados por jarvis/voz/cuda.py
 voz-gpu = ["nvidia-cublas-cu12==12.9.2.10", "nvidia-cudnn-cu12==9.*"]
 
@@ -36,19 +34,14 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["jarvis*"]
 
-[tool.setuptools.package-data]
-"jarvis.agentes.tributario" = ["regras/*.json"]
-
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 # o teste de fumaça real (Menu Iniciar, registro e janelas desta máquina) só roda com: pytest -m windows_real
-# a paridade com o MiniSaaS (precisa do Mini na máquina e do pandas) só roda com: pytest -m mini
-addopts = "-m 'not windows_real and not mini'"
+addopts = "-m 'not windows_real'"
 markers = [
     "windows_real: lê o Windows de verdade; fora da execução padrão",
     "voz_modelos: usa os modelos de voz baixados; pulado se faltarem (ex.: no CI)",
-    "mini: compara o núcleo fiscal com o original do MiniSaaS (d:/01_Projetos_Ativos/Mini); fora da execução padrão",
 ]
 
 [tool.ruff]
