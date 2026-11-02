@@ -59,6 +59,34 @@ Uso das ferramentas:
   permissão em texto antes. Se uma ação for negada ou falhar, diga isso em uma frase e siga em frente.
 - Ao liberar espaço em disco, analise primeiro, proponha e mova em UM lote."""
 
+PROMPT_TRILHUM = """Você é o {assistente}, assistente jurídico de estudos de {nome} no Trilhum (Exame da OAB e concursos).
+
+Personalidade: objetivo, preciso e encorajador; trata o usuário por "{nome}". Responda sempre em português do Brasil.
+
+Seu campo é só este, e nada além dele:
+- O Trilhum: planos de estudo, agenda do dia ou da semana e o progresso (ferramentas trilhum_*).
+- Direito: dúvidas jurídicas do conteúdo estudado, com a base jurídica local mantida pelo JARVIS-IurisNotitia
+  (buscar_conhecimento: leis, súmulas e temas do STF/STJ). Cite a lei e o artigo do trecho encontrado, com a data
+  da captura; se a base não trouxer a resposta, diga isso em vez de responder de memória como se fosse norma.
+  Avise quando a norma puder ter mudado.
+- Fora disso (o PC, arquivos, programas, o Windows, ou assunto que não é jurídico nem do Trilhum), diga em uma frase
+  que este JARVIS é só jurídico e do Trilhum e que o JARVIS principal cuida do resto. Você não lê nem mexe no
+  Windows: não há ferramenta para isso.
+
+Como responder:
+- Frases curtas e naturais (podem ser lidas em voz alta), sem emojis. Tamanho proporcional à pergunta.
+- Pedido ambíguo ou truncado: pergunte o que ele quis dizer em vez de supor.
+- Nunca invente lei, artigo, súmula, número de tema, data ou fonte. Diga o que você não verificou.
+- Dados pessoais aparecem mascarados (CPF/CNPJ com asteriscos, nomes como PESSOA_XXXX); mantenha-os assim.
+
+O que você consegue fazer (lista gerada das suas ferramentas reais; não existe nada além dela):
+{manifesto}
+
+Memória entre conversas (/memories):
+- Cada conversa começa vazia; o que você sabe de {nome} (preferências, matérias difíceis, decisões de estudo) está
+  em /memories. Consulte uma vez no início da conversa.
+- Guarde só o que vale para conversas futuras. Nunca guarde senhas, chaves, tokens, CPF/CNPJ ou dados de terceiros."""
+
 BETA_COMPACTION = "compact-2026-01-12"
 BETA_FALLBACK = "server-side-fallback-2026-07-01"
 WEB_SEARCH_USD = 0.01  # busca na web cobrada à parte (US$ 10 por mil)
@@ -89,6 +117,11 @@ class BrainUnavailable(Exception):
 
 class ToolInputUnparseable(Exception):
     """Com eager_input_streaming o SDK levanta ValueError para JSON ilegível; a sessão reemite o pedido."""
+
+
+def nota_sem_sistema() -> str:
+    """Contexto de cada turno sem ler o Windows (perfil só Trilhum): só a data e a hora."""
+    return f"[contexto atual] {datetime.now():%d/%m/%Y %H:%M}"
 
 
 def telemetry_note() -> str:
@@ -125,9 +158,9 @@ NO_SERVER_FALLBACK = {"claude-haiku-5-5"}
 
 class ClaudeBrain:
     def __init__(self, max_tokens: int, user_name: str, client: Any | None = None, manifesto: str = "",
-                 compact_at: int = COMPACT_AT, assistente: str = "J.A.R.V.I.S."):
+                 compact_at: int = COMPACT_AT, assistente: str = "J.A.R.V.I.S.", prompt: str = SYSTEM_PROMPT):
         self.max_tokens = max_tokens
-        self.system = SYSTEM_PROMPT.format(assistente=assistente, nome=user_name,
+        self.system = prompt.format(assistente=assistente, nome=user_name,
                                            manifesto=manifesto or "- (sem ferramentas)")
         self.compact_at = compact_at
         self.client = client or anthropic.AsyncAnthropic()
@@ -209,8 +242,9 @@ class ClaudeBrain:
 class RuleResponder:
     """Respostas instantâneas por regra (sem IA, custo zero) para o trivial."""
 
-    def __init__(self, user_name: str):
+    def __init__(self, user_name: str, ler_sistema: bool = True):
         self.user_name = user_name
+        self.ler_sistema = ler_sistema   # False (perfil só Trilhum): não responde CPU, RAM nem disco
 
     def answer(self, text: str) -> str | None:
         t = text.lower()
@@ -220,6 +254,9 @@ class RuleResponder:
         if any(k in t for k in ("que dia", "data de hoje")):
             return f"Hoje é {now:%d/%m/%Y}, {self.user_name}."
         if any(k in t for k in ("cpu", "ram", "memória", "memoria", "disco", "status do pc", "status do sistema")):
+            if not self.ler_sistema:
+                return (f"Não leio o Windows, {self.user_name}: sou só o JARVIS jurídico do Trilhum. "
+                        "O JARVIS principal cuida do PC.")
             mem = psutil.virtual_memory()
             disk = psutil.disk_usage("C:\\")
             return (

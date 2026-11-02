@@ -175,8 +175,12 @@ class Conversation:
         approvals: Approvals | None = None,
         plano: PlanoJarvis | None = None,
         coach: Callable[[], str | None] | None = None,
+        web: bool = True,
+        contexto: Callable[[], str] = telemetry_note,
     ):
         self.claude = claude
+        self.web = web            # False: sem busca na web e sem o sandbox de código (perfil só Trilhum)
+        self.contexto = contexto  # nota de cada turno; nota_sem_sistema no perfil só Trilhum (não lê o Windows)
         self.rules = rules
         self.ledger = ledger
         self.audit = audit
@@ -237,7 +241,7 @@ class Conversation:
                     "O Claude volta no próximo mês, ou antes se o teto (JARVIS_BUDGET_USD) for aumentado."
                 )
             else:
-                nota = telemetry_note() + (f"\n{area_note(decision.area)}" if decision.area else "")
+                nota = self.contexto() + (f"\n{area_note(decision.area)}" if decision.area else "")
                 if self.coach and not any(m.get("role") == "system" and COACH_MARCA in str(m.get("content"))
                                           for m in history):
                     try:   # uma vez por conversa: depois do rollover o histórico volta vazio e a nota vem de novo
@@ -314,7 +318,7 @@ class Conversation:
             step += 1
             last_step = step == MAX_STEPS
             outcome: TurnOutcome | None = None
-            defs = definitions_for(model, self.tools) if self.tools else None
+            defs = definitions_for(model, self.tools, self.web) if self.tools else None
             try:
                 stream = self.claude.stream(
                     history, model, effort, tools=defs,

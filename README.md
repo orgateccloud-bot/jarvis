@@ -7,6 +7,8 @@
 > `jarvis-hud/src/lib/marca.js` no HUD. O `start-jarvis.bat` deste branch sobe na 8003 e sem a voz local, para não
 > disputar o microfone com o principal.
 >
+> **Só Trilhum e só jurídico (padrão deste branch, `JARVIS_SO_TRILHUM=1`):** este JARVIS cuida só do Trilhum (planos, agenda do dia ou da semana e progresso em concursos e OAB) e do Direito. A inteligência jurídica vem da base que o JARVIS-IurisNotitia abastece (`D:\JARVIS-Conhecimento`). Ele só consulta, e só nas áreas jurídicas (`JARVIS_AREAS`, padrão `juridico,oab,tributario`). Não lê nem mexe no Windows: sem ferramentas de arquivos, disco, programas, processos ou configurações, sem CPU/RAM/disco no contexto, no monitor ou nas respostas por regra, sem `/system/status`, sem busca na web e sem sandbox de código. Pedido fora do campo recebe uma frase indicando o JARVIS principal. `JARVIS_SO_TRILHUM=0` volta ao perfil completo.
+>
 > **Estudos (Trilhum):** as ferramentas `trilhum_agenda`, `trilhum_planos` e `trilhum_plano` leem os planos de `JARVIS_TRILHUM_DIR\planos` e montam a agenda com o próprio app do Trilhum (`jarvis/estudos/agenda_trilhum.mjs` abre o `trilha.html` no jsdom dos testes do Trilhum; precisa do Node). Com a sincronização do Trilhum no `.env` (`JARVIS_TRILHUM_SYNC_*`), a agenda usa o seu cadastro, marca o que já foi feito e `trilhum_progresso` mostra o andamento. Só leitura: perfil e perguntas do app são descartados antes de qualquer resposta.
 >
 > **JARVIS do Trilhum ULTRA (versão 2.2):** uma instância por aluno, com a chave da API, o token de sincronização e os dados dele.

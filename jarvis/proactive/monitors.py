@@ -39,8 +39,9 @@ def _gb(v: float) -> str:
 class Monitor:
     def __init__(self, ledger: CostLedger, reminders: ReminderStore, user_name: str = "Senhor",
                  sampler: Callable[[], dict] = sample_system, clock: Callable[[], datetime] = datetime.now,
-                 assistente: str = "Sistemas"):
+                 assistente: str = "Sistemas", ler_sistema: bool = True):
         self.ledger = ledger
+        self.ler_sistema = ler_sistema   # False (perfil só Trilhum): nada de CPU, RAM ou disco do Windows
         self.assistente = assistente
         self.reminders = reminders
         self.user = user_name
@@ -60,6 +61,13 @@ class Monitor:
 
     def check(self) -> list[ProactiveEvent]:
         now = self.clock()
+        out: list[ProactiveEvent] = []
+        if self.ler_sistema:
+            out += self._sistema(now)
+        self._orcamento_e_lembretes(now, out)
+        return out
+
+    def _sistema(self, now: datetime) -> list[ProactiveEvent]:
         s = self.sampler()
         out: list[ProactiveEvent] = []
 
@@ -88,7 +96,9 @@ class Monitor:
                 ))
         else:
             self._cpu_since = None
+        return out
 
+    def _orcamento_e_lembretes(self, now: datetime, out: list[ProactiveEvent]) -> None:
         budget = self.ledger.state()
         if budget is not self._budget:
             if budget is BudgetState.ECONOMY:
@@ -102,19 +112,20 @@ class Monitor:
         for r in self.reminders.take_due(now):
             out.append(ProactiveEvent(kind="lembrete", nivel="aviso", titulo="Lembrete",
                                       texto=f"{self.user}, lembrete: {r.texto}."))
-        return out
 
     def greeting(self) -> ProactiveEvent:
         h = self.clock().hour
         saud = "Bom dia" if 5 <= h < 12 else "Boa tarde" if h < 18 else "Boa noite"
-        s = self.sampler()
         alertas = []
-        if s["disk"] >= DISK_LIMIT:
-            alertas.append(f"o disco C: está em {s['disk']:.0f}%")
-        if s["ram"] >= RAM_LIMIT:
-            alertas.append(f"a RAM está em {s['ram']:.0f}%")
+        if self.ler_sistema:
+            s = self.sampler()
+            if s["disk"] >= DISK_LIMIT:
+                alertas.append(f"o disco C: está em {s['disk']:.0f}%")
+            if s["ram"] >= RAM_LIMIT:
+                alertas.append(f"a RAM está em {s['ram']:.0f}%")
         pend = self.reminders.pending()
-        extra = f" Atenção: {' e '.join(alertas)}." if alertas else " Todos os sistemas estáveis."
+        ok = " Todos os sistemas estáveis." if self.ler_sistema else " Pronto para os estudos."
+        extra = f" Atenção: {' e '.join(alertas)}." if alertas else ok
         if pend:
             extra += f" Você tem {len(pend)} lembrete(s) pendente(s)."
         return ProactiveEvent(kind="saudacao", titulo=saud, texto=f"{saud}, {self.user}. {self.assistente} online.{extra}")

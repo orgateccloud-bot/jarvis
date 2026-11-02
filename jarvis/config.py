@@ -43,6 +43,11 @@ class Settings(BaseModel):
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
     # Etapa 2: escuta por voz local (microfone → "Jarvis" → Whisper → fala), sem o HUD. Desligada por padrão.
     voz_local: bool = Field(default_factory=lambda: _env("JARVIS_VOZ_LOCAL", "0") == "1")
+    # Perfil só Trilhum (padrão deste branch): só o Trilhum e o Direito, com a base jurídica que o JARVIS-IurisNotitia
+    # abastece; não lê nem mexe no Windows (sem arquivos, disco, programas, CPU/RAM, web nem sandbox). 0 = completo.
+    so_trilhum: bool = Field(default_factory=lambda: _env("JARVIS_SO_TRILHUM", "1") != "0")
+    areas_juridicas: list[str] = Field(
+        default_factory=lambda: [a for a in _env("JARVIS_AREAS", "juridico,oab,tributario").split(",") if a.strip()])
     # Aluno do Trilhum ULTRA (uma instância por aluno): plano do JARVIS (haiku, sonnet, opus, fable ou router; vazio =
     # o dono, sem plano) e o teto mensal = preço do plano x fração / câmbio (JARVIS_BUDGET_USD só pode baixar)
     plano_jarvis: str = Field(default_factory=lambda: _env("JARVIS_PLANO", ""))

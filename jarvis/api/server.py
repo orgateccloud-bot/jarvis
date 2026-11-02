@@ -24,11 +24,19 @@ HUD_DIST = ROOT / "jarvis-hud" / "dist"
 # (DNS rebinding) chega com outro Host e recebe a página sem ele.
 HOSTS_LOCAIS = {"127.0.0.1", "localhost", "[::1]"}
 from ..conhecimento.base import KnowledgeBase
+from ..conhecimento.restrita import BaseRestrita
 from ..core.approvals import Approvals
 from ..core.audit import AuditChain
 from ..core.contracts import ApprovalDecision, ChatRequest
 from ..core.costs import CostLedger
-from ..core.llm import ClaudeBrain, RuleResponder
+from ..core.llm import (
+    PROMPT_TRILHUM,
+    SYSTEM_PROMPT,
+    ClaudeBrain,
+    RuleResponder,
+    nota_sem_sistema,
+    telemetry_note,
+)
 from ..core.planos import plano_jarvis
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
@@ -59,15 +67,19 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
     memory = JarvisMemory(settings.data_dir, salt=salt)
     memory.semear(settings.user_name)
     knowledge = KnowledgeBase(settings.knowledge_dir())
-    tools = registry(knowledge=knowledge)
+    if settings.so_trilhum:   # só as áreas jurídicas da base que o JARVIS-IurisNotitia abastece
+        knowledge = BaseRestrita(knowledge, settings.areas_juridicas)
+    tools = registry(knowledge=knowledge, so_trilhum=settings.so_trilhum)
+    web = not settings.so_trilhum
     if plano:
         tools = {k: v for k, v in tools.items() if k in FERRAMENTAS_ALUNO}
     trilhum = Trilhum(settings.trilhum_dir(), settings.trilhum_plano(),
                       sync=SincronizacaoTrilhum(*settings.trilhum_sync(), salt=salt))
     return Conversation(
-        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools),
-                           assistente=settings.assistente),
-        rules=RuleResponder(settings.user_name),
+        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client,
+                           manifesto=manifesto(tools, web), assistente=settings.assistente,
+                           prompt=PROMPT_TRILHUM if settings.so_trilhum else SYSTEM_PROMPT),
+        rules=RuleResponder(settings.user_name, ler_sistema=not settings.so_trilhum),
         ledger=ledger,
         audit=AuditChain(settings.data_dir / "audit.jsonl"),
         store=SessionStore(settings.data_dir / "sessions", idle=timedelta(minutes=settings.session_idle_min)),
@@ -83,6 +95,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         approvals=Approvals(timeout_s=approval_timeout_s),
         plano=plano,
         coach=provedor_coach(trilhum, plano.nome if plano else "") if settings.coach() else None,
+        web=web,
+        contexto=nota_sem_sistema if settings.so_trilhum else telemetry_note,
     )
 
 
@@ -95,7 +109,7 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     logger.add(settings.data_dir.parent / "logs" / "jarvis.log", rotation="10 MB", retention="30 days")
     bus = EventBus()
     monitor = monitor or Monitor(conv.ledger, conv.tool_ctx.reminders, settings.user_name,
-                                 assistente=settings.assistente)
+                                 assistente=settings.assistente, ler_sistema=not settings.so_trilhum)
     proactive = settings.proactive if proactive is None else proactive
 
     # Etapa 2: escuta por voz local. Com a flag em 0, nada disto existe (nem rota, nem processo).
@@ -189,6 +203,8 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
 
     @app.get("/system/status", dependencies=[Depends(require_token)])
     async def system_status():
+        if settings.so_trilhum:   # perfil só Trilhum: não lê o Windows (o HUD ignora o 404 e esconde os medidores)
+            raise HTTPException(status_code=404, detail="este JARVIS não lê o sistema")
         mem = psutil.virtual_memory()
         boot = datetime.fromtimestamp(psutil.boot_time())
         return {

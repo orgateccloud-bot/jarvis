@@ -63,9 +63,10 @@ class ToolError(Exception):
     """Erro esperado de ferramenta (vira tool_result com is_error, sem stack trace)."""
 
 
-def registry(apps_json: Path | None = None, knowledge: Any = None) -> dict[str, Tool]:
+def registry(apps_json: Path | None = None, knowledge: Any = None, so_trilhum: bool = False) -> dict[str, Tool]:
     """Todas as ferramentas. A lista de programas de abrir_app vem de config/apps.json (ou de apps_json); a
-    descrição de buscar_conhecimento, das áreas da base (knowledge: KnowledgeBase)."""
+    descrição de buscar_conhecimento, das áreas da base (knowledge: KnowledgeBase).
+    so_trilhum: só o Trilhum, a base jurídica, a memória e os lembretes; nada que leia ou mexa no Windows."""
     from .apps import CATALOGO_PADRAO, app_tools, carregar_catalogo
     from .disk import DISK_TOOLS
     from .files import FILE_TOOLS
@@ -76,9 +77,12 @@ def registry(apps_json: Path | None = None, knowledge: Any = None) -> dict[str, 
     from .tasks import TASK_TOOLS
     from .trilhum import TRILHUM_TOOLS
 
-    apps = app_tools(carregar_catalogo(apps_json or CATALOGO_PADRAO))
     conhecimento = KNOWLEDGE_TOOLS if knowledge is None else knowledge_tools(knowledge.areas_em_uso()
                                                                              or knowledge.areas())
+    if so_trilhum:
+        tools = [*TASK_TOOLS, *MEMORY_TOOLS, *conhecimento, *TRILHUM_TOOLS]
+        return {t.name: t for t in tools}
+    apps = app_tools(carregar_catalogo(apps_json or CATALOGO_PADRAO))
     tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS, *conhecimento,
              *TRILHUM_TOOLS, *apps]
     return {t.name: t for t in tools}
@@ -92,21 +96,24 @@ WEB_TOOLS = [
 WEB_CAPABLE = {"claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-5", "claude-opus-4-8"}
 
 
-def definitions_for(model: str, tools: dict[str, Tool]) -> list[dict]:
-    """Lista em ordem fixa (nome) — mudar a ordem invalidaria o cache de prompt."""
+def definitions_for(model: str, tools: dict[str, Tool], web: bool = True) -> list[dict]:
+    """Lista em ordem fixa (nome) — mudar a ordem invalidaria o cache de prompt. web=False: sem busca na web e sem
+    o sandbox de código que vem junto."""
     defs = [tools[name].definition() for name in sorted(tools)]
-    if model in WEB_CAPABLE:
+    if web and model in WEB_CAPABLE:
         defs += WEB_TOOLS
     return defs
 
 
-def manifesto(tools: dict[str, Tool]) -> str:
+def manifesto(tools: dict[str, Tool], web: bool = True) -> str:
     """Lista curta do que o JARVIS consegue fazer, gerada das ferramentas reais (nunca desatualiza)."""
     linhas = []
     for name in sorted(tools):
         t = tools[name]
         frase = t.description.split(". ")[0].rstrip(".")
         linhas.append(f"- {name}: {frase}" + (" (pede confirmação)" if t.needs_approval else ""))
+    if not web:
+        return "\n".join(linhas)
     linhas.append("- web_search / web_fetch: buscar e ler páginas da web (só nos modelos Sonnet, Opus e Fable)")
     linhas.append("- sandbox de código (junto com a web, Sonnet, Opus e Fable): gerar arquivos; os gravados em $OUTPUT_DIR "
                   "são salvos no PC do usuário")
