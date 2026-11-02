@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { FRAG, VERT } from './shaders.js'
+import { VERT, fragDoAstro } from './shaders.js'
 import { fpsAlvo, proximoQuadro } from './pacing.js'
 import { TIERS, hexToRgb } from '../lib/tiers.js'
+import { ASTRO, astroDe } from '../lib/astro.js'
 import { TRANSICAO_MS, flameLim } from '../spike/params.js'
 
 const SOL_MAIN = { x: 0, y: 0.13, r: 0.105 }
@@ -39,15 +40,18 @@ function noiseTexture(gl) {
 }
 
 /**
- * Cosmos em tela cheia atrás da interface: universo em expansão, galáxia espiral e sol flamejante.
+ * Cosmos em tela cheia atrás da interface: universo em expansão, galáxia espiral e o astro do centro
+ * (sol flamejante no JARVIS principal, um planeta nos outros; ver lib/astro.js).
  *
  * state: 'idle' | 'listening' | 'thinking' | 'speaking'
- * tier: chave de TIERS (regras | simples | media | complexa) — define a classe estelar do sol
- * alert: tinge de classe M e dispara a ejeção de massa coronal
+ * tier: chave de TIERS (regras | simples | media | complexa) — define a classe estelar do sol (ou da luz do planeta)
+ * alert: tinge de classe M e dispara a ejeção de massa coronal (no planeta, a aurora)
  * energyRef: ref 0..1 "chutado" a cada trecho/palavra; decai sozinho
  * statsRef: opcional, recebe { fps, scale } para diagnóstico
+ * astro: chave de ASTROS; o padrão é o deste JARVIS (a bancada troca por ?astro=)
  */
-export default function CosmosScene({ state = 'idle', tier = 'regras', alert = false, energyRef, statsRef, sun = SOL_MAIN }) {
+export default function CosmosScene({ state = 'idle', tier = 'regras', alert = false, energyRef, statsRef, sun = SOL_MAIN,
+  astro = ASTRO }) {
   const canvasRef = useRef(null)
   const target = useRef({ state, tier, alert, sun })
   target.current = { state, tier, alert, sun }
@@ -70,7 +74,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
     const createResources = () => {
       canvas.classList.add('cosmos-fallback') // gradiente enquanto o shader compila
       vs = shader(gl, gl.VERTEX_SHADER, VERT)
-      fs = shader(gl, gl.FRAGMENT_SHADER, FRAG)
+      fs = shader(gl, gl.FRAGMENT_SHADER, fragDoAstro(astroDe(astro).id))
       prog = gl.createProgram()
       gl.attachShader(prog, vs)
       gl.attachShader(prog, fs)
@@ -310,7 +314,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       canvas.removeEventListener('webglcontextrestored', onRestored)
       deleteResources()
     }
-  }, [energyRef, statsRef])
+  }, [energyRef, statsRef, astro])
 
   return <canvas ref={canvasRef} className="cosmos" aria-hidden="true" />
 }

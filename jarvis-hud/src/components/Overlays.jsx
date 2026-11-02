@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { astroDe } from '../lib/astro.js'
 
-const LINES = ['Ignição estelar', 'Desdobrando a galáxia', 'Conectando ao Claude', 'Sistemas online']
+const ASTRO = astroDe()
+const LINES = [ASTRO.abertura, 'Desdobrando a galáxia', 'Conectando ao Claude', 'Sistemas online']
 
 /** Textos da sequência de ignição, sincronizados com o boot do cosmos (~3,2 s). */
 export function BootIgnition() {
@@ -40,7 +42,7 @@ export function SunButton({ mode, speaking, onClick, disabled }) {
 }
 
 const HINT = {
-  off: 'Clique no sol para conversar',
+  off: `Clique no ${ASTRO.chamado} para conversar`,
   wake: 'Diga “Jarvis” para começar',
 }
 
