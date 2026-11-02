@@ -227,7 +227,10 @@ class AgendadorAvisos:
     def __init__(self, trilhum: Trilhum, envio: Envio, destinatario: Destinatario | None, registro: RegistroAvisos,
                  plano: str | None = None, antecedencia: timedelta = ANTECEDENCIA, avisar_feriado: bool = True,
                  relogio: Callable[[], datetime] = lambda: datetime.now(FUSO_SP)):
-        self.trilhum, self.envio, self.destinatario, self.registro = trilhum, envio, destinatario, registro
+        self.trilhum, self.envio, self.registro = trilhum, envio, registro
+        # destino fixo (configuração local) ou lido na hora (LeitorAssinante, do Firestore do Trilhum)
+        self.destino: Callable[[], Destinatario | None] = (
+            destinatario if callable(destinatario) else lambda: destinatario)
         self.plano, self.antecedencia, self.avisar_feriado, self.relogio = plano, antecedencia, avisar_feriado, relogio
         self._sem_destino_avisado = False
 
@@ -248,26 +251,30 @@ class AgendadorAvisos:
                              self.antecedencia, self.avisar_feriado)
 
     def verificar(self) -> list[Aviso]:
-        """Manda os avisos que venceram e cujo bloco ainda não começou. Devolve os enviados."""
-        if self.destinatario is None:
-            if not self._sem_destino_avisado:
-                logger.warning("avisos WhatsApp: sem número válido ou sem consentimento (JARVIS_WHATSAPP_NUMERO e "
-                               "JARVIS_WHATSAPP_CONSENTIMENTO); nenhum aviso sai")
-                self._sem_destino_avisado = True
-            return []
+        """Manda os avisos que venceram e cujo bloco ainda não começou. Devolve os enviados. O destino (número e
+        consentimento) só é lido quando há aviso a mandar, e é relido a cada vez: o aluno pode ter parado os avisos."""
         agora = self.agora()
         try:
             pendentes = [a for a in self.avisos(agora.date()) if a.quando <= agora < a.inicio]
         except TrilhumErro as e:
             logger.warning(f"avisos WhatsApp: não li a agenda ({e})")
             return []
+        if not pendentes:
+            return []
+        destino = self.destino()
+        if destino is None:
+            if not self._sem_destino_avisado:
+                logger.warning("avisos WhatsApp: sem número válido, sem consentimento ou sem a ULTRA; nenhum aviso sai")
+                self._sem_destino_avisado = True
+            return []
+        self._sem_destino_avisado = False
         modo = "dry-run" if self.envio.dry_run else "meta"
         enviados = []
         for a in pendentes:
             if not self.registro.reservar(a.chave, modo):
                 continue
             try:
-                self.registro.confirmar(a.chave, self.envio.enviar(self.destinatario.whatsapp, a))
+                self.registro.confirmar(a.chave, self.envio.enviar(destino.whatsapp, a))
             except AvisoErro as e:
                 self.registro.liberar(a.chave)
                 logger.warning(f"aviso WhatsApp {a.chave} não saiu: {e}")
@@ -286,6 +293,17 @@ async def run_avisos(agendador: AgendadorAvisos, intervalo_s: float = INTERVALO_
         await asyncio.sleep(intervalo_s)
 
 
+def destino(settings, trilhum: Trilhum):
+    """Com JARVIS_TRILHUM_UID, o Firestore do Trilhum (assinantes/{uid}) é a fonte: vale o que o aluno ativou ou parou
+    no app, e a configuração local é ignorada. Sem o uid, a configuração local (piloto)."""
+    uid, projeto, credenciais, emulador = settings.firebase()
+    if uid:
+        from .assinante import LeitorAssinante
+
+        return LeitorAssinante(uid, projeto, trilhum.pasta / "functions" / "node_modules", credenciais, emulador)
+    return Destinatario.da_config(*settings.whatsapp_destino())
+
+
 def montar(settings, trilhum: Trilhum, dry_run: bool = False) -> AgendadorAvisos:
     """O agendador com a configuração local. Sem token e id do número da Meta, o envio é dry-run."""
     token, numero_id, modelo, idioma, versao = settings.meta_whatsapp()
@@ -293,8 +311,7 @@ def montar(settings, trilhum: Trilhum, dry_run: bool = False) -> AgendadorAvisos
         envio: Envio = EnvioDryRun()
     else:
         envio = EnvioMetaCloud(token, numero_id, modelo or MODELO_PADRAO, idioma or "pt_BR", versao or META_VERSAO)
-    return AgendadorAvisos(trilhum, envio, Destinatario.da_config(*settings.whatsapp_destino()),
-                           RegistroAvisos(settings.db_path), plano=settings.trilhum_plano() or None,
+    return AgendadorAvisos(trilhum, envio, destino(settings, trilhum), RegistroAvisos(settings.db_path), plano=settings.trilhum_plano() or None,
                            antecedencia=timedelta(minutes=settings.whatsapp_antecedencia_min()),
                            avisar_feriado=settings.whatsapp_feriado())
 

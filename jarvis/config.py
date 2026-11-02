@@ -57,8 +57,15 @@ class Settings(BaseModel):
 
     def whatsapp_destino(self) -> tuple[str, str]:
         """Número e data do consentimento (LGPD) do aluno. No Trilhum ficam em assinantes/{uid}.whatsapp e
-        whatsappConsentimento (Firestore); por enquanto, configuração local. Lidos na hora: fora do repr."""
+        whatsappConsentimento (Firestore); sem JARVIS_TRILHUM_UID, valem estes. Lidos na hora: fora do repr."""
         return _env("JARVIS_WHATSAPP_NUMERO", ""), _env("JARVIS_WHATSAPP_CONSENTIMENTO", "")
+
+    def firebase(self) -> tuple[str, str, str, str]:
+        """Firestore do Trilhum (assinantes/{uid}, só leitura): uid do aluno, projeto, arquivo da conta de serviço
+        (fora do Git) e, no modo teste, o emulador local (127.0.0.1:8085, projeto demo-trilhum). Com o uid, o número e
+        o consentimento vêm de lá e a configuração local é ignorada."""
+        return (_env("JARVIS_TRILHUM_UID", ""), _env("JARVIS_FIREBASE_PROJETO", "trilha-estudos-2026"),
+                _env("JARVIS_FIREBASE_CREDENCIAIS", ""), _env("JARVIS_FIRESTORE_EMULADOR", ""))
 
     def whatsapp_dry_run(self) -> bool:
         """1 (padrão) = os avisos só vão para o log, mesmo com a conta da Meta configurada."""

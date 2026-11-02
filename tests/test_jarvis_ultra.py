@@ -345,3 +345,105 @@ def test_falha_na_meta_libera_para_tentar_de_novo(pasta, tmp_path):
     assert "token-meta" not in str(e.value) and NUMERO not in str(e.value)
     with pytest.raises(ValueError):
         EnvioMetaCloud("t", "../outro")
+
+
+# ── 5. número e consentimento do Firestore do Trilhum ────────
+class FirestoreFalso:
+    """No lugar do Node com o firebase-admin: guarda as chamadas e devolve o registro do assinante."""
+
+    def __init__(self, registro=None, falha=False):
+        self.chamadas, self.falha = [], falha
+        self.registro = registro if registro is not None else {
+            "existe": True, "plano": "ultra", "whatsapp": NUMERO, "whatsappConsentimento": "2026-11-01T13:00:00.000Z"}
+
+    def __call__(self, argv, timeout_s, entrada, ambiente):
+        from jarvis.estudos.trilhum import TrilhumErro
+
+        self.chamadas.append((argv, json.loads(entrada), ambiente))
+        if self.falha:
+            raise TrilhumErro("não li o assinante no Firestore: PERMISSION_DENIED")
+        return json.dumps(self.registro)
+
+
+def _leitor(tmp_path, fs, emulador="127.0.0.1:8085", **kw):
+    from jarvis.estudos.assinante import LeitorAssinante
+
+    (tmp_path / "nm" / "firebase-admin").mkdir(parents=True, exist_ok=True)
+    return LeitorAssinante("AbC123uid", "demo-trilhum", tmp_path / "nm", emulador=emulador, node="node",
+                           executar=fs, **kw)
+
+
+def test_leitor_do_firestore_le_numero_e_consentimento(tmp_path, monkeypatch):
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "nao-pode-vazar.json")
+    fs = FirestoreFalso()
+    agora = [0.0]
+    leitor = _leitor(tmp_path, fs, relogio=lambda: agora[0])
+    d = leitor.ler()
+    assert d.whatsapp == NUMERO and d.whatsappConsentimento == datetime(2026, 11, 1, 13, 0, tzinfo=UTC)
+    argv, entrada, ambiente = fs.chamadas[0]
+    assert argv[1].endswith("assinante_trilhum.mjs") and entrada == {"uid": "AbC123uid", "projeto": "demo-trilhum"}
+    assert ambiente["FIRESTORE_EMULATOR_HOST"] == "127.0.0.1:8085" and "GOOGLE_APPLICATION_CREDENTIALS" not in ambiente
+    leitor.ler()
+    assert len(fs.chamadas) == 1          # cache
+    agora[0] = 301.0
+    leitor.ler()
+    assert len(fs.chamadas) == 2          # relido: "Parar avisos" vale em minutos
+
+
+@pytest.mark.parametrize("registro", [
+    {"existe": False},
+    {"existe": True, "plano": "basica", "whatsapp": NUMERO, "whatsappConsentimento": "2026-11-01T13:00:00Z"},
+    {"existe": True, "plano": "ultra", "whatsapp": None, "whatsappConsentimento": None},   # parou os avisos
+    {"existe": True, "plano": "ultra", "whatsapp": NUMERO, "whatsappConsentimento": None},
+])
+def test_leitor_fecha_sem_ultra_numero_ou_consentimento(tmp_path, registro):
+    assert _leitor(tmp_path, FirestoreFalso(registro)).ler() is None
+
+
+def test_leitor_fecha_na_falha_e_valida_a_configuracao(tmp_path):
+    from jarvis.estudos.assinante import LeitorAssinante
+    from jarvis.estudos.trilhum import TrilhumErro
+
+    assert _leitor(tmp_path, FirestoreFalso(falha=True))() is None   # para o agendador: falha = nenhum aviso
+    with pytest.raises(TrilhumErro, match="PERMISSION_DENIED"):
+        _leitor(tmp_path, FirestoreFalso(falha=True)).ler()
+    nm = tmp_path / "nm"
+    casos = {"uid/../x": "JARVIS_TRILHUM_UID", "": "JARVIS_TRILHUM_UID"}
+    for uid, msg in casos.items():
+        assert msg in LeitorAssinante(uid, "demo-trilhum", nm, emulador="127.0.0.1:8085", node="node").problema()
+    assert "local" in LeitorAssinante("u1", "demo-trilhum", nm, emulador="10.0.0.5:8085", node="node").problema()
+    assert "conta de serviço" in LeitorAssinante("u1", "trilha-estudos-2026", nm, node="node").problema()
+    cred = tmp_path / "conta.json"
+    cred.write_text("{}", encoding="utf-8")
+    fs = FirestoreFalso()
+    LeitorAssinante("u1", "trilha-estudos-2026", nm, credenciais=str(cred), node="node", executar=fs).ler()
+    amb = fs.chamadas[0][2]
+    assert amb["GOOGLE_APPLICATION_CREDENTIALS"] == str(cred) and "FIRESTORE_EMULATOR_HOST" not in amb
+
+
+def test_agendador_le_o_firestore_so_quando_ha_aviso(pasta, tmp_path):
+    fs = FirestoreFalso()
+    leitor = _leitor(tmp_path, fs)
+    vazio = _agendador(pasta, tmp_path, datetime(2026, 11, 3, 15, 0, tzinfo=UTC))   # 12:00 em São Paulo
+    vazio.destino = leitor
+    assert vazio.verificar() == [] and fs.chamadas == []   # sem aviso vencido, o Node nem roda
+    ag = _agendador(pasta, tmp_path, datetime(2026, 11, 3, 22, 35, tzinfo=UTC))
+    ag.destino = leitor
+    assert [a.bloco.id for a in ag.verificar()] == ["1-1q"] and len(fs.chamadas) == 1
+    parou = _agendador(pasta, tmp_path / "outro", datetime(2026, 11, 3, 22, 35, tzinfo=UTC))
+    parou.destino = _leitor(tmp_path, FirestoreFalso({"existe": True, "plano": "ultra", "whatsapp": None}))
+    assert parou.verificar() == []
+
+
+def test_montar_usa_o_firestore_quando_ha_uid(settings, monkeypatch, pasta):
+    from jarvis.estudos.assinante import LeitorAssinante
+    from jarvis.estudos.avisos import destino
+
+    monkeypatch.setenv("JARVIS_WHATSAPP_NUMERO", "(62) 99999-8888")
+    monkeypatch.setenv("JARVIS_WHATSAPP_CONSENTIMENTO", "2026-11-01")
+    t = _trilhum(pasta)
+    assert isinstance(destino(settings, t), Destinatario)
+    monkeypatch.setenv("JARVIS_TRILHUM_UID", "AbC123uid")
+    leitor = destino(settings, t)
+    assert isinstance(leitor, LeitorAssinante) and leitor.projeto == "trilha-estudos-2026"
+    assert leitor.modulos == pasta / "functions" / "node_modules"
