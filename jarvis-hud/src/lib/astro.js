@@ -12,7 +12,7 @@ export const ASTROS = {
 }
 
 /** O astro deste JARVIS: o principal (branch main) fica com o sol. */
-export const ASTRO = 'anelado' // JARVIS Tributário: Saturno
+export const ASTRO = 'nublado' // JARVIS Tributário: Vênus
 
 /** Dados do astro pela chave; chave desconhecida cai no sol. */
 export const astroDe = (chave = ASTRO) => ASTROS[chave] || ASTROS.sol
