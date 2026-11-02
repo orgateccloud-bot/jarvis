@@ -2,10 +2,11 @@ import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import CosmosScene from './cosmos/CosmosScene.jsx'
 import { TIERS } from './lib/tiers.js'
+import { ASTRO, ASTROS } from './lib/astro.js'
 import './styles/tokens.css'
 
-// Bancada do cosmos: troca estado, classe estelar, alerta e ignição sem precisar da API.
-// Parâmetros de URL: ?estado=thinking&camada=complexa&alerta=1
+// Bancada do cosmos: troca astro, estado, classe estelar, alerta e ignição sem precisar da API.
+// Parâmetros de URL: ?astro=anelado&estado=thinking&camada=complexa&alerta=1
 const STATES = { idle: 'Ocioso', listening: 'Ouvindo', thinking: 'Pensando', speaking: 'Falando' }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -14,6 +15,7 @@ function Bancada() {
   const [state, setState] = useState(params.get('estado') || 'idle')
   const [tier, setTier] = useState(params.get('camada') || 'regras')
   const [alert, setAlert] = useState(params.get('alerta') === '1')
+  const [astro, setAstro] = useState(ASTROS[params.get('astro')] ? params.get('astro') : ASTRO)
   const [seed, setSeed] = useState(0)
   const energyRef = useRef(0)
   const statsRef = useRef({ fps: 0, scale: 0 })
@@ -36,8 +38,10 @@ function Bancada() {
 
   return (
     <>
-      <CosmosScene key={seed} state={state} tier={tier} alert={alert} energyRef={energyRef} statsRef={statsRef} />
+      <CosmosScene key={seed} state={state} tier={tier} alert={alert} energyRef={energyRef} statsRef={statsRef}
+        astro={astro} />
       <div className="bench glass">
+        <div className="bench-row">{Object.entries(ASTROS).map(([k, v]) => chip(astro === k, () => setAstro(k), v.nome, k))}</div>
         <div className="bench-row">{Object.entries(STATES).map(([k, v]) => chip(state === k, () => setState(k), v, k))}</div>
         <div className="bench-row">
           {['regras', 'simples', 'media', 'complexa'].map(k => chip(tier === k, () => setTier(k), TIERS[k].label, k))}

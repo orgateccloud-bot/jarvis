@@ -1,10 +1,14 @@
-// GLSL do cosmos do JARVIS: universo em expansão + galáxia espiral + sol flamejante.
+// GLSL do cosmos do JARVIS: universo em expansão + galáxia espiral + o astro do centro (sol ou planeta).
 // Coordenadas: uv normalizado pela altura, y para cima, (0,0) no centro da tela.
+// O astro é escolhido na compilação (#define ASTRO, ids em lib/astro.js): cada JARVIS compila só o seu.
 
 export const VERT = `#version 300 es
 in vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`
 
-export const FRAG = `#version 300 es
+/** Fragment shader do astro `id` (0 = sol). O #version tem de ser a primeira linha; o #define vem logo depois. */
+export const fragDoAstro = (id = 0) => `#version 300 es\n#define ASTRO ${id}\n${CORPO}`
+
+const CORPO = `
 precision highp float;
 out vec4 o;
 
@@ -129,6 +133,7 @@ vec3 galaxy(vec2 g){
   return col;
 }
 
+#if ASTRO == 0
 // ── 3. sol flamejante ──
 vec3 sunColor(vec2 g, out float occl){
   occl = 0.0;
@@ -193,6 +198,116 @@ vec3 sunColor(vec2 g, out float occl){
   col += star * exp(-abs(g.y) * 140.0) * exp(-abs(g.x) * 2.2) * 0.45 * smoothstep(0.3, 0.9, uBoot);
   return col;
 }
+#else
+// ── 3b. planeta (os JARVIS que não são o principal) ──
+// Iluminado pela estrela da camada que respondeu (uTemp), fora da tela, de cima e da esquerda.
+const vec3 LUZ = normalize(vec3(-0.55, 0.42, 0.72));
+#if ASTRO == 1        // Marte: rochoso, ferrugem, calota polar, atmosfera fina e rosada
+const float ESCALA = 0.95, INCLINACAO = -0.42, ELEVACAO = 0.22, ESPESSURA = 26.0;
+const vec3 ATM = vec3(0.95, 0.5, 0.38);
+#elif ASTRO == 2      // Saturno: faixas cor de areia e ouro, com anéis
+const float ESCALA = 0.74, INCLINACAO = -0.38, ELEVACAO = 0.3, ESPESSURA = 22.0;
+const vec3 ATM = vec3(0.95, 0.82, 0.55);
+#else                 // Netuno: gelado, azul profundo, atmosfera forte
+const float ESCALA = 0.95, INCLINACAO = -0.48, ELEVACAO = 0.2, ESPESSURA = 12.0;
+const vec3 ATM = vec3(0.3, 0.55, 1.0);
+#endif
+
+// ruído sobre a esfera sem costura: três projeções 2D misturadas pela normal (o mapa atan/asin do sol
+// deixaria uma emenda visível na longitude quando o planeta gira)
+float fbmEsfera(vec3 p, float s){
+  vec3 w = pow(abs(p), vec3(4.0)); w /= w.x + w.y + w.z;
+  return fbm(p.yz * s) * w.x + fbm(p.zx * s + 7.3) * w.y + fbm(p.xy * s + 13.1) * w.z;
+}
+float fbmEsfera3(vec3 p, float s){
+  vec3 w = pow(abs(p), vec3(4.0)); w /= w.x + w.y + w.z;
+  return fbm3(p.yz * s) * w.x + fbm3(p.zx * s + 7.3) * w.y + fbm3(p.xy * s + 13.1) * w.z;
+}
+
+// normal da tela → coordenadas do planeta: eixo inclinado na tela (z), polo voltado para quem olha (x), rotação (y)
+vec3 girar(vec3 n, float ang){
+  vec3 a = vec3(rot(INCLINACAO) * n.xy, n.z);
+  a.yz = rot(ELEVACAO) * a.yz;
+  float c = cos(ang), s = sin(ang);
+  return vec3(a.x * c + a.z * s, a.y, -a.x * s + a.z * c);
+}
+
+vec3 superficie(vec3 q){
+  float lat = q.y;
+#if ASTRO == 1
+  float h = fbmEsfera(q, 2.2);
+  vec3 c = mix(vec3(0.42, 0.17, 0.08), vec3(0.8, 0.42, 0.2), smoothstep(0.35, 0.65, h));
+  c = mix(c, vec3(0.24, 0.11, 0.07), smoothstep(0.56, 0.74, fbmEsfera3(q + 9.0, 3.0)) * 0.65);   // regiões escuras
+  float cr = fbmEsfera3(q + 3.0, 14.0);                                                          // crateras discretas
+  c *= 0.88 + 0.24 * fbmEsfera3(q + 4.0, 6.0) - 0.16 * smoothstep(0.62, 0.7, cr) + 0.06 * smoothstep(0.56, 0.6, cr);
+  c = mix(c, vec3(0.96, 0.94, 0.9), smoothstep(0.86, 0.9, abs(lat) + (h - 0.5) * 0.12));         // calota polar
+  return c;
+#elif ASTRO == 2
+  float turb = fbmEsfera3(q, 3.0);
+  float bands = 0.5 + 0.5 * sin(lat * 26.0 + (turb - 0.5) * 2.2) * (0.6 + 0.4 * sin(lat * 7.0));
+  vec3 c = mix(vec3(0.7, 0.55, 0.34), vec3(0.96, 0.87, 0.64), bands);
+  c *= 0.92 + 0.16 * fbmEsfera3(q + 5.0, 8.0);
+  return mix(c, vec3(0.6, 0.55, 0.47), smoothstep(0.78, 0.97, abs(lat)));                         // polos mais frios
+#else
+  float turb = fbmEsfera3(q, 2.5);
+  float bands = 0.5 + 0.5 * sin(lat * 8.0 + (turb - 0.5) * 2.4);
+  vec3 c = mix(vec3(0.04, 0.13, 0.48), vec3(0.16, 0.36, 0.84), bands * 0.55 + turb * 0.45);
+  vec3 d = q - normalize(vec3(0.62, -0.38, 0.69));                                                // Grande Mancha Escura
+  d.y *= 1.8;
+  c = mix(c, vec3(0.02, 0.05, 0.22), exp(-dot(d, d) * 45.0) * 0.85);
+  vec3 e = q - normalize(vec3(0.66, -0.5, 0.56));                                                 // nuvem clara ao lado dela
+  e.y *= 2.5;
+  float cirros = smoothstep(0.66, 0.82, fbmEsfera3(q + vec3(uTime * 0.008, 0.0, 21.0), 6.0))
+               * (0.35 + 0.65 * smoothstep(0.2, 0.9, sin(lat * 9.0 + 1.0)));
+  return mix(c, vec3(0.88, 0.93, 1.0), clamp(cirros * 0.8 + exp(-dot(e, e) * 160.0) * 0.9, 0.0, 1.0));
+#endif
+}
+
+vec3 planetColor(vec2 g, out float occl){
+  occl = 0.0;
+  float R = uSunR * ESCALA * smoothstep(0.25, 0.85, uBoot) * (1.0 + 0.015 * uEnergy);
+  vec2 sv = g / max(R, 1e-4);
+  float sr = length(sv);
+  vec3 luz = pow(blackbody(uTemp), vec3(1.4)) * (1.15 + 0.25 * uGiant);
+  float brilho = 0.6 + 0.7 * uListen + 0.6 * uEnergy;            // a atmosfera acende ouvindo e falando
+  vec3 col = vec3(0.0);
+
+  if (sr < 1.0){
+    float z = sqrt(1.0 - sr * sr);
+    vec3 n = vec3(sv, z);
+    vec3 q = girar(n, uSpin * 2.0);                                // uSpin já acumula: pensando, gira mais rápido
+    float dl = dot(n, LUZ);
+    col = superficie(q) * luz * (0.025 + 1.25 * smoothstep(-0.15, 1.0, dl));
+    col += ATM * luz * pow(1.0 - z, 2.5) * smoothstep(-0.3, 0.4, dl) * brilho * 0.9;
+    occl = smoothstep(1.0, 0.985, sr);
+  }
+  float h = sr - 1.0;
+  if (h > 0.0 && h < 1.5){
+    vec2 dir = sv / sr;
+    float lado = 0.25 + 0.75 * smoothstep(-0.6, 0.8, dot(dir, normalize(LUZ.xy)));
+    col += ATM * luz * exp(-h * ESPESSURA) * 0.55 * lado * brilho;
+    // aurora vermelha no alerta
+    col += vec3(1.0, 0.22, 0.12) * exp(-h * 7.0) * uAlert * (0.55 + 0.45 * sin(uTime * 3.0 + atan(sv.y, sv.x) * 6.0)) * 1.2;
+  }
+  col += ATM * luz * (0.012 / (dot(sv, sv) * 0.4 + 0.05)) * (0.5 + 0.5 * brilho) * (1.0 - occl);   // halo fraco
+
+#if ASTRO == 2
+  // anéis no plano inclinado: a metade de cima fica atrás do planeta, a de baixo passa na frente
+  vec2 rq = rot(INCLINACAO) * sv;
+  float rr = length(vec2(rq.x, rq.y / 0.3));
+  float fino = noise(vec2(rr * 42.0, 3.7));
+  float a = smoothstep(1.3, 1.34, rr) * smoothstep(2.3, 2.22, rr)
+          * (0.45 + 0.55 * fino) * (rr < 1.62 ? 0.5 : 1.0)
+          * (1.0 - 0.9 * smoothstep(0.045, 0.01, abs(rr - 1.92)))   // divisão de Cassini
+          * 0.92 * smoothstep(0.25, 0.85, uBoot);
+  if (a > 0.0 && !(rq.y > 0.0 && sr < 1.0)){
+    col = mix(col, vec3(0.86, 0.77, 0.6) * luz * (0.55 + 0.25 * fino) * (0.85 + 0.3 * uListen), a);
+    occl = max(occl, a);
+  }
+#endif
+  return col;
+}
+#endif
 
 // ── 4. onda de voz: linha luminosa que atravessa o sol na horizontal enquanto ele fala ──
 // amplitude sintética (a síntese de voz do navegador não entrega o áudio); só uma faixa estreita é calculada
@@ -219,12 +334,18 @@ void main(){
   vec3 col = deepField(uv) * smoothstep(0.0, 0.6, uBoot);
   col += galaxy(g);
   float occl;
-  vec3 sun = sunColor(g, occl);
-  col = mix(col, sun, occl) + sun * (1.0 - occl);
+#if ASTRO == 0
+  vec3 astro = sunColor(g, occl);
+#else
+  vec3 astro = planetColor(g, occl);
+#endif
+  col = mix(col, astro, occl) + astro * (1.0 - occl);
   col += voiceWave(g);
 
-  // clarão da ignição
+#if ASTRO == 0
+  // clarão da ignição (só a estrela acende; o planeta só aparece)
   col += vec3(1.0, 0.9, 0.75) * exp(-length(g) * 7.0) * smoothstep(0.0, 0.12, uBoot) * smoothstep(0.5, 0.12, uBoot) * 3.0;
+#endif
 
   col = aces(col * 1.05);
   vec2 vq = gl_FragCoord.xy / uRes - 0.5;
