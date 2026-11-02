@@ -208,9 +208,12 @@ const vec3 ATM = vec3(0.95, 0.5, 0.38);
 #elif ASTRO == 2      // Saturno: faixas cor de areia e ouro, com anéis
 const float ESCALA = 0.74, INCLINACAO = -0.38, ELEVACAO = 0.3, ESPESSURA = 22.0;
 const vec3 ATM = vec3(0.95, 0.82, 0.55);
-#else                 // Netuno: gelado, azul profundo, atmosfera forte
+#elif ASTRO == 3      // Netuno: gelado, azul profundo, atmosfera forte
 const float ESCALA = 0.95, INCLINACAO = -0.48, ELEVACAO = 0.2, ESPESSURA = 12.0;
 const vec3 ATM = vec3(0.3, 0.55, 1.0);
+#else                 // Vênus: nuvens espessas cor de creme, eixo quase reto, atmosfera densa e quente
+const float ESCALA = 0.95, INCLINACAO = -0.05, ELEVACAO = 0.15, ESPESSURA = 9.0;
+const vec3 ATM = vec3(1.0, 0.84, 0.56);
 #endif
 
 // ruído sobre a esfera sem costura: três projeções 2D misturadas pela normal (o mapa atan/asin do sol
@@ -248,7 +251,7 @@ vec3 superficie(vec3 q){
   vec3 c = mix(vec3(0.7, 0.55, 0.34), vec3(0.96, 0.87, 0.64), bands);
   c *= 0.92 + 0.16 * fbmEsfera3(q + 5.0, 8.0);
   return mix(c, vec3(0.6, 0.55, 0.47), smoothstep(0.78, 0.97, abs(lat)));                         // polos mais frios
-#else
+#elif ASTRO == 3
   float turb = fbmEsfera3(q, 2.5);
   float bands = 0.5 + 0.5 * sin(lat * 8.0 + (turb - 0.5) * 2.4);
   vec3 c = mix(vec3(0.04, 0.13, 0.48), vec3(0.16, 0.36, 0.84), bands * 0.55 + turb * 0.45);
@@ -260,16 +263,26 @@ vec3 superficie(vec3 q){
   float cirros = smoothstep(0.66, 0.82, fbmEsfera3(q + vec3(uTime * 0.008, 0.0, 21.0), 6.0))
                * (0.35 + 0.65 * smoothstep(0.2, 0.9, sin(lat * 9.0 + 1.0)));
   return mix(c, vec3(0.88, 0.93, 1.0), clamp(cirros * 0.8 + exp(-dot(e, e) * 160.0) * 0.9, 0.0, 1.0));
+#else
+  // super-rotação: as nuvens dão a volta bem mais rápido que o planeta; as faixas dobram rumo aos polos (o "V")
+  float ang = uTime * 0.05;
+  vec3 r = vec3(q.x * cos(ang) + q.z * sin(ang), q.y, -q.x * sin(ang) + q.z * cos(ang));
+  float turb = fbmEsfera(r, 2.2);
+  float faixas = 0.5 + 0.5 * sin(lat * 6.0 + abs(lat) * 5.0 + r.x * 1.5 + (turb - 0.5) * 3.0);
+  vec3 c = mix(vec3(0.84, 0.7, 0.46), vec3(0.99, 0.94, 0.8), faixas * 0.45 + turb * 0.55);
+  return c * (0.93 + 0.12 * fbmEsfera3(r + 6.0, 7.0));
 #endif
 }
 
 vec3 planetColor(vec2 g, out float occl){
   occl = 0.0;
-  float R = uSunR * ESCALA * smoothstep(0.25, 0.85, uBoot) * (1.0 + 0.015 * uEnergy);
+  float R = uSunR * ESCALA * smoothstep(0.25, 0.85, uBoot) * (1.0 + 0.03 * uEnergy);   // pulsa com a fala, como o sol
   vec2 sv = g / max(R, 1e-4);
   float sr = length(sv);
   vec3 luz = pow(blackbody(uTemp), vec3(1.4)) * (1.15 + 0.25 * uGiant);
-  float brilho = 0.6 + 0.7 * uListen + 0.6 * uEnergy;            // a atmosfera acende ouvindo e falando
+  // pulso: a atmosfera respira o tempo todo (como a coroa do sol) e acende ouvindo e falando
+  float pulso = 0.5 + 0.5 * sin(uTime * 1.7);
+  float brilho = 0.6 + 0.6 * pulso + 0.7 * uListen + 0.8 * uEnergy;
   vec3 col = vec3(0.0);
 
   if (sr < 1.0){
@@ -286,10 +299,16 @@ vec3 planetColor(vec2 g, out float occl){
     vec2 dir = sv / sr;
     float lado = 0.25 + 0.75 * smoothstep(-0.6, 0.8, dot(dir, normalize(LUZ.xy)));
     col += ATM * luz * exp(-h * ESPESSURA) * 0.55 * lado * brilho;
+    // atmosfera viva: fluxo radial em duas fases cruzadas, o mesmo das chamas do sol, bem mais contido
+    // (velocidade fixa: com a velocidade variando, fract(uTime * v) saltaria na troca de estado)
+    float t1 = fract(uTime * 0.16), t2 = fract(uTime * 0.16 + 0.5);
+    float fl = mix(fbm3(sv * 2.0 - dir * t1 * 1.6), fbm3(sv * 2.0 - dir * t2 * 1.6 + 9.0), abs(2.0 * t1 - 1.0));
+    col += ATM * luz * pow(fl, 1.8) * exp(-h * ESPESSURA * 0.35) * (0.45 + 0.55 * pulso + 0.6 * uSpeak + 0.4 * uThink)
+         * brilho * 0.9;
     // aurora vermelha no alerta
     col += vec3(1.0, 0.22, 0.12) * exp(-h * 7.0) * uAlert * (0.55 + 0.45 * sin(uTime * 3.0 + atan(sv.y, sv.x) * 6.0)) * 1.2;
   }
-  col += ATM * luz * (0.012 / (dot(sv, sv) * 0.4 + 0.05)) * (0.5 + 0.5 * brilho) * (1.0 - occl);   // halo fraco
+  col += ATM * luz * (0.018 / (dot(sv, sv) * 0.4 + 0.05)) * (0.4 + 0.6 * brilho) * (1.0 - occl);   // halo que respira
 
 #if ASTRO == 2
   // anéis no plano inclinado: a metade de cima fica atrás do planeta, a de baixo passa na frente

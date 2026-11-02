@@ -27,8 +27,9 @@ test('o #define do astro vem logo depois do #version, que tem de ser a primeira 
 test('o shader tem o sol e um bloco para cada planeta', () => {
   const frag = fragDoAstro(0)
   assert.match(frag, /#if ASTRO == 0\s+\/\/ ── 3\. sol flamejante/)
-  // Marte (1) e Saturno (2) têm bloco próprio; Netuno (3) é o #else, então um 4º planeta exigiria mexer no shader
+  // Marte (1), Saturno (2) e Netuno (3) têm bloco próprio; Vênus (4) é o #else, então outro planeta exige mexer no shader
   assert.match(frag, /#if ASTRO == 1\b/)
   assert.match(frag, /#elif ASTRO == 2\b/)
-  assert.deepEqual(Object.values(ASTROS).map(a => a.id).sort(), [0, 1, 2, 3])
+  assert.match(frag, /#elif ASTRO == 3\b/)
+  assert.deepEqual(Object.values(ASTROS).map(a => a.id).sort(), [0, 1, 2, 3, 4])
 })
