@@ -4,8 +4,10 @@ A agenda (o que estudar em cada dia) vem do próprio app: agenda_trilhum.mjs abr
 simulado, como os testes do Trilhum fazem, e devolve as semanas que ele monta. Copiar a lógica do calendário
 (fases, data-alvo, fase extra, reta final, rodízio de tópicos, sábados) para Python divergiria do app.
 
-Os horários são os padrões do plano: o cadastro e o progresso do usuário ficam no navegador dele (localStorage,
-com sincronização opcional pelo Supabase da Trilha) e ainda não são lidos. Nada é gravado na Trilha.
+O cadastro (início, data-alvo, dias e horários) e o progresso do usuário ficam no navegador dele, com
+sincronização opcional pelo Supabase da Trilha. Com a sincronização configurada (sincronizacao.py), a agenda é
+montada com o cadastro dele e os blocos feitos são marcados; sem ela, valem os padrões do plano. Nada é gravado na
+Trilha.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ import threading
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -31,7 +34,9 @@ class TrilhumErro(Exception):
 
 
 class Bloco(BaseModel):
+    id: str = ""              # o mesmo id do app ("5-0t"): é por ele que o progresso marca o bloco como feito
     tipo: str = ""            # rótulo do plano: "Lei seca", "Questões", "Exame", "Prova"...
+    tipo_bloco: str = ""      # t (teoria), l (leitura), q (questões), a (áudio), x (extra) e outros do app
     disciplina: str = ""
     assunto: str = ""
     minutos: int = 0
@@ -104,14 +109,15 @@ def _data(v) -> date | None:
         return None
 
 
-Executor = Callable[[list[str], float], str]  # (argv, timeout) -> stdout
+Executor = Callable[[list[str], float, str | None], str]  # (argv, timeout, entrada) -> stdout
 
 
-def _executar_node(argv: list[str], timeout_s: float) -> str:
+def _executar_node(argv: list[str], timeout_s: float, entrada: str | None = None) -> str:
     try:
-        # argv = [node, agenda_trilhum.mjs, trilha.html, plano.json, node_modules]: caminhos montados aqui, sem shell
-        r = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", timeout=timeout_s,  # nosec B603
-                           check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        # argv = [node, agenda_trilhum.mjs, trilha.html, plano.json, node_modules, (--cfg-stdin)]: montados aqui,
+        # sem shell; o cadastro do usuário vai pela entrada padrão, não pela linha de comando
+        r = subprocess.run(argv, input=entrada, capture_output=True, text=True, encoding="utf-8",  # nosec B603
+                           timeout=timeout_s, check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired as e:
         raise TrilhumErro(f"o app do Trilhum não montou a agenda em {timeout_s:.0f} s") from e
     except OSError as e:
@@ -124,14 +130,15 @@ def _executar_node(argv: list[str], timeout_s: float) -> str:
 
 class Trilhum:
     def __init__(self, pasta: Path, plano_padrao: str = "", node: str | None = None, modulos: Path | None = None,
-                 timeout_s: float = TIMEOUT_S, executar: Executor = _executar_node):
+                 timeout_s: float = TIMEOUT_S, executar: Executor = _executar_node, sync: Any = None):
         self.pasta = pasta
+        self.sync = sync   # SincronizacaoTrilhum (progresso e cadastro do usuário); None = só os padrões do plano
         self.plano_padrao = plano_padrao.strip().lower()
         self.node = node or shutil.which("node")
         self.modulos = modulos or pasta / "testes" / "node_modules"   # o jsdom que os testes do Trilhum já usam
         self.timeout_s = timeout_s
         self._executar = executar
-        self._cache: dict[str, tuple[tuple, Agenda]] = {}
+        self._cache: dict[tuple[str, str], tuple[tuple, Agenda]] = {}
         self._trava = threading.Lock()
 
     @property
@@ -186,8 +193,18 @@ class Trilhum:
         except (OSError, ValueError) as e:
             raise TrilhumErro(f"não consegui ler o plano {plano_id}: {e}") from e
 
-    def agenda(self, plano_id: str) -> Agenda:
-        """As semanas montadas pelo app. Fica em cache até o plano ou o trilha.html mudarem."""
+    def progresso(self, plano_id: str):
+        """Progresso e cadastro do usuário pela sincronização do app (Progresso), ou None se o plano ainda não foi
+        sincronizado. TrilhumErro se a sincronização não estiver configurada ou falhar."""
+        from .sincronizacao import plano_sync
+
+        if self.sync is None:
+            raise TrilhumErro("a sincronização do Trilhum não está ligada neste JARVIS")
+        return self.sync.ler(plano_sync(self.plano(plano_id), plano_id))
+
+    def agenda(self, plano_id: str, cfg: dict | None = None) -> Agenda:
+        """As semanas montadas pelo app, com o cadastro do usuário (cfg) se houver. Fica em cache até o plano, o
+        trilha.html ou o cadastro mudarem."""
         f = self.arquivo(plano_id)
         if not self.html.is_file():
             raise TrilhumErro(f"o app do Trilhum não foi encontrado: {self.html}")
@@ -195,14 +212,17 @@ class Trilhum:
             raise TrilhumErro("o Node não está instalado (ou não está no PATH); a agenda usa o próprio app do Trilhum")
         if not (self.modulos / "jsdom").is_dir():
             raise TrilhumErro(f"o jsdom não está em {self.modulos} (rode npm install em {self.pasta / 'testes'})")
+        cfg_json = json.dumps(cfg, sort_keys=True, ensure_ascii=False) if cfg else ""
         chave = (f.stat().st_mtime_ns, self.html.stat().st_mtime_ns)
+        argv = [self.node, str(SCRIPT), str(self.html), str(f), str(self.modulos)]
         with self._trava:
-            if (c := self._cache.get(plano_id)) and c[0] == chave:
+            if (c := self._cache.get((plano_id, cfg_json))) and c[0] == chave:
                 return c[1]
-            saida = self._executar([self.node, str(SCRIPT), str(self.html), str(f), str(self.modulos)], self.timeout_s)
+            saida = self._executar(argv + ["--cfg-stdin"] if cfg else argv, self.timeout_s,
+                                   json.dumps({"cfg": cfg}) if cfg else None)
             try:
                 agenda = Agenda.model_validate_json(saida)
             except ValueError as e:
                 raise TrilhumErro(f"o app do Trilhum devolveu uma agenda que não entendi: {str(e)[:200]}") from e
-            self._cache[plano_id] = (chave, agenda)
+            self._cache[(plano_id, cfg_json)] = (chave, agenda)
             return agenda

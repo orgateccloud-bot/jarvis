@@ -31,6 +31,7 @@ from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
+from ..estudos.sincronizacao import SincronizacaoTrilhum
 from ..estudos.trilhum import Trilhum
 from ..proactive.bus import EventBus, ProactiveEvent, event_source
 from ..proactive.monitors import Monitor, run_monitor
@@ -62,7 +63,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         tool_ctx=ToolContext(
             roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
             archive=settings.archive_dir(), move_roots=settings.move_roots(), journal=MoveJournal(settings.db_path),
-            memory=memory, knowledge=knowledge, trilhum=Trilhum(settings.trilhum_dir(), settings.trilhum_plano()),
+            memory=memory, knowledge=knowledge, trilhum=Trilhum(settings.trilhum_dir(), settings.trilhum_plano(),
+                                                                sync=SincronizacaoTrilhum(*settings.trilhum_sync())),
         ),
         approvals=Approvals(timeout_s=approval_timeout_s),
     )

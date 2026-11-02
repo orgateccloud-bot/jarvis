@@ -74,6 +74,12 @@ class Settings(BaseModel):
         """Plano usado quando o pedido não diz qual (JARVIS_TRILHUM_PLANO); vazio = o em andamento."""
         return _env("JARVIS_TRILHUM_PLANO", "")
 
+    def trilhum_sync(self) -> tuple[str, str, str]:
+        """Sincronização do Trilhum (progresso, só leitura): endereço do Supabase da Trilha, chave publishable e o
+        token de sincronização do usuário. Lidos do ambiente na hora: não são campos, então não aparecem no repr."""
+        return (_env("JARVIS_TRILHUM_SYNC_URL", ""), _env("JARVIS_TRILHUM_SYNC_CHAVE", ""),
+                _env("JARVIS_TRILHUM_SYNC_TOKEN", ""))
+
     def voz_dir(self) -> Path:
         """Modelos de voz e gravações de teste, fora do repositório: JARVIS_VOZ_DIR ou D:\\JARVIS-Voz."""
         return Path(_env("JARVIS_VOZ_DIR", "D:\\JARVIS-Voz"))

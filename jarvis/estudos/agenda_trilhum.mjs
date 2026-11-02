@@ -2,7 +2,11 @@
 // tela, do mesmo jeito que os testes do Trilhum abrem o app. Assim o JARVIS-TRILHUM não copia a lógica do
 // calendário (fases, data-alvo, fase extra, reta final, rodízio de tópicos, sábados) e nunca diverge do app.
 //
-//     node agenda_trilhum.mjs <trilha.html> <plano.json> <pasta node_modules com o jsdom>
+//     node agenda_trilhum.mjs <trilha.html> <plano.json> <pasta node_modules com o jsdom> [--cfg-stdin]
+//
+// Com --cfg-stdin, lê da entrada {"cfg": {...}}: o cadastro do usuário (início, data-alvo, dias e horários),
+// vindo da sincronização do Trilhum. Assim a agenda e os ids dos blocos são os mesmos do aparelho dele, e o
+// progresso ("feito", por id de bloco) bate. Sem ele, valem os padrões do plano.
 //
 // Só lê: nada é gravado na Trilha. O localStorage é o do navegador simulado e some ao terminar.
 // Saída (stdout): JSON com as semanas, os dias, os blocos e as fases.
@@ -10,13 +14,14 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {join} from 'node:path';
 
-const [htmlPath, planoPath, modulos] = process.argv.slice(2);
+const [htmlPath, planoPath, modulos, opcao] = process.argv.slice(2);
 if (!htmlPath || !planoPath || !modulos) {
-  process.stderr.write('uso: node agenda_trilhum.mjs <trilha.html> <plano.json> <node_modules>\n');
+  process.stderr.write('uso: node agenda_trilhum.mjs <trilha.html> <plano.json> <node_modules> [--cfg-stdin]\n');
   process.exit(2);
 }
 const {JSDOM, VirtualConsole} = createRequire(join(modulos, 'jsdom.cjs'))('jsdom');
 const plano = JSON.parse(readFileSync(planoPath, 'utf8'));
+const cfg = opcao === '--cfg-stdin' ? (JSON.parse(readFileSync(0, 'utf8') || '{}').cfg || null) : null;
 
 // O app guarda as semanas em `S`, dentro de uma função fechada. Na cópia em memória (o arquivo não muda), um
 // gancho logo depois de montar as semanas as expõe a este script. Se o trecho mudar no app, falha em vez de chutar.
@@ -36,6 +41,7 @@ const dom = new JSDOM(html.replace(GANCHO, GANCHO + 'window.__jarvis={S,phases};
     w.localStorage.setItem('trilha.planos', JSON.stringify({[plano.id]: plano}));
     w.localStorage.setItem('trilha.ativo', JSON.stringify(plano.id));
     w.localStorage.setItem('trilha.' + plano.id + '.perfil', JSON.stringify({nome: 'JARVIS', proj: plano.sigla, cargo: plano.nome}));
+    if (cfg) w.localStorage.setItem('trilha.' + plano.id + '.cfg', JSON.stringify(cfg));
     w.matchMedia = () => ({matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}});
     w.scrollTo = () => {};
     w.HTMLElement.prototype.scrollIntoView = () => {};
@@ -52,8 +58,8 @@ try {
     total: S.total,
     semanas: S.weeks.map((w) => ({n: w.n, segunda: w.mon, fase: w.fase, titulo: w.tit,
       dias: w.days.map((d) => ({data: d.date, feriado: d.fer || '', depois_da_prova: !!d.after,
-        blocos: d.blocks.map((b) => ({tipo: b.label, disciplina: b.disc, assunto: b.topic, minutos: b.min,
-          inicio: b.start, questoes: b.nq}))}))})),
+        blocos: d.blocks.map((b) => ({id: b.id, tipo: b.label, tipo_bloco: b.kind, disciplina: b.disc,
+          assunto: b.topic, minutos: b.min, inicio: b.start, questoes: b.nq}))}))})),
     fases: phases().map((p) => ({nome: p.name, descricao: p.desc || '', saida: p.out || '',
       inicio: p.r ? p.r[0] : null, fim: p.r ? p.r[1] : null}))
   })`);

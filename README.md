@@ -7,7 +7,7 @@
 > `jarvis-hud/src/lib/marca.js` no HUD. O `start-jarvis.bat` deste branch sobe na 8003 e sem a voz local, para não
 > disputar o microfone com o principal.
 >
-> **Estudos (Trilhum):** as ferramentas `trilhum_agenda`, `trilhum_planos` e `trilhum_plano` leem os planos de `JARVIS_TRILHUM_DIR\planos` e montam a agenda com o próprio app do Trilhum (`jarvis/estudos/agenda_trilhum.mjs` abre o `trilha.html` no jsdom dos testes do Trilhum; precisa do Node). Só leitura; o progresso, que fica no navegador, ainda não é lido.
+> **Estudos (Trilhum):** as ferramentas `trilhum_agenda`, `trilhum_planos` e `trilhum_plano` leem os planos de `JARVIS_TRILHUM_DIR\planos` e montam a agenda com o próprio app do Trilhum (`jarvis/estudos/agenda_trilhum.mjs` abre o `trilha.html` no jsdom dos testes do Trilhum; precisa do Node). Com a sincronização do Trilhum no `.env` (`JARVIS_TRILHUM_SYNC_*`), a agenda usa o seu cadastro, marca o que já foi feito e `trilhum_progresso` mostra o andamento. Só leitura: perfil e perguntas do app são descartados antes de qualquer resposta.
 
 Assistente pessoal para Windows, conversacional e proativo, que roda no próprio PC e usa **só modelos Claude**
 (Anthropic). Conversa por texto ou voz num HUD cinematográfico, executa ações reais no computador sempre com
@@ -229,6 +229,7 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 | `JARVIS_CONHECIMENTO` | `D:\JARVIS-Conhecimento` | Base de leis e documentos (uma subpasta por área) |
 | `JARVIS_TRILHUM_DIR` | `D:\01_Projetos_Ativos\Trilha` | Projeto do Trilhum: planos de estudo (só leitura) e o app que monta a agenda |
 | `JARVIS_TRILHUM_PLANO` | (vazio) | Plano usado quando o pedido não diz qual; vazio = o plano em andamento |
+| `JARVIS_TRILHUM_SYNC_URL`, `_CHAVE`, `_TOKEN` | (vazio) | Sincronização do Trilhum (Configurações › Sincronização no app): com elas, a agenda usa o seu cadastro e o JARVIS vê o progresso. Só leitura |
 | `JARVIS_VOZ_LOCAL` | `0` | `1` liga a [voz local](#voz-local-sem-o-hud) (a API sobe o serviço de voz) |
 | `JARVIS_VOZ_DIR` | `D:\JARVIS-Voz` | Modelos de voz e gravações de teste (fora do repositório) |
 | `JARVIS_VOZ_MICROFONE` | o do Windows | Parte do nome do microfone (`--listar-microfones`) |
