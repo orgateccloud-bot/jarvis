@@ -29,8 +29,10 @@ from ..core.audit import AuditChain
 from ..core.contracts import ApprovalDecision, ChatRequest
 from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, RuleResponder
+from ..core.planos import plano_jarvis
 from ..core.router import Tiers
 from ..core.session import Conversation, SessionStore
+from ..estudos.coach import provedor_coach
 from ..estudos.sincronizacao import SincronizacaoTrilhum
 from ..estudos.trilhum import Trilhum
 from ..proactive.bus import EventBus, ProactiveEvent, event_source
@@ -40,15 +42,28 @@ from ..tools import ToolContext, manifesto, registry
 from ..tools.journal import MoveJournal
 from ..tools.memory import JarvisMemory
 
+# Ferramentas de um aluno do Trilhum (JARVIS_PLANO): só o plano de estudo, a memória e os lembretes. Arquivos,
+# disco, programas e o sistema do PC ficam de fora.
+FERRAMENTAS_ALUNO = {"trilhum_agenda", "trilhum_plano", "trilhum_planos", "trilhum_progresso", "memory",
+                     "criar_lembrete", "lembretes_listar", "cancelar_lembrete"}
+
 
 def build_conversation(settings: Settings, claude_client=None, approval_timeout_s: float = 60.0) -> Conversation:
-    ledger = CostLedger(settings.db_path, settings.monthly_budget_usd, settings.economy_threshold)
+    plano = plano_jarvis(settings.plano_jarvis)
+    teto = settings.monthly_budget_usd
+    if plano:   # o teto do aluno vem do plano; JARVIS_BUDGET_USD só pode baixar
+        teto = min(teto, plano.teto_usd(settings.cambio, settings.teto_fracao))
+    ledger = CostLedger(settings.db_path, teto, settings.economy_threshold)
     salt = settings.salt()
     reminders = ReminderStore(settings.db_path)
     memory = JarvisMemory(settings.data_dir, salt=salt)
     memory.semear(settings.user_name)
     knowledge = KnowledgeBase(settings.knowledge_dir())
     tools = registry(knowledge=knowledge)
+    if plano:
+        tools = {k: v for k, v in tools.items() if k in FERRAMENTAS_ALUNO}
+    trilhum = Trilhum(settings.trilhum_dir(), settings.trilhum_plano(),
+                      sync=SincronizacaoTrilhum(*settings.trilhum_sync(), salt=salt))
     return Conversation(
         claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools),
                            assistente=settings.assistente),
@@ -63,10 +78,11 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
         tool_ctx=ToolContext(
             roots=settings.tool_roots(), ledger=ledger, reminders=reminders, salt=salt,
             archive=settings.archive_dir(), move_roots=settings.move_roots(), journal=MoveJournal(settings.db_path),
-            memory=memory, knowledge=knowledge, trilhum=Trilhum(settings.trilhum_dir(), settings.trilhum_plano(),
-                                                                sync=SincronizacaoTrilhum(*settings.trilhum_sync())),
+            memory=memory, knowledge=knowledge, trilhum=trilhum,
         ),
         approvals=Approvals(timeout_s=approval_timeout_s),
+        plano=plano,
+        coach=provedor_coach(trilhum, plano.nome if plano else "") if settings.coach() else None,
     )
 
 
@@ -96,6 +112,12 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     @contextlib.asynccontextmanager
     async def lifespan(_app: FastAPI):
         tasks = [asyncio.create_task(run_monitor(monitor, bus))] if proactive else []
+        if settings.whatsapp_avisos and conv.tool_ctx is not None and conv.tool_ctx.trilhum is not None:
+            from ..estudos.avisos import montar, run_avisos
+
+            agendador = montar(settings, conv.tool_ctx.trilhum)
+            logger.info(f"avisos WhatsApp ligados ({'dry-run' if agendador.envio.dry_run else 'Meta Cloud API'})")
+            tasks.append(asyncio.create_task(run_avisos(agendador)))
         if supervisor:
             tasks.append(asyncio.create_task(supervisor.rodar()))
         yield

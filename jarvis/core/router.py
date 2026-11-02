@@ -120,6 +120,15 @@ def escalate(route: Route) -> Route:
     return _UP[route]
 
 
+def descer(route: Route) -> Route:
+    """Uma camada abaixo (modo economia)."""
+    return _DOWN[route]
+
+
+def effort_for(route: Route) -> str:
+    return _EFFORT[route]
+
+
 def area_for(t: str) -> str | None:
     """Área especializada pelo assunto (texto já normalizado); empate fica com a ordem de _AREAS."""
     contagem = {a: sum(bool(re.search(p, t)) for p in pats) for a, pats in _AREAS.items()}

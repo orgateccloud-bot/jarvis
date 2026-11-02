@@ -5,8 +5,9 @@ o hash). Aqui só se chama trilha_sync_get, com a chave publishable, como o app 
 dá acesso de leitura e gravação aos dados do usuário: vem do .env (JARVIS_TRILHUM_SYNC_TOKEN), não aparece em log,
 mensagem de erro ou resposta.
 
-Do JSON só fica o necessário para falar de progresso. perfil (nome) e perguntas (texto livre) são descartados na
-leitura: nada pessoal segue para o Claude.
+Do JSON só fica o necessário para falar de progresso e para o coach. perfil (nome) e perguntas (texto livre) são
+descartados na leitura. O questionário do JARVIS (chave jarvis, campo exclusivo da ULTRA) fica, mas já anonimizado:
+CPF/CNPJ, e-mail e telefone mascarados e o nome do perfil pseudonimizado (PESSOA_XXXX), antes de sair da leitura.
 """
 
 from __future__ import annotations
@@ -15,17 +16,22 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from datetime import date
+from datetime import UTC, date, datetime
+from typing import Literal
 
 import httpx
 from pydantic import BaseModel, Field
 
+from ..core.privacy import anonimizar_contato, sanitizar
 from .trilhum import TrilhumErro
 
 SUPABASE = re.compile(r"^https://[a-z0-9-]+\.supabase\.co/?$", re.IGNORECASE)   # o mesmo teste do app
 PLANO_APP = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")                   # ids de plano que o app aceita
 TTL_S = 60.0      # o app aceita 3.000 leituras por hora por endereço; o JARVIS não precisa de mais que uma por minuto
 CFG_CHAVES = {"start", "exam", "hora", "dias", "blocos", "hDia", "hSab", "hDom", "nq", "pomodoro"}
+JARVIS_TEXTOS = ("obj", "porque", "dif", "desiste")   # respostas livres do questionário (até 300 caracteres no app)
+HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+TONS = ("gentil", "direto", "firme")
 
 
 class Acerto(BaseModel):
@@ -39,15 +45,64 @@ class Nota(BaseModel):
     n: float
 
 
+class FeedbackJarvis(BaseModel):
+    """O questionário inicial do campo JARVIS (Trilhum ULTRA), já anonimizado."""
+
+    obj: str = ""       # o que quer conquistar
+    porque: str = ""    # por que importa
+    dif: str = ""       # maior dificuldade hoje
+    desiste: str = ""   # o que costuma fazer parar
+    ans: int | None = Field(default=None, ge=1, le=5)   # quanto a ansiedade com a prova pesa (1 a 5)
+    hora: str | None = None                            # melhor horário para falar com ele (HH:MM)
+    tom: Literal["gentil", "direto", "firme"] = "gentil"
+    em: datetime | None = None                         # quando respondeu (o app grava Date.now(), em ms)
+
+    @property
+    def vazio(self) -> bool:
+        return not any(getattr(self, k) for k in JARVIS_TEXTOS) and self.ans is None
+
+    @classmethod
+    def do_app(cls, d, nomes: list[str] | None = None, salt: str = "") -> FeedbackJarvis | None:
+        """Do registro jarvis do app; None se não veio. Texto anonimizado aqui, antes de ir a qualquer lugar."""
+        if not isinstance(d, dict):
+            return None
+
+        def limpo(v) -> str:
+            texto = sanitizar(str(v)[:300], nomes=nomes, salt=salt, inteiras=True)
+            return anonimizar_contato(texto).strip()
+
+        ans = d.get("ans")
+        em = d.get("em")
+        hora = str(d.get("hora") or "")
+        return cls(
+            **{k: limpo(d[k]) for k in JARVIS_TEXTOS if isinstance(d.get(k), str)},
+            ans=int(ans) if isinstance(ans, int | float) and not isinstance(ans, bool) and 1 <= ans <= 5 else None,
+            hora=hora if HORA.match(hora) else None,
+            tom=d.get("tom") if d.get("tom") in TONS else "gentil",
+            em=datetime.fromtimestamp(em / 1000, tz=UTC) if isinstance(em, int | float) and em > 0 else None,
+        )
+
+
+def _nomes_do_perfil(d: dict) -> list[str]:
+    """Nome completo e primeiro nome do perfil, só para pseudonimizar o questionário (o perfil não é guardado)."""
+    perfil = d.get("perfil") if isinstance(d.get("perfil"), dict) else {}
+    nome = str(perfil.get("nome") or "").strip()
+    if not nome:
+        return []
+    primeiro = nome.split()[0]
+    return [nome] + ([primeiro] if len(primeiro) >= 3 and primeiro != nome else [])
+
+
 class Progresso(BaseModel):
     cfg: dict = Field(default_factory=dict)            # cadastro: início, data-alvo, dias e horários
     feito: set[str] = Field(default_factory=set)       # ids dos blocos marcados como feitos
     acertos: dict[str, Acerto] = Field(default_factory=dict)
     notas: list[Nota] = Field(default_factory=list)
     revisoes: dict[str, int] = Field(default_factory=dict)   # semana → itens da revisão de sábado marcados (de 6)
+    jarvis: FeedbackJarvis | None = None                     # questionário do JARVIS (ULTRA), anonimizado
 
     @classmethod
-    def do_app(cls, d: dict) -> Progresso:
+    def do_app(cls, d: dict, salt: str = "") -> Progresso:
         """Do JSON do app (dadosLocais), tolerante a campos estranhos; perfil e perguntas ficam de fora."""
         d = d if isinstance(d, dict) else {}
         cfg = d.get("cfg") if isinstance(d.get("cfg"), dict) else {}
@@ -68,15 +123,17 @@ class Progresso(BaseModel):
                      for k, v in acertos.items() if isinstance(v, dict) and len(str(k)) <= 60},
             notas=sorted(boas_notas, key=lambda n: n.d),
             revisoes={str(k): sum(1 for x in v if x) for k, v in check.items() if isinstance(v, list)},
+            jarvis=FeedbackJarvis.do_app(d.get("jarvis"), _nomes_do_perfil(d), salt),
         )
 
 
 class SincronizacaoTrilhum:
     def __init__(self, url: str | None = None, chave: str | None = None, token: str | None = None,
                  ttl_s: float = TTL_S, cliente: httpx.Client | None = None,
-                 relogio: Callable[[], float] = time.monotonic):
+                 relogio: Callable[[], float] = time.monotonic, salt: str = ""):
         self.url, self.chave, self.token = (url or "").strip(), (chave or "").strip(), (token or "").strip()
         self.ttl_s, self.relogio = ttl_s, relogio
+        self.salt = salt   # pseudonimização do nome no questionário do JARVIS (o mesmo salt do resto do JARVIS)
         self._cliente = cliente
         self._cache: dict[str, tuple[float, object]] = {}   # registro → (quando, JSON cru)
         self._trava = threading.Lock()
@@ -99,7 +156,7 @@ class SincronizacaoTrilhum:
     def ler(self, plano_sync: str) -> Progresso | None:
         """O progresso do plano (None se o plano ainda não foi sincronizado). Guardado por TTL_S."""
         bruto = self._ler(plano_sync)
-        return Progresso.do_app(bruto) if isinstance(bruto, dict) else None
+        return Progresso.do_app(bruto, self.salt) if isinstance(bruto, dict) else None
 
     def catalogo(self) -> dict[str, dict]:
         """Os planos salvos no app ({id: plano}), que viajam com o token no registro "_planos". São as versões que o

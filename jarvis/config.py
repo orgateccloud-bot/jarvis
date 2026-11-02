@@ -43,6 +43,38 @@ class Settings(BaseModel):
     pii_salt: str = Field(default_factory=lambda: _env("JARVIS_PII_SALT", ""))
     # Etapa 2: escuta por voz local (microfone → "Jarvis" → Whisper → fala), sem o HUD. Desligada por padrão.
     voz_local: bool = Field(default_factory=lambda: _env("JARVIS_VOZ_LOCAL", "0") == "1")
+    # Aluno do Trilhum ULTRA (uma instância por aluno): plano do JARVIS (haiku, sonnet, opus, fable ou router; vazio =
+    # o dono, sem plano) e o teto mensal = preço do plano x fração / câmbio (JARVIS_BUDGET_USD só pode baixar)
+    plano_jarvis: str = Field(default_factory=lambda: _env("JARVIS_PLANO", ""))
+    cambio: float = Field(default_factory=lambda: float(_env("JARVIS_CAMBIO", "5.5")))
+    teto_fracao: float = Field(default_factory=lambda: float(_env("JARVIS_TETO_FRACAO", "0.5")))
+    # Avisos pelo WhatsApp 30 min antes de cada bloco (0 = desligado)
+    whatsapp_avisos: bool = Field(default_factory=lambda: _env("JARVIS_WHATSAPP_AVISOS", "0") == "1")
+
+    def coach(self) -> bool:
+        """Coach de constância nas conversas: ligado por padrão para um aluno (JARVIS_PLANO), opcional para o dono."""
+        return _env("JARVIS_COACH", "1" if self.plano_jarvis else "0") == "1"
+
+    def whatsapp_destino(self) -> tuple[str, str]:
+        """Número e data do consentimento (LGPD) do aluno. No Trilhum ficam em assinantes/{uid}.whatsapp e
+        whatsappConsentimento (Firestore); por enquanto, configuração local. Lidos na hora: fora do repr."""
+        return _env("JARVIS_WHATSAPP_NUMERO", ""), _env("JARVIS_WHATSAPP_CONSENTIMENTO", "")
+
+    def whatsapp_dry_run(self) -> bool:
+        """1 (padrão) = os avisos só vão para o log, mesmo com a conta da Meta configurada."""
+        return _env("JARVIS_WHATSAPP_DRY_RUN", "1") != "0"
+
+    def whatsapp_antecedencia_min(self) -> int:
+        return int(_env("JARVIS_WHATSAPP_ANTECEDENCIA_MIN", "30"))
+
+    def whatsapp_feriado(self) -> bool:
+        """1 (padrão) = avisa nos feriados (o Trilhum mantém os blocos); 0 = não avisa."""
+        return _env("JARVIS_WHATSAPP_FERIADO", "1") != "0"
+
+    def meta_whatsapp(self) -> tuple[str, str, str, str, str]:
+        """Meta Cloud API: token, id do número, nome do modelo aprovado, idioma e versão da Graph API."""
+        return (_env("JARVIS_META_TOKEN", ""), _env("JARVIS_META_NUMERO_ID", ""), _env("JARVIS_META_MODELO", ""),
+                _env("JARVIS_META_IDIOMA", ""), _env("JARVIS_META_VERSAO", ""))
 
     def tool_roots(self) -> list[Path]:
         """Pastas que as ferramentas podem ler: JARVIS_PASTAS (separadas por ;) ou as pastas pessoais."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import aclosing
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -25,8 +25,11 @@ from .llm import (
     area_note,
     telemetry_note,
 )
-from .privacy import sanitizar
-from .router import DEFAULT_TIERS, Tiers, decide, escalate, strip_force
+from .planos import PlanoJarvis, decidir
+from .privacy import anonimizar_contato, sanitizar
+from .router import DEFAULT_TIERS, Tiers, escalate, strip_force
+
+COACH_MARCA = "[coach de estudos]"   # o início da nota do coach (jarvis.estudos.coach.MARCA)
 
 MAX_STEPS = 6          # iterações do loop agêntico por turno
 MAX_JSON_RETRIES = 2   # reemissões quando a entrada de ferramenta chega ilegível
@@ -170,6 +173,8 @@ class Conversation:
         tools: dict | None = None,
         tool_ctx=None,
         approvals: Approvals | None = None,
+        plano: PlanoJarvis | None = None,
+        coach: Callable[[], str | None] | None = None,
     ):
         self.claude = claude
         self.rules = rules
@@ -181,6 +186,8 @@ class Conversation:
         self.tools = tools or {}
         self.tool_ctx = tool_ctx
         self.approvals = approvals or Approvals()
+        self.plano = plano    # plano do JARVIS do aluno (modelo fixo ou Router); None = o dono, sem plano
+        self.coach = coach    # nota do coach de constância, uma vez por conversa; None = desligado
         self._locks: dict[str, asyncio.Lock] = {}
         self._avisos: dict[str, list[str]] = {}   # avisos do sistema ao modelo (ex.: arquivo salvo), por sessão
 
@@ -199,7 +206,7 @@ class Conversation:
     async def _turn(self, session_id: str, message: str) -> AsyncIterator[StreamEvent]:
         nova = self.store.rollover_if_idle(session_id)
         budget = self.ledger.state()
-        decision = decide(message, budget, self.tiers)
+        decision = decidir(message, budget, self.tiers, self.plano)
         quick = self.rules.answer(message) if decision.route is Route.LOCAL else None
         if decision.route is Route.LOCAL and quick is None and budget is not BudgetState.CAP_REACHED:
             # parecia trivial, mas nenhuma regra responde: vai para o modelo simples
@@ -212,7 +219,10 @@ class Conversation:
         )
 
         history = self.store.history(session_id)
-        history.append({"role": "user", "content": sanitizar(strip_force(message), salt=self.salt)})
+        texto = sanitizar(strip_force(message), salt=self.salt)
+        if self.plano:   # aluno: e-mail e telefone também ficam fora do Claude
+            texto = anonimizar_contato(texto)
+        history.append({"role": "user", "content": texto})
         route = decision.route
         texts: list[str] = []
         total = TurnOutcome(text="", model=decision.model or "regras")
@@ -221,11 +231,20 @@ class Conversation:
         try:
             if route is Route.LOCAL:
                 notice = quick or (
+                    f"O limite mensal do seu plano JARVIS {self.plano.nome} foi atingido, {self.rules.user_name}. "
+                    "Volto a conversar no próximo mês; até lá, siga o seu plano no Trilhum." if self.plano else
                     f"O teto mensal de US$ {self.ledger.budget:.2f} foi atingido, {self.rules.user_name}. "
                     "O Claude volta no próximo mês, ou antes se o teto (JARVIS_BUDGET_USD) for aumentado."
                 )
             else:
                 nota = telemetry_note() + (f"\n{area_note(decision.area)}" if decision.area else "")
+                if self.coach and not any(m.get("role") == "system" and COACH_MARCA in str(m.get("content"))
+                                          for m in history):
+                    try:   # uma vez por conversa: depois do rollover o histórico volta vazio e a nota vem de novo
+                        if nota_coach := await asyncio.to_thread(self.coach):
+                            nota = f"{nota_coach}\n\n{nota}"
+                    except Exception:  # noqa: BLE001 — sem o coach a conversa segue
+                        logger.exception("nota do coach")
                 if avisos := self._avisos.pop(session_id, None):
                     nota += "\n[desde a última resposta] " + "; ".join(avisos) + "."
                 history.append({"role": "system", "content": nota})

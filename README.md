@@ -8,6 +8,16 @@
 > disputar o microfone com o principal.
 >
 > **Estudos (Trilhum):** as ferramentas `trilhum_agenda`, `trilhum_planos` e `trilhum_plano` leem os planos de `JARVIS_TRILHUM_DIR\planos` e montam a agenda com o próprio app do Trilhum (`jarvis/estudos/agenda_trilhum.mjs` abre o `trilha.html` no jsdom dos testes do Trilhum; precisa do Node). Com a sincronização do Trilhum no `.env` (`JARVIS_TRILHUM_SYNC_*`), a agenda usa o seu cadastro, marca o que já foi feito e `trilhum_progresso` mostra o andamento. Só leitura: perfil e perguntas do app são descartados antes de qualquer resposta.
+>
+> **JARVIS do Trilhum ULTRA (versão 2.2):** uma instância por aluno, com a chave da API, o token de sincronização e os dados dele.
+> - **Plano** (`JARVIS_PLANO`): `haiku` (R$ 20), `sonnet` (R$ 35), `opus` (R$ 50), `fable` (R$ 75) ou `router` (R$ 100, o roteador por complexidade). O aluno fica no modelo do plano: prefixos como `/opus` não valem. Ver `jarvis/core/planos.py`.
+> - **Teto mensal por aluno:** preço × `JARVIS_TETO_FRACAO` (0,5) ÷ `JARVIS_CAMBIO` (5,5), de US$ 1,82 (Haiku) a US$ 9,09 (Router). É o teto de sempre, com o modo economia a 80% (desce uma camada) e a pausa a 100%. `JARVIS_BUDGET_USD` só baixa o teto.
+> - **Ferramentas do aluno:** só Trilhum, memória e lembretes. Arquivos e sistema do PC ficam fora.
+> - **Coach** (`jarvis/estudos/coach.py`): o questionário do campo JARVIS (chave `jarvis` da sincronização) abre cada conversa, uma vez, como contexto. O foco é motivação, constância, ansiedade e foco, no tom escolhido (gentil, direto ou firme) e só dentro do plano de estudo dele. Antes de sair da leitura, o texto é anonimizado: CPF/CNPJ, e-mail e telefone mascarados e o nome do perfil como `PESSOA_XXXX`.
+> - **Avisos pelo WhatsApp** (`JARVIS_WHATSAPP_AVISOS=1`, `jarvis/estudos/avisos.py`): o aviso sai 30 minutos antes de cada bloco do dia, no horário de São Paulo. Bloco feito e bloco sem duração não são avisados; no feriado o aviso sai com o nome dele (`JARVIS_WHATSAPP_FERIADO=0` pula).
+>   - O envio é pela Meta Cloud API, com modelo utilitário aprovado. Até a conta existir, fica em dry-run, que só registra no log (`JARVIS_WHATSAPP_DRY_RUN=1`, o padrão).
+>   - O número e o consentimento vêm da configuração local (`JARVIS_WHATSAPP_NUMERO`, `JARVIS_WHATSAPP_CONSENTIMENTO`). No Trilhum, eles ficam em `assinantes/{uid}`. O número nunca vai ao Claude.
+>   - `python -m jarvis.estudos.avisos --listar` mostra os avisos de hoje; `--dry-run` roda o agendador.
 
 Assistente pessoal para Windows, conversacional e proativo, que roda no próprio PC e usa **só modelos Claude**
 (Anthropic). Conversa por texto ou voz num HUD cinematográfico, executa ações reais no computador sempre com
