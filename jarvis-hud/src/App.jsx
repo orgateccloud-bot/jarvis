@@ -5,7 +5,7 @@ import { SPIKE } from './spike/params.js'
 import { alvoSol } from './spike/arranjo.js'
 import './spike/spike.css'
 import TopBar from './components/TopBar.jsx'
-import { CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
+import { AvisosCard, CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
 import Transcript from './components/Transcript.jsx'
 import CommandDock from './components/CommandDock.jsx'
 import { BootIgnition, Caption, SunButton, Toasts } from './components/Overlays.jsx'
@@ -151,7 +151,8 @@ export default function App() {
                 <VitalsCard vitals={j.vitals} history={j.history} />
                 <CostCard costs={j.costs} />
               </aside>
-              <aside className="side side-right" aria-label="Estado neural">
+              <aside className="side side-right" aria-label="Avisos e estado neural">
+                <AvisosCard avisos={j.avisos} onLimpar={j.limparAvisos} />
                 <NeuralCard neural={j.neural} />
               </aside>
             </div>

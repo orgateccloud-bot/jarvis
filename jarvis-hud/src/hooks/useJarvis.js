@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { decideApproval, getJson, streamChat, streamEvents } from '../lib/api.js'
 import { ROUTE_TO_TIER } from '../lib/tiers.js'
 import { mensagensQueFicam } from '../lib/telaLimpa.js'
+import { acrescentarAviso, novoAviso } from '../lib/avisos.js'
 
 const HISTORY = 60
 let seq = 0
@@ -18,6 +19,7 @@ export function useJarvis(callbacks = {}) {
   useEffect(() => { cb.current = callbacks })
   const [phase, setPhase] = useState('idle')
   const [messages, setMessages] = useState([])
+  const [avisos, setAvisos] = useState([])
   const [busy, setBusy] = useState(false)
   const [neural, setNeural] = useState(null)
   const [vitals, setVitals] = useState(null)
@@ -92,10 +94,8 @@ export function useJarvis(callbacks = {}) {
             if (ev.kind === 'voz') { cb.current.onVoz?.(ev.texto); continue }
             if (ev.kind === 'nova_conversa') { setMessages([]); continue }
             if (ev.kind === 'saudacao') greetedRef.current = true
-            setMessages(m => [...m, {
-              id: uid(), role: 'jarvis', kind: ev.kind === 'saudacao' ? 'saudacao' : 'aviso',
-              nivel: ev.nivel, titulo: ev.titulo, text: ev.texto, tier: ev.nivel === 'critico' ? 'alerta' : 'regras',
-            }])
+            // vão para o card Avisos, não para a conversa: o centro da tela fica livre
+            setAvisos(a => acrescentarAviso(a, novoAviso(ev, uid())))
             if (ev.nivel !== 'info') pushToast(`${ev.titulo}: ${ev.texto}`, ev.nivel === 'critico' ? 'danger' : 'warn')
             if (ev.nivel === 'critico') flashAlert()
             cb.current.onProactive?.(ev)
@@ -199,9 +199,10 @@ export function useJarvis(callbacks = {}) {
 
   // tela limpa: tira as mensagens da tela; o histórico da sessão na API continua (o contexto do JARVIS não muda)
   const limparTela = useCallback(() => setMessages(mensagensQueFicam), [])
+  const limparAvisos = useCallback(() => setAvisos([]), [])
 
   return {
-    phase, messages, busy, neural, vitals, history, costs, online, authOk,
-    toasts, dismissToast, pushToast, alertFlash, energyRef, sendMessage, approve, limparTela,
+    phase, messages, avisos, busy, neural, vitals, history, costs, online, authOk,
+    toasts, dismissToast, pushToast, alertFlash, energyRef, sendMessage, approve, limparTela, limparAvisos,
   }
 }
