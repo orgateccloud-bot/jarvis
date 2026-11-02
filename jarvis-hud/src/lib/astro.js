@@ -11,7 +11,7 @@ export const ASTROS = {
 }
 
 /** O astro deste JARVIS: o principal (branch main) fica com o sol. */
-export const ASTRO = 'sol'
+export const ASTRO = 'rochoso' // JARVIS-TRILHUM: Marte
 
 /** Dados do astro pela chave; chave desconhecida cai no sol. */
 export const astroDe = (chave = ASTRO) => ASTROS[chave] || ASTROS.sol
