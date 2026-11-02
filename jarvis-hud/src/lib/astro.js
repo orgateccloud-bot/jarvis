@@ -8,6 +8,7 @@ export const ASTROS = {
   rochoso: { id: 1, nome: 'Marte', chamado: 'planeta', abertura: 'Formação planetária' },
   anelado: { id: 2, nome: 'Saturno', chamado: 'planeta', abertura: 'Formação planetária' },
   gelado: { id: 3, nome: 'Netuno', chamado: 'planeta', abertura: 'Formação planetária' },
+  nublado: { id: 4, nome: 'Vênus', chamado: 'planeta', abertura: 'Formação planetária' },
 }
 
 /** O astro deste JARVIS: o principal (branch main) fica com o sol. */
