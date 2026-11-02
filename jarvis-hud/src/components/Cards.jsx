@@ -116,6 +116,38 @@ function Telemetria({ t, teto }) {
   )
 }
 
+// Saudação, alertas e lembretes: ficam aqui, fora da conversa, com o mais novo em cima.
+export function AvisosCard({ avisos, onLimpar }) {
+  return (
+    <Card title="Avisos" className="avisos" aside={avisos.length > 0 && (
+      <>
+        <span className={`avisos-conta mono nivel-${avisos[0].nivel}`} title={avisos.length === 1 ? '1 aviso' : `${avisos.length} avisos`}>{avisos.length}</span>
+        <button type="button" className="card-min" onClick={onLimpar} aria-label="Limpar os avisos" title="Limpar os avisos">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </>
+    )}>
+      {avisos.length ? (
+        <ol className="avisos-lista" aria-live="polite" aria-label="Avisos do JARVIS">
+          {avisos.map(a => (
+            <li key={a.id} className={`aviso nivel-${a.nivel}`}>
+              <span className="aviso-meta">
+                <span className="aviso-dot" aria-hidden="true" />
+                {a.titulo}
+                <time className="mono">{a.hora}</time>
+              </span>
+              <p>{a.texto}</p>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="muted small">Nenhum aviso. A saudação, os alertas e os lembretes aparecem aqui.</p>
+      )}
+    </Card>
+  )
+}
+
 export function NeuralCard({ neural }) {
   const tierKey = ROUTE_TO_TIER[neural?.rota] || 'regras'
   const t = TIERS[tierKey]

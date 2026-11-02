@@ -6,7 +6,7 @@ import { alvoSol } from './spike/arranjo.js'
 import './spike/spike.css'
 import TopBar from './components/TopBar.jsx'
 import { NOME } from './lib/marca.js'
-import { CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
+import { AvisosCard, CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
 import { ClienteCard, TributarioCard } from './components/FiscalCards.jsx'
 import Transcript from './components/Transcript.jsx'
 import CommandDock from './components/CommandDock.jsx'
@@ -157,7 +157,8 @@ export default function App() {
                 <ClienteCard clientes={fiscal.clientes} clienteId={fiscal.clienteId} onEscolher={fiscal.escolher}
                   cliente={fiscal.cliente} erro={fiscal.erro} />
               </aside>
-              <aside className="side side-right" aria-label="Estado neural, sistema e custos">
+              <aside className="side side-right" aria-label="Avisos, estado neural, sistema e custos">
+                <AvisosCard avisos={j.avisos} onLimpar={j.limparAvisos} />
                 <NeuralCard neural={j.neural} />
                 <VitalsCard vitals={j.vitals} history={j.history} />
                 <CostCard costs={j.costs} />

@@ -91,14 +91,13 @@ export default function Transcript({ messages, onDecide }) {
           return <li key={m.id} className="msg msg-approval"><ApprovalCard m={m} onDecide={onDecide} /></li>
         }
         const t = TIERS[m.tier] || TIERS.regras
-        const aviso = m.kind === 'aviso' || m.kind === 'saudacao'
         return (
-          <li key={m.id} className={`msg msg-${m.role} ${aviso ? `msg-aviso nivel-${m.nivel}` : ''}`}
+          <li key={m.id} className={`msg msg-${m.role}`}
             style={m.role === 'jarvis' ? { '--msg': t.ui } : undefined}>
             {m.role === 'jarvis' && (
               <span className="msg-meta">
                 <span className="msg-dot" aria-hidden="true" />
-                {aviso ? (m.titulo || 'Aviso') : m.tier ? t.label : 'JARVIS'}
+                {m.tier ? t.label : 'JARVIS'}
                 {m.custo != null && <span className="mono"> · US$ {m.custo.toFixed(4).replace('.', ',')}</span>}
               </span>
             )}

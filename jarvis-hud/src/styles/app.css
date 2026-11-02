@@ -402,7 +402,7 @@
     transition: transform var(--slow) var(--ease), opacity var(--slow);
   }
   .panels.open { transform: none; opacity: 1; }
-  .side { overflow: visible; animation: none; }
+  .side { flex: none; overflow: visible; animation: none; } /* sem encolher: a gaveta rola, os cards não se sobrepõem */
   .transcript { max-height: 42vh; }
   .modes .mode { padding: 5px 8px; }
 }
@@ -503,10 +503,28 @@
 .tool.fail { color: #ffb1b1; border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
 .tool.run { color: var(--aurora-3); animation: pulse-soft 1.2s var(--ease) infinite; }
 
-/* ---------- avisos proativos ---------- */
-.msg-aviso { border-left-width: 3px; }
-.msg-aviso.nivel-aviso { --msg: var(--warn); }
-.msg-aviso.nivel-critico { --msg: var(--danger); background: linear-gradient(135deg, rgba(255, 77, 77, 0.1), var(--glass)); }
+/* ---------- card Avisos: saudação, alertas e lembretes fora da conversa ---------- */
+.avisos-lista {
+  list-style: none; display: flex; flex-direction: column; gap: 8px;
+  max-height: 280px; overflow-y: auto; scrollbar-width: thin;
+}
+.aviso, .avisos-conta { --aviso: var(--aurora-3); }
+.aviso {
+  padding: 8px 10px; border-radius: 4px var(--radius-sm) var(--radius-sm) var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--hairline); border-left: 3px solid var(--aviso);
+}
+.nivel-aviso { --aviso: var(--warn); }
+.nivel-critico { --aviso: var(--danger); }
+.aviso.nivel-critico { background: linear-gradient(135deg, rgba(255, 77, 77, 0.1), rgba(255, 255, 255, 0.03)); }
+.aviso-meta { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--aviso); margin-bottom: 3px; }
+.aviso-meta time { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--text-faint); }
+.aviso-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--aviso); box-shadow: 0 0 8px var(--aviso); }
+.aviso p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text); }
+.avisos-conta {
+  min-width: 20px; padding: 0 6px; border-radius: 999px; text-align: center;
+  font-size: 11px; line-height: 18px; color: var(--aviso);
+  border: 1px solid color-mix(in srgb, var(--aviso) 45%, transparent);
+}
 
 @keyframes halo { 50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--aurora-3) 60%, transparent), 0 0 70px 10px rgba(14, 165, 233, 0.18); } }
 @keyframes pulse-soft { 50% { opacity: 0.55; } }
