@@ -432,7 +432,8 @@
 
 .caption {
   position: fixed; z-index: 2; pointer-events: none;
-  left: 50%; top: 51vh; transform: translateX(-50%);
+  /* centrada sem transform: a animação rise termina em transform: none e desfazia o translateX(-50%) */
+  left: 0; right: 0; margin-inline: auto; width: fit-content; top: 51vh;
   max-width: min(640px, calc(100vw - 32px));
   font-size: 13px; letter-spacing: 0.04em; color: rgba(230, 236, 255, 0.72);
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.9);
