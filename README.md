@@ -1,5 +1,14 @@
 # J.A.R.V.I.S. 4.0
 
+> **Este é o JARVIS-IurisNotitia** (branch `jarvis-iurisnotitia`, pasta `D:\01_Projetos_Ativos\jarvis-iurisnotitia`,
+> porta **8004**), voltado ao conhecimento jurídico: a biblioteca de leis, súmulas e precedentes da base de
+> conhecimento (`jarvis/conhecimento/`, catálogos em `D:\JARVIS-Conhecimento\_catalogo`). Desde 02/11/2026 o projeto
+> tem quatro JARVIS: o principal (branch `main`, porta 8000, com a voz local), o Tributário (`jarvis-tributario`,
+> porta 8002), o JARVIS-TRILHUM (`jarvis-trilhum`, porta 8003) e este, que parte do principal. O nome vem de
+> `JARVIS_ASSISTENTE` (padrão "JARVIS-IurisNotitia") no prompt e na saudação, e de `jarvis-hud/src/lib/marca.js` no
+> HUD. O `start-jarvis.bat` deste branch sobe na 8004 e sem a voz local, para não disputar o microfone com o
+> principal.
+
 Assistente pessoal para Windows, conversacional e proativo, que roda no próprio PC e usa **só modelos Claude**
 (Anthropic). Conversa por texto ou voz num HUD cinematográfico, executa ações reais no computador sempre com
 aprovação humana, lembra do usuário entre conversas e responde perguntas jurídicas e fiscais citando lei e artigo

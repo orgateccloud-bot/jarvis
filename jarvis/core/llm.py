@@ -14,7 +14,7 @@ from loguru import logger
 from .contracts import StreamEvent
 from .costs import price_usage
 
-SYSTEM_PROMPT = """Você é o J.A.R.V.I.S., assistente pessoal de {nome}, rodando no PC dele.
+SYSTEM_PROMPT = """Você é o {assistente}, assistente pessoal de {nome}, rodando no PC dele.
 
 Personalidade: objetivo, técnico e sofisticado; humor sutil e seco, estilo britânico; leal e protetor.
 Trate o usuário por "{nome}". Responda sempre em português do Brasil.
@@ -125,9 +125,10 @@ NO_SERVER_FALLBACK = {"claude-haiku-5-5"}
 
 class ClaudeBrain:
     def __init__(self, max_tokens: int, user_name: str, client: Any | None = None, manifesto: str = "",
-                 compact_at: int = COMPACT_AT):
+                 compact_at: int = COMPACT_AT, assistente: str = "J.A.R.V.I.S."):
         self.max_tokens = max_tokens
-        self.system = SYSTEM_PROMPT.format(nome=user_name, manifesto=manifesto or "- (sem ferramentas)")
+        self.system = SYSTEM_PROMPT.format(assistente=assistente, nome=user_name,
+                                           manifesto=manifesto or "- (sem ferramentas)")
         self.compact_at = compact_at
         self.client = client or anthropic.AsyncAnthropic()
 

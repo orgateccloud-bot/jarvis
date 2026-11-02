@@ -48,7 +48,8 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
     knowledge = KnowledgeBase(settings.knowledge_dir())
     tools = registry(knowledge=knowledge)
     return Conversation(
-        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools)),
+        claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client, manifesto=manifesto(tools),
+                           assistente=settings.assistente),
         rules=RuleResponder(settings.user_name),
         ledger=ledger,
         audit=AuditChain(settings.data_dir / "audit.jsonl"),
@@ -74,7 +75,8 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     conv = conversation or build_conversation(settings)
     logger.add(settings.data_dir.parent / "logs" / "jarvis.log", rotation="10 MB", retention="30 days")
     bus = EventBus()
-    monitor = monitor or Monitor(conv.ledger, conv.tool_ctx.reminders, settings.user_name)
+    monitor = monitor or Monitor(conv.ledger, conv.tool_ctx.reminders, settings.user_name,
+                                 assistente=settings.assistente)
     proactive = settings.proactive if proactive is None else proactive
 
     # Etapa 2: escuta por voz local. Com a flag em 0, nada disto existe (nem rota, nem processo).

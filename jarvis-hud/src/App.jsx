@@ -5,6 +5,7 @@ import { SPIKE } from './spike/params.js'
 import { alvoSol } from './spike/arranjo.js'
 import './spike/spike.css'
 import TopBar from './components/TopBar.jsx'
+import { NOME } from './lib/marca.js'
 import { AvisosCard, CostCard, NeuralCard, VitalsCard } from './components/Cards.jsx'
 import Transcript from './components/Transcript.jsx'
 import CommandDock from './components/CommandDock.jsx'
@@ -125,7 +126,7 @@ export default function App() {
         />
         {j.online === false && (
           <div className="offline glass" role="alert">
-            <strong>Núcleo offline.</strong> A API do JARVIS não responde em 127.0.0.1:8000.
+            <strong>Núcleo offline.</strong> A API do {NOME} não responde em {window.location.host || '127.0.0.1:8004'}.
             Rode <code>start-jarvis.bat</code> (ou <code>.venv\Scripts\python -m jarvis</code>) — o HUD reconecta sozinho.
           </div>
         )}
@@ -141,7 +142,7 @@ export default function App() {
         {j.online && !j.authOk && (
           <div className="offline glass" role="alert">
             <strong>Token recusado.</strong> O HUD não tem o token da API.
-            Abra o HUD pelo endereço da API (<code>http://127.0.0.1:8000</code>), que entrega o token sozinho.
+            Abra o HUD pelo endereço da API (<code>http://127.0.0.1:8004</code>), que entrega o token sozinho.
           </div>
         )}
         <div className="stage">
