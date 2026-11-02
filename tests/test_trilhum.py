@@ -7,7 +7,6 @@ Trilhum não estiverem na máquina.
 """
 
 import json
-import os
 import shutil
 from datetime import date
 from pathlib import Path
@@ -103,14 +102,17 @@ class ExecutorFalso:
 
 
 class SupabaseFalso:
-    """Transporte do httpx no lugar do Supabase da Trilha: guarda os pedidos e responde o JSON do plano."""
+    """Transporte do httpx no lugar do Supabase da Trilha: guarda os pedidos e responde o registro pedido
+    (p_plano); registro que não existe vira null, como no banco (não corpo vazio)."""
 
-    def __init__(self, dados=DADOS_APP, status=200):
-        self.pedidos, self.dados, self.status = [], dados, status
+    def __init__(self, registros=None, status=200):
+        self.pedidos, self.status = [], status
+        self.registros = {"rota40-oab-48": DADOS_APP} if registros is None else registros
 
     def __call__(self, req: httpx.Request) -> httpx.Response:
-        self.pedidos.append(req)   # o Supabase responde null (não corpo vazio) quando o plano não foi sincronizado
-        return httpx.Response(self.status, content=json.dumps(self.dados).encode(),
+        self.pedidos.append(req)
+        dados = self.registros.get(json.loads(req.content)["p_plano"])
+        return httpx.Response(self.status, content=json.dumps(dados).encode(),
                               headers={"content-type": "application/json"})
 
     def sync(self, **kw):
@@ -141,15 +143,16 @@ def test_agenda_vem_do_app_com_o_cadastro_e_fica_em_cache(pasta):
     a = t.agenda("rota40-oab-48")
     assert a.total == 2 and t.agenda("rota40-oab-48") is a and len(ex.chamadas) == 1
     argv = ex.chamadas[0]
-    assert argv[0] == "node" and argv[1].endswith("agenda_trilhum.mjs") and argv[3].endswith("rota40-oab-48.json")
-    assert "--cfg-stdin" not in argv and ex.entradas[0] is None
+    assert argv[0] == "node" and argv[1].endswith("agenda_trilhum.mjs") and argv[3].endswith("node_modules")
+    entrada = json.loads(ex.entradas[0])      # o plano e o cadastro vão pela entrada, não pela linha de comando
+    assert entrada["plano"]["id"] == "rota40-oab-48" and entrada["cfg"] is None
     cfg = {"start": "2026-10-12"}
-    t.agenda("rota40-oab-48", cfg)                     # cadastro diferente: monta de novo, cadastro pela entrada
-    assert ex.chamadas[1][-1] == "--cfg-stdin" and json.loads(ex.entradas[1]) == {"cfg": cfg}
+    t.agenda("rota40-oab-48", cfg)                     # cadastro diferente: monta de novo
+    assert json.loads(ex.entradas[1])["cfg"] == cfg
     t.agenda("rota40-oab-48", dict(cfg))
     assert len(ex.chamadas) == 2                        # mesmo cadastro: cache
     f = pasta / "planos" / "rota40-oab-48.json"
-    os.utime(f, ns=(f.stat().st_atime_ns, f.stat().st_mtime_ns + 10**9))   # o plano mudou: monta de novo
+    f.write_text(json.dumps({**PLANOS["rota40-oab-48"], "versao": "1.2"}), encoding="utf-8")   # o plano mudou
     t.agenda("rota40-oab-48")
     assert len(ex.chamadas) == 3
 
@@ -195,7 +198,7 @@ def test_sincronizacao_erros_sem_vazar_o_token():
     with pytest.raises(TrilhumErro, match="HTTP 401") as e:
         SupabaseFalso(status=401).sync().ler("rota40-oab-48")
     assert TOKEN not in str(e.value) and "chave-publishable" not in str(e.value)
-    assert SupabaseFalso(dados=None).sync().ler("rota40-oab-48") is None   # plano ainda não sincronizado
+    assert SupabaseFalso(registros={}).sync().ler("rota40-oab-48") is None   # plano ainda não sincronizado
 
 
 def test_andamento():
@@ -284,6 +287,28 @@ def test_registro_validacao_e_sem_trilhum(pasta):
         tools["trilhum_agenda"].parse({"dias": 30})
     with pytest.raises(ToolError, match="não está configurado"):
         trilhum_agenda(AgendaParams(), _ctx(None))
+
+
+def test_planos_salvos_no_app_entram_e_sao_preferidos(pasta):
+    """31/10: no app, o usuário tinha "rota40" (gerado no app, sem arquivo na pasta) e "oab-60-dias"; o JARVIS só
+    conhecia a pasta e não achava o plano em uso. Os planos do catálogo sincronizado (_planos) entram na lista,
+    valem sobre a pasta quando o id é o mesmo e são preferidos na escolha automática."""
+    app = {**PLANOS["rota40-oab-48"], "id": "rota40", "titulo": "Exame da Ordem (no app)"}
+    sb = SupabaseFalso({"_planos": {"itens": {"rota40": {"em": 1, "plano": app},
+                                              "removido": {"em": 2, "plano": None}}},
+                        "rota40": DADOS_APP})
+    ex = ExecutorFalso()
+    t = Trilhum(pasta, node="node", executar=ex, sync=sb.sync())
+    planos = {p.id: p for p in t.planos()}
+    assert planos["rota40"].origem == "app" and planos["rota40-oab-48"].origem == "pasta" and "removido" not in planos
+    assert t.escolher(None, date(2026, 11, 2)).id == "rota40"     # os dois em andamento: o do app vem antes
+    t.agenda("rota40")
+    assert json.loads(ex.entradas[0])["plano"]["titulo"] == "Exame da Ordem (no app)"
+    assert t.progresso("rota40").feito == {"1-0t", "1-0q"}          # progresso lido com o id do app
+    lista = trilhum_planos(PlanosParams(), _ctx(t))
+    assert "- rota40: Exame da Ordem (no app) (05/10/2026 a 10/01/2027; versão 1.1) · em andamento · salvo no app" in lista
+    sem_catalogo = Trilhum(pasta, node="node", executar=ExecutorFalso(), sync=SupabaseFalso(status=500).sync())
+    assert "rota40-oab-48" in {p.id for p in sem_catalogo.planos()}   # catálogo fora do ar: a pasta continua valendo
 
 
 REAL = Path(r"D:\01_Projetos_Ativos\Trilha")

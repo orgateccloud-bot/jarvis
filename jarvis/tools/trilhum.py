@@ -83,7 +83,8 @@ def trilhum_planos(p: PlanosParams, ctx: ToolContext) -> str:
     linhas = []
     for x in planos:
         marca = " · plano de teste" if x.teste else " · em andamento" if x.em_andamento(hoje) else ""
-        linhas.append(f"- {x.id}: {x.titulo} ({_periodo(x)}; versão {x.versao or '?'}){marca}")
+        origem = " · salvo no app" if x.origem == "app" else ""
+        linhas.append(f"- {x.id}: {x.titulo} ({_periodo(x)}; versão {x.versao or '?'}){marca}{origem}")
     return "Planos do Trilhum:\n" + "\n".join(linhas)
 
 

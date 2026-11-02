@@ -12,6 +12,7 @@ Trilha.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
@@ -24,7 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-PLANO_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
+PLANO_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")   # o mesmo formato de id que o app aceita
 SCRIPT = Path(__file__).with_name("agenda_trilhum.mjs")
 TIMEOUT_S = 60.0  # abrir o app no jsdom leva de 4 a 6 s nesta máquina
 
@@ -87,11 +88,13 @@ class PlanoInfo(BaseModel):
     inicio: date | None = None
     alvo: date | None = None
     versao: str = ""
+    origem: str = "pasta"   # "pasta" (planos\*.json) ou "app" (salvo no app e sincronizado)
 
     @classmethod
-    def de(cls, plano_id: str, d: dict) -> PlanoInfo:
+    def de(cls, plano_id: str, d: dict, origem: str = "pasta") -> PlanoInfo:
         return cls(id=plano_id, sigla=str(d.get("sigla") or ""), titulo=str(d.get("titulo") or d.get("nome") or plano_id),
-                   inicio=_data(d.get("inicio")), alvo=_data(d.get("alvo")), versao=str(d.get("versao") or ""))
+                   inicio=_data(d.get("inicio")), alvo=_data(d.get("alvo")), versao=str(d.get("versao") or ""),
+                   origem=origem)
 
     @property
     def teste(self) -> bool:
@@ -114,8 +117,8 @@ Executor = Callable[[list[str], float, str | None], str]  # (argv, timeout, entr
 
 def _executar_node(argv: list[str], timeout_s: float, entrada: str | None = None) -> str:
     try:
-        # argv = [node, agenda_trilhum.mjs, trilha.html, plano.json, node_modules, (--cfg-stdin)]: montados aqui,
-        # sem shell; o cadastro do usuário vai pela entrada padrão, não pela linha de comando
+        # argv = [node, agenda_trilhum.mjs, trilha.html, node_modules]: montados aqui, sem shell; o plano e o
+        # cadastro do usuário vão pela entrada padrão, não pela linha de comando
         r = subprocess.run(argv, input=entrada, capture_output=True, text=True, encoding="utf-8",  # nosec B603
                            timeout=timeout_s, check=False, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except subprocess.TimeoutExpired as e:
@@ -138,41 +141,54 @@ class Trilhum:
         self.modulos = modulos or pasta / "testes" / "node_modules"   # o jsdom que os testes do Trilhum já usam
         self.timeout_s = timeout_s
         self._executar = executar
-        self._cache: dict[tuple[str, str], tuple[tuple, Agenda]] = {}
+        self._cache: dict[str, tuple[tuple, Agenda]] = {}   # plano → ((hash do plano e cadastro, mtime do app), agenda)
         self._trava = threading.Lock()
 
     @property
     def html(self) -> Path:
         return self.pasta / "trilha.html"
 
+    def _catalogo(self) -> dict[str, dict]:
+        """Planos salvos no app (sincronização); vazio se ela não estiver configurada ou falhar."""
+        if self.sync is None or not self.sync.configurada:
+            return {}
+        try:
+            return self.sync.catalogo()
+        except TrilhumErro:
+            return {}
+
     def planos(self) -> list[PlanoInfo]:
-        """Os planos de planos\\*.json, do que começa antes ao que começa depois."""
+        """Os planos da pasta planos\\ e os salvos no app (estes valem quando o id é o mesmo: é a versão que o
+        usuário usa), do que começa antes ao que começa depois."""
         pasta = self.pasta / "planos"
         if not pasta.is_dir():
             raise TrilhumErro(f"a pasta de planos do Trilhum não existe: {pasta}")
-        out = []
+        out: dict[str, PlanoInfo] = {}
         for f in pasta.glob("*.json"):
             if not PLANO_ID.match(f.stem):
                 continue
             try:
-                out.append(PlanoInfo.de(f.stem, json.loads(f.read_text(encoding="utf-8"))))
+                out[f.stem] = PlanoInfo.de(f.stem, json.loads(f.read_text(encoding="utf-8")))
             except (OSError, ValueError):
                 continue  # arquivo ilegível não derruba a lista
-        return sorted(out, key=lambda p: (p.inicio or date.max, p.id))
+        for pid, d in self._catalogo().items():
+            out[pid] = PlanoInfo.de(pid, d, origem="app")
+        return sorted(out.values(), key=lambda p: (p.inicio or date.max, p.id))
 
     def escolher(self, plano_id: str | None, hoje: date) -> PlanoInfo:
-        """O plano pedido; senão JARVIS_TRILHUM_PLANO; senão, fora os de teste, o em andamento que começou por
-        último, o próximo a começar ou o último."""
+        """O plano pedido; senão JARVIS_TRILHUM_PLANO; senão, fora os de teste e preferindo os salvos no app, o em
+        andamento que começou por último, o próximo a começar ou o último."""
         planos = self.planos()
         if not planos:
             raise TrilhumErro(f"não há planos em {self.pasta / 'planos'}")
         pedido = (plano_id or self.plano_padrao or "").strip().lower()
         if pedido:
-            achado = next((p for p in planos if pedido in (p.id, p.sigla.lower())), None)
+            achado = next((p for p in planos if pedido in (p.id.lower(), p.sigla.lower())), None)
             if achado is None:
                 raise TrilhumErro(f"plano {pedido!r} não encontrado; os planos são: {', '.join(p.id for p in planos)}")
             return achado
         planos = [p for p in planos if not p.teste] or planos
+        planos = [p for p in planos if p.origem == "app"] or planos   # o que o usuário usa no app vem antes
         andamento = [p for p in planos if p.em_andamento(hoje)]
         if andamento:
             return max(andamento, key=lambda p: p.inicio)
@@ -188,6 +204,11 @@ class Trilhum:
         return f
 
     def plano(self, plano_id: str) -> dict:
+        """O conteúdo do plano: a versão salva no app, se houver; senão o arquivo da pasta."""
+        if not PLANO_ID.match(plano_id):
+            raise TrilhumErro(f"nome de plano inválido: {plano_id!r}")
+        if (d := self._catalogo().get(plano_id)) is not None:
+            return d
         try:
             return json.loads(self.arquivo(plano_id).read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
@@ -205,24 +226,24 @@ class Trilhum:
     def agenda(self, plano_id: str, cfg: dict | None = None) -> Agenda:
         """As semanas montadas pelo app, com o cadastro do usuário (cfg) se houver. Fica em cache até o plano, o
         trilha.html ou o cadastro mudarem."""
-        f = self.arquivo(plano_id)
+        plano = dict(self.plano(plano_id))
+        plano.setdefault("id", plano_id)
         if not self.html.is_file():
             raise TrilhumErro(f"o app do Trilhum não foi encontrado: {self.html}")
         if not self.node:
             raise TrilhumErro("o Node não está instalado (ou não está no PATH); a agenda usa o próprio app do Trilhum")
         if not (self.modulos / "jsdom").is_dir():
             raise TrilhumErro(f"o jsdom não está em {self.modulos} (rode npm install em {self.pasta / 'testes'})")
-        cfg_json = json.dumps(cfg, sort_keys=True, ensure_ascii=False) if cfg else ""
-        chave = (f.stat().st_mtime_ns, self.html.stat().st_mtime_ns)
-        argv = [self.node, str(SCRIPT), str(self.html), str(f), str(self.modulos)]
+        entrada = json.dumps({"plano": plano, "cfg": cfg or None}, ensure_ascii=False, sort_keys=True)
+        chave = (hashlib.sha256(entrada.encode()).hexdigest(), self.html.stat().st_mtime_ns)
+        argv = [self.node, str(SCRIPT), str(self.html), str(self.modulos)]
         with self._trava:
-            if (c := self._cache.get((plano_id, cfg_json))) and c[0] == chave:
+            if (c := self._cache.get(plano_id)) and c[0] == chave:
                 return c[1]
-            saida = self._executar(argv + ["--cfg-stdin"] if cfg else argv, self.timeout_s,
-                                   json.dumps({"cfg": cfg}) if cfg else None)
+            saida = self._executar(argv, self.timeout_s, entrada)
             try:
                 agenda = Agenda.model_validate_json(saida)
             except ValueError as e:
                 raise TrilhumErro(f"o app do Trilhum devolveu uma agenda que não entendi: {str(e)[:200]}") from e
-            self._cache[(plano_id, cfg_json)] = (chave, agenda)
+            self._cache[plano_id] = (chave, agenda)
             return agenda

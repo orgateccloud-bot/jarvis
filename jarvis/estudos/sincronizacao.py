@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from .trilhum import TrilhumErro
 
 SUPABASE = re.compile(r"^https://[a-z0-9-]+\.supabase\.co/?$", re.IGNORECASE)   # o mesmo teste do app
+PLANO_APP = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")                   # ids de plano que o app aceita
 TTL_S = 60.0      # o app aceita 3.000 leituras por hora por endereço; o JARVIS não precisa de mais que uma por minuto
 CFG_CHAVES = {"start", "exam", "hora", "dias", "blocos", "hDia", "hSab", "hDom", "nq", "pomodoro"}
 
@@ -77,7 +78,7 @@ class SincronizacaoTrilhum:
         self.url, self.chave, self.token = (url or "").strip(), (chave or "").strip(), (token or "").strip()
         self.ttl_s, self.relogio = ttl_s, relogio
         self._cliente = cliente
-        self._cache: dict[str, tuple[float, Progresso | None]] = {}
+        self._cache: dict[str, tuple[float, object]] = {}   # registro → (quando, JSON cru)
         self._trava = threading.Lock()
 
     @property
@@ -97,17 +98,35 @@ class SincronizacaoTrilhum:
 
     def ler(self, plano_sync: str) -> Progresso | None:
         """O progresso do plano (None se o plano ainda não foi sincronizado). Guardado por TTL_S."""
+        bruto = self._ler(plano_sync)
+        return Progresso.do_app(bruto) if isinstance(bruto, dict) else None
+
+    def catalogo(self) -> dict[str, dict]:
+        """Os planos salvos no app ({id: plano}), que viajam com o token no registro "_planos". São as versões que o
+        usuário de fato usa, e podem não existir na pasta planos\\ (ex.: um plano gerado ou importado no app)."""
+        bruto = self._ler("_planos")
+        if not isinstance(bruto, dict):
+            return {}
+        itens = bruto.get("itens")
+        if isinstance(itens, dict):   # formato atual: {id: {em, plano}}; plano None = removido
+            pares = ((k, v.get("plano")) for k, v in itens.items() if isinstance(v, dict))
+        else:                         # formato antigo: {planos: {id: plano}}
+            pares = (bruto.get("planos") or {}).items() if isinstance(bruto.get("planos"), dict) else ()
+        return {str(k): v for k, v in pares if isinstance(v, dict) and PLANO_APP.match(str(k))}
+
+    def _ler(self, nome: str):
+        """O JSON cru de um registro da sincronização (None se não existe). Guardado por TTL_S."""
         if erro := self.problema():
             raise TrilhumErro(erro)
         with self._trava:
             agora = self.relogio()
-            if (c := self._cache.get(plano_sync)) and agora - c[0] < self.ttl_s:
+            if (c := self._cache.get(nome)) and agora - c[0] < self.ttl_s:
                 return c[1]
             cliente = self._cliente or httpx.Client(timeout=10.0, trust_env=False)
             try:
                 r = cliente.post(self.url.rstrip("/") + "/rest/v1/rpc/trilha_sync_get",
                                  headers={"apikey": self.chave, "Content-Type": "application/json"},
-                                 json={"p_token": self.token, "p_plano": plano_sync})
+                                 json={"p_token": self.token, "p_plano": nome})
             except httpx.HTTPError as e:
                 raise TrilhumErro(f"não consegui falar com a sincronização do Trilhum ({type(e).__name__})") from e
             finally:
@@ -120,9 +139,8 @@ class SincronizacaoTrilhum:
                 bruto = r.json()
             except ValueError as e:
                 raise TrilhumErro("a sincronização do Trilhum devolveu algo que não é JSON") from e
-            progresso = Progresso.do_app(bruto) if isinstance(bruto, dict) else None
-            self._cache[plano_sync] = (agora, progresso)
-            return progresso
+            self._cache[nome] = (agora, bruto)
+            return bruto
 
 
 def plano_sync(plano: dict, plano_id: str) -> str:
