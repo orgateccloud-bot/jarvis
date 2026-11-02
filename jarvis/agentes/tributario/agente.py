@@ -1,4 +1,4 @@
-"""Agente tributário v1: consultar, analisar lançamentos, comparar cenários da Reforma e laudo em 4 partes.
+"""Agente tributário v1: consultar, analisar lançamentos, comparar cenários da Reforma, anterioridade e laudo em 4 partes.
 
 Sem laço de ferramentas: o código busca os trechos da base, monta o cronograma e calcula os números; depois faz uma
 única chamada ao Claude (pelo gateway), com saída estruturada. Números, índice de risco e textos falados saem do código.
@@ -8,18 +8,27 @@ from __future__ import annotations
 
 import re
 import secrets
-from datetime import datetime
+from datetime import date, datetime
 from typing import ClassVar
 
 from ...core.privacy import sanitizar
 from ..base import Agente
 from ..contratos import ConfigAgente, Lancamento, PedidoTarefa, SaidaTarefa, TarefaRecusada
-from . import prompts, reforma
+from . import anterioridade, prompts, reforma
 from .lancamentos import analisar
+
+MESES = ("janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro",
+         "novembro", "dezembro")
+REGRA = {"anterioridade_anual": "anterioridade anual", "noventena": "noventena",
+         "vigencia_da_lei": "vigência fixada na lei", "publicacao": "publicação, sem anterioridade"}
 
 
 def _num(v: float, casas: int = 1) -> str:
     return f"{v:.{casas}f}".replace(".", ",")
+
+
+def _extenso(d: date) -> str:
+    return f"{'1º' if d.day == 1 else d.day} de {MESES[d.month - 1]} de {d.year}"
 
 
 def _brl(v: float) -> str:
@@ -34,8 +43,8 @@ class AgenteTributario(Agente):
     tipo = "tributario"
     nome = "agente tributário"
     descricao = ("Dúvidas tributárias com a base local de leis, análise de lançamentos com índice de risco de "
-                 "autuação, cenários atual × pós-Reforma (IBS/CBS) e laudo em 4 partes.")
-    versao_codigo = "1.0.0"
+                 "autuação, cenários atual × pós-Reforma (IBS/CBS), anterioridade e noventena e laudo em 4 partes.")
+    versao_codigo = "1.1.0"
     tarefas: ClassVar[dict[str, str]] = {
         "consultar": "Responde dúvida tributária com a base local de leis, cita lei e artigo e compara com o "
                      "pós-Reforma quando couber (usa o Claude).",
@@ -43,6 +52,9 @@ class AgenteTributario(Agente):
                                 "cada fator e os grupos de fracionamento (local, sem custo).",
         "comparar_cenarios": "Calcula os tributos sobre consumo hoje e com IBS/CBS no ano pedido (calculadora "
                              "local) e comenta riscos e oportunidades (usa o Claude).",
+        "calcular_anterioridade": "Data a partir da qual a lei ou MP que cria, aumenta, reduz ou muda o prazo de um "
+                                  "tributo vale (anterioridade anual e noventena, com as exceções da CF), com "
+                                  "fundamento e jurisprudência da base (local, sem custo).",
         "laudo": "Laudo em 4 partes: base normativa, cenários, probabilidade de autuação (índice calculado) e "
                  "resumo executivo; salvo em .md (usa o Claude).",
     }
@@ -138,6 +150,13 @@ class AgenteTributario(Agente):
         return SaidaTarefa(resumo=self._resumo_calculo(calc), resumo_voz=self._voz_calculo(calc),
                            saida={"calculo": calc, **r.dados})
 
+    async def tarefa_calcular_anterioridade(self, pedido: PedidoTarefa, config: ConfigAgente) -> SaidaTarefa:
+        if pedido.anterioridade is None:
+            raise TarefaRecusada("informe o tributo, a data de publicação e se a norma cria, aumenta, reduz ou muda o "
+                                 "prazo do tributo")
+        c = anterioridade.calcular(pedido.anterioridade)
+        return SaidaTarefa(resumo=self._resumo_anterioridade(c), resumo_voz=self._voz_anterioridade(c), saida=c)
+
     async def tarefa_laudo(self, pedido: PedidoTarefa, config: ConfigAgente) -> SaidaTarefa:
         if not pedido.pedido.strip():
             raise TarefaRecusada("o laudo precisa do contexto: quem, qual período e o que avaliar")
@@ -186,6 +205,24 @@ class AgenteTributario(Agente):
         a, p = calc["atual"]["carga_pct"], calc["pos_reforma"]["carga_pct"]
         return (f"Em {calc['ano']}, a carga sobre o consumo vai de {_num(a)} para {_num(p)} por cento do "
                 "faturamento, pela calculadora local.")
+
+    @staticmethod
+    def _resumo_anterioridade(c: dict) -> str:
+        if c["pendente"]:
+            return f"{c['tributo_nome']}: data pendente. {c['pendente']}"
+        quando = date.fromisoformat(c["exigivel_a_partir_de"])
+        regras = " e ".join(REGRA[k] for k in c["determinante"])
+        return f"{c['tributo_nome']}: exigível a partir de {quando:%d/%m/%Y} ({regras}; {c['fundamentos'][0]})."
+
+    @staticmethod
+    def _voz_anterioridade(c: dict) -> str:
+        if c["pendente"]:
+            return "A data depende da conversão da medida provisória em lei; me diga quando ela foi convertida."
+        quando = _extenso(date.fromisoformat(c["exigivel_a_partir_de"]))
+        if c["determinante"] == ["publicacao"]:
+            return f"A norma sobre {c['tributo_nome']} vale desde a publicação, em {quando}: não há anterioridade."
+        regras = " e pela ".join(REGRA[k] for k in c["determinante"])
+        return f"A norma sobre {c['tributo_nome']} só vale para cobrança a partir de {quando}, pela {regras}."
 
     @staticmethod
     def _parte3(analise: dict | None) -> dict:
