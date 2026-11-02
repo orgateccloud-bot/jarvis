@@ -12,8 +12,9 @@ const MODES = [
   { key: 'fable', label: 'Fable', tier: 'fable', hint: 'O mais capaz (2,5x o custo do Opus)' },
 ]
 
-const SUGGESTIONS = ['Briefing do dia', 'O que está ocupando espaço no C:?', 'Quais processos estão pesando?',
-  'Me lembra de beber água em 30 minutos']
+// JARVIS-TRILHUM: só o Trilhum e o Direito (não lê o Windows)
+const SUGGESTIONS = ['O que eu estudo hoje?', 'Como está o meu progresso?', 'Agenda da semana',
+  'O que diz a Súmula Vinculante 14?']
 
 export default function CommandDock({ onSend, busy, mode, onMode, convMode, onToggleConversation, voiceSupported, showSuggestions }) {
   const [text, setText] = useState('')

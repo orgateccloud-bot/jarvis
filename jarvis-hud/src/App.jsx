@@ -149,7 +149,8 @@ export default function App() {
           <CardsContexto.Provider value={cards}>
             <div className={`panels ${panelsOpen ? 'open' : ''}`}>
               <aside className="side side-left" aria-label="Sistema e custos">
-                <VitalsCard vitals={j.vitals} history={j.history} />
+                {/* o JARVIS-TRILHUM não lê o Windows (/system/status dá 404): sem dados, sem o card */}
+                {j.vitals && <VitalsCard vitals={j.vitals} history={j.history} />}
                 <CostCard costs={j.costs} />
               </aside>
               <aside className="side side-right" aria-label="Avisos e estado neural">
