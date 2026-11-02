@@ -24,6 +24,7 @@ class ToolContext:
     journal: Any = None                                                      # MoveJournal
     memory: Any = None                                                       # JarvisMemory
     knowledge: Any = None                                                    # KnowledgeBase
+    trilhum: Any = None                                                      # Trilhum (planos de estudo)
     home: Path = field(default_factory=Path.home)  # ponto de partida dos caminhos relativos (não é raiz)
 
 
@@ -73,12 +74,13 @@ def registry(apps_json: Path | None = None, knowledge: Any = None) -> dict[str, 
     from .settings import SETTINGS_TOOLS
     from .system import SYSTEM_TOOLS
     from .tasks import TASK_TOOLS
+    from .trilhum import TRILHUM_TOOLS
 
     apps = app_tools(carregar_catalogo(apps_json or CATALOGO_PADRAO))
     conhecimento = KNOWLEDGE_TOOLS if knowledge is None else knowledge_tools(knowledge.areas_em_uso()
                                                                              or knowledge.areas())
     tools = [*SYSTEM_TOOLS, *FILE_TOOLS, *TASK_TOOLS, *DISK_TOOLS, *SETTINGS_TOOLS, *MEMORY_TOOLS, *conhecimento,
-             *apps]
+             *TRILHUM_TOOLS, *apps]
     return {t.name: t for t in tools}
 
 

@@ -66,6 +66,14 @@ class Settings(BaseModel):
         """Base de conhecimento do especialista (leis e documentos): JARVIS_CONHECIMENTO ou D:\\JARVIS-Conhecimento."""
         return Path(_env("JARVIS_CONHECIMENTO", "D:\\JARVIS-Conhecimento"))
 
+    def trilhum_dir(self) -> Path:
+        """Projeto do Trilhum (planos de estudo, só leitura): JARVIS_TRILHUM_DIR ou D:\\01_Projetos_Ativos\\Trilha."""
+        return Path(_env("JARVIS_TRILHUM_DIR", "D:\\01_Projetos_Ativos\\Trilha"))
+
+    def trilhum_plano(self) -> str:
+        """Plano usado quando o pedido não diz qual (JARVIS_TRILHUM_PLANO); vazio = o em andamento."""
+        return _env("JARVIS_TRILHUM_PLANO", "")
+
     def voz_dir(self) -> Path:
         """Modelos de voz e gravações de teste, fora do repositório: JARVIS_VOZ_DIR ou D:\\JARVIS-Voz."""
         return Path(_env("JARVIS_VOZ_DIR", "D:\\JARVIS-Voz"))
