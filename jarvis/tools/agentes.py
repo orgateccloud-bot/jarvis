@@ -16,6 +16,7 @@ from ..agentes.contratos import (
     ID_AGENTE,
     AtualizacaoAgente,
     ConfigInvalida,
+    ParametrosAnterioridade,
     ParametrosCenario,
     PedidoTarefa,
     Regra,
@@ -65,6 +66,10 @@ def resumo_para_jarvis(r: ResultadoTarefa) -> str:
                            "diferenca": c["diferenca"], "premissas": c["premissas"]}
                           if c["suportado"] else {"suportado": False, "motivo": c["motivo"]})
         out |= {"analise": _corte(s["analise"], 1500), "riscos": s["riscos"][:4], "oportunidades": s["oportunidades"][:4]}
+    elif r.tarefa == "calcular_anterioridade" and s:
+        out |= {k: s[k] for k in ("tributo_nome", "exigivel_a_partir_de", "determinante", "pendente",
+                                  "anterioridade_anual", "noventena", "fundamentos", "jurisprudencia", "alertas",
+                                  "premissas")}
     elif r.tarefa == "laudo" and s:
         p3 = s["parte3"]
         out |= {"indice_risco_pct": p3.get("indice"), "resumo_executivo": _corte(s["resumo_executivo"], 1200),
@@ -104,6 +109,7 @@ class ComandarParams(BaseModel):
     arquivo: str | None = Field(default=None, max_length=400,
                                 description="CSV de lançamentos nas pastas permitidas (analisar_lancamentos, laudo)")
     cenario: ParametrosCenario | None = Field(default=None, description="Para comparar_cenarios e laudo")
+    anterioridade: ParametrosAnterioridade | None = Field(default=None, description="Para calcular_anterioridade")
 
 
 def ler_lancamentos(caminho: str, ctx: ToolContext):
@@ -123,7 +129,8 @@ def ler_lancamentos(caminho: str, ctx: ToolContext):
 async def comandar_agente(p: ComandarParams, ctx: ToolContext) -> str:
     orq = _orquestrador(ctx)
     lancamentos = await asyncio.to_thread(ler_lancamentos, p.arquivo, ctx) if p.arquivo else None
-    pedido = PedidoTarefa(tarefa=p.tarefa, pedido=p.pedido, lancamentos=lancamentos, cenario=p.cenario)
+    pedido = PedidoTarefa(tarefa=p.tarefa, pedido=p.pedido, lancamentos=lancamentos, cenario=p.cenario,
+                          anterioridade=p.anterioridade)
     try:
         r = await orq.comandar(p.agente, pedido, "jarvis_conversa")
     except KeyError as e:
@@ -213,7 +220,8 @@ def ferramentas_agentes(catalogo: dict[str, dict]) -> list[Tool]:
         Tool("comandar_agente",
              "Dá uma tarefa a um agente subordinado e devolve o resultado (ou 'em andamento', se demorar; aí um aviso "
              f"chega quando terminar). Use quando o usuário pedir algo a um agente. Catálogo: {lista}. Lançamentos "
-             "vão por arquivo CSV nas pastas permitidas; cenários pelo campo cenario.",
+             "vão por arquivo CSV nas pastas permitidas; cenários pelo campo cenario; anterioridade pelo campo "
+             "anterioridade.",
              ComandarParams, comandar_agente, lambda p: f"agente {p.agente}: {p.tarefa.replace('_', ' ')}"[:120],
              assincrona=True),
         Tool("resultado_agente",

@@ -6,7 +6,7 @@ import secrets
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ID_AGENTE = r"^[a-z][a-z0-9_]{1,31}$"
 Origem = Literal["usuario_api", "jarvis_conversa"]
@@ -53,11 +53,47 @@ class ParametrosCenario(_Contrato):
                                            description="Fração do faturamento em compras que geram crédito")
 
 
+# As chaves da tabela de jarvis/agentes/tributario/anterioridade.py (um teste confere que batem)
+TributoAnterioridade = Literal[
+    "icms", "iss", "ibs", "imposto_seletivo", "itcmd", "itbi", "itr", "ipva", "iptu", "taxa", "contribuicao_melhoria",
+    "cide", "cosip", "outra_contribuicao", "emprestimo_compulsorio_investimento",
+    "ipi", "cbs", "pis_cofins", "csll", "contribuicao_previdenciaria", "icms_combustivel_restabelecimento",
+    "cide_combustivel_restabelecimento",
+    "ir", "ipva_base_calculo", "iptu_base_calculo", "aliquota_referencia_ibs_cbs",
+    "ii", "ie", "iof", "emprestimo_compulsorio_calamidade_guerra", "imposto_extraordinario_guerra",
+]
+
+
+class ParametrosAnterioridade(_Contrato):
+    """Entrada da calculadora de anterioridade e noventena (CF, art. 150, III, b e c)."""
+
+    tributo: TributoAnterioridade
+    data_publicacao: date = Field(ge=date(1988, 10, 5), le=date(2100, 12, 31),
+                                  description="Publicação da lei ou da medida provisória")
+    natureza: Literal["instituicao_ou_majoracao", "revogacao_de_beneficio", "reducao_ou_extincao",
+                      "alteracao_de_prazo"] = "instituicao_ou_majoracao"
+    veiculo: Literal["lei", "medida_provisoria"] = "lei"
+    data_conversao: date | None = Field(default=None, description="MP: publicação da lei de conversão")
+    majoracao_so_na_conversao: bool = Field(default=False, description="MP: o aumento só veio na lei de conversão")
+    vigencia_lei: date | None = Field(default=None, description="Vigência que a própria lei fixou, se houver")
+
+    @model_validator(mode="after")
+    def _coerente(self) -> ParametrosAnterioridade:
+        if self.veiculo == "lei" and (self.data_conversao or self.majoracao_so_na_conversao):
+            raise ValueError("data de conversão e majoração na conversão só valem para medida provisória")
+        if self.data_conversao and self.data_conversao < self.data_publicacao:
+            raise ValueError("a conversão em lei não pode ser antes da publicação da MP")
+        if self.majoracao_so_na_conversao and self.data_conversao is None:
+            raise ValueError("informe a data de conversão: é dela que contam os 90 dias")
+        return self
+
+
 class PedidoTarefa(_Contrato):
     tarefa: str = Field(pattern=r"^[a-z_]{3,40}$", description="Uma das tarefas do catálogo do agente")
     pedido: str = Field(default="", max_length=4000)
     lancamentos: list[Lancamento] | None = Field(default=None, max_length=50_000)
     cenario: ParametrosCenario | None = None
+    anterioridade: ParametrosAnterioridade | None = None
 
 
 class Ordem(_Contrato):
