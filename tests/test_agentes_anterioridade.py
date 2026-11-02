@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from jarvis.agentes.contratos import ParametrosAnterioridade, PedidoTarefa, TributoAnterioridade
 from jarvis.agentes.tributario import anterioridade
+from jarvis.agentes.tributario.agente import AgenteTributario
 from tests.conftest import text_turn, tool_turn
 from tests.test_agentes_api import AUTH, _app
 from tests.test_agentes_jarvis import _conv
@@ -133,10 +134,26 @@ async def test_tarefa_do_agente_sem_claude(montar):  # noqa: F811
                            "usuario_api")
     assert r.estado == "concluida" and r.custo_usd == 0 and r.modelo == "regras" and fake.calls == []
     assert r.saida["exigivel_a_partir_de"] == "2027-03-15"
-    assert r.resumo.startswith("ICMS: exigível a partir de 15/03/2027 (noventena")
+    assert r.resumo == "ICMS: exigível a partir de 15/03/2027 (noventena; CF, art. 150, III, c)."
     assert r.resumo_voz == "A norma sobre ICMS só vale para cobrança a partir de 15 de março de 2027, pela noventena."
     falta = await orq.comandar("tributario", PedidoTarefa(tarefa="calcular_anterioridade"), "usuario_api")
     assert falta.estado == "recusada" and "data de publicação" in falta.erro
+
+
+@pytest.mark.parametrize(("tributo", "publicacao", "kw", "resumo"), [
+    ("icms", date(2026, 10, 1), {}, "ICMS: exigível a partir de 01/01/2027 (anterioridade anual; CF, art. 150, III, b)."),
+    ("icms", date(2026, 10, 3), {}, ("ICMS: exigível a partir de 01/01/2027 (anterioridade anual e noventena; "
+                                     "CF, art. 150, III, b; CF, art. 150, III, c).")),
+    ("cbs", date(2026, 11, 2), {}, "CBS: exigível a partir de 31/01/2027 (noventena; CF, art. 195, §6º)."),
+    ("ir", date(2026, 11, 10), {"veiculo": "medida_provisoria", "data_conversao": date(2027, 2, 15)},
+     "Imposto de Renda: exigível a partir de 01/01/2028 (anterioridade anual; CF, art. 62, §2º; art. 150, III, b)."),
+    ("iof", date(2026, 10, 1), {}, ("IOF: exigível a partir de 01/10/2026 (publicação, sem anterioridade; "
+                                    "CF, art. 150, §1º (fora das duas)).")),
+    ("icms", date(2026, 10, 1), {"vigencia_lei": date(2027, 4, 1)},
+     "ICMS: exigível a partir de 01/04/2027 (vigência fixada na lei; CF, art. 150, III, b e c)."),
+])
+def test_resumo_cita_o_artigo_da_regra_que_decidiu(tributo, publicacao, kw, resumo):
+    assert AgenteTributario._resumo_anterioridade(_calc(tributo, publicacao, **kw)) == resumo
 
 
 def test_pela_api(settings):

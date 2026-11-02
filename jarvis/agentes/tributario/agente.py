@@ -212,7 +212,10 @@ class AgenteTributario(Agente):
             return f"{c['tributo_nome']}: data pendente. {c['pendente']}"
         quando = date.fromisoformat(c["exigivel_a_partir_de"])
         regras = " e ".join(REGRA[k] for k in c["determinante"])
-        return f"{c['tributo_nome']}: exigível a partir de {quando:%d/%m/%Y} ({regras}; {c['fundamentos'][0]})."
+        # o artigo da regra que decidiu; vigência da lei e publicação ficam com o fundamento do tributo
+        artigos = [c[k]["fundamento"] for k in c["determinante"] if k in ("anterioridade_anual", "noventena")]
+        artigo = "; ".join(artigos) or c["fundamentos"][0]
+        return f"{c['tributo_nome']}: exigível a partir de {quando:%d/%m/%Y} ({regras}; {artigo})."
 
     @staticmethod
     def _voz_anterioridade(c: dict) -> str:
