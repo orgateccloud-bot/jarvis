@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { TIERS } from '../lib/tiers.js'
+import { astroDe } from '../lib/astro.js'
+
+const CHAMADO = astroDe().chamado // "sol" no JARVIS principal, "planeta" nos outros
 
 const MODES = [
   { key: 'auto', label: 'Auto', hint: 'O JARVIS escolhe o modelo pela complexidade' },
@@ -61,7 +64,7 @@ export default function CommandDock({ onSend, busy, mode, onMode, convMode, onTo
           className="dock-input"
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder={listening ? 'Conversa aberta — fale ou digite…' : 'Digite ou clique no sol para conversar…  (Ctrl+K)'}
+          placeholder={listening ? 'Conversa aberta — fale ou digite…' : `Digite ou clique no ${CHAMADO} para conversar…  (Ctrl+K)`}
           aria-label="Comando para o JARVIS"
           autoFocus
         />
