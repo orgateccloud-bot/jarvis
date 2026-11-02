@@ -1,9 +1,10 @@
-"""Progresso do Trilhum lido pela sincronização do app (Supabase da Trilha), só leitura.
+"""Progresso do Trilhum lido da sincronização do app (Firestore do Trilhum), só leitura.
 
-O app guarda um JSON por plano no Supabase próprio da Trilha, atrás de um token de sincronização (o banco guarda só
-o hash). Aqui só se chama trilha_sync_get, com a chave publishable, como o app faz; trilha_sync_put nunca. O token
-dá acesso de leitura e gravação aos dados do usuário: vem do .env (JARVIS_TRILHUM_SYNC_TOKEN), não aparece em log,
-mensagem de erro ou resposta.
+O app grava um JSON por plano em sync/{uid}/planos/{plano} (campo json, a string {app, plano, ts, data, em}, e
+campo em), pela função "api"; o catálogo dos planos salvos fica no plano "_planos". Aqui só se lê, pelo Admin SDK
+(sync_trilhum.mjs; ver firestore.py para a credencial e o emulador do modo teste); nada é gravado. O uid é o
+código que o aluno copia no app ("Copiar código para o JARVIS"), em JARVIS_TRILHUM_UID; não aparece em log nem em
+mensagem de erro.
 
 Do JSON só fica o necessário para falar de progresso e para o coach. perfil (nome) e perguntas (texto livre) são
 descartados na leitura. O questionário do JARVIS (chave jarvis, campo exclusivo da ULTRA) fica, mas já anonimizado:
@@ -12,22 +13,24 @@ CPF/CNPJ, e-mail e telefone mascarados e o nome do perfil pseudonimizado (PESSOA
 
 from __future__ import annotations
 
+import json
 import re
 import threading
 import time
 from collections.abc import Callable
 from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Literal
 
-import httpx
 from pydantic import BaseModel, Field
 
 from ..core.privacy import anonimizar_contato, sanitizar
+from .firestore import Executor, LeitorFirestore, _executar_node
 from .trilhum import TrilhumErro
 
-SUPABASE = re.compile(r"^https://[a-z0-9-]+\.supabase\.co/?$", re.IGNORECASE)   # o mesmo teste do app
+SCRIPT = Path(__file__).with_name("sync_trilhum.mjs")
 PLANO_APP = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")                   # ids de plano que o app aceita
-TTL_S = 60.0      # o app aceita 3.000 leituras por hora por endereço; o JARVIS não precisa de mais que uma por minuto
+TTL_S = 60.0      # cada leitura roda o Node; o JARVIS não precisa de mais que uma por minuto por plano
 CFG_CHAVES = {"start", "exam", "hora", "dias", "blocos", "hDia", "hSab", "hDom", "nq", "pomodoro"}
 JARVIS_TEXTOS = ("obj", "porque", "dif", "desiste")   # respostas livres do questionário (até 300 caracteres no app)
 HORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -127,39 +130,43 @@ class Progresso(BaseModel):
         )
 
 
-class SincronizacaoTrilhum:
-    def __init__(self, url: str | None = None, chave: str | None = None, token: str | None = None,
-                 ttl_s: float = TTL_S, cliente: httpx.Client | None = None,
-                 relogio: Callable[[], float] = time.monotonic, salt: str = ""):
-        self.url, self.chave, self.token = (url or "").strip(), (chave or "").strip(), (token or "").strip()
+class SincronizacaoTrilhum(LeitorFirestore):
+    def __init__(self, uid: str = "", projeto: str = "", modulos: Path | None = None, credenciais: str = "",
+                 emulador: str = "", node: str | None = None, executar: Executor = _executar_node,
+                 ttl_s: float = TTL_S, relogio: Callable[[], float] = time.monotonic, salt: str = ""):
+        super().__init__(uid, projeto, modulos or Path("node_modules"), credenciais, emulador, node, executar)
         self.ttl_s, self.relogio = ttl_s, relogio
         self.salt = salt   # pseudonimização do nome no questionário do JARVIS (o mesmo salt do resto do JARVIS)
-        self._cliente = cliente
         self._cache: dict[str, tuple[float, object]] = {}   # registro → (quando, JSON cru)
         self._trava = threading.Lock()
 
+    @classmethod
+    def da_config(cls, settings, salt: str = "") -> SincronizacaoTrilhum:
+        """Com o uid, o projeto e a credencial do Firebase do .env e o firebase-admin de Trilha\\functions."""
+        uid, projeto, credenciais, emulador = settings.firebase()
+        return cls(uid, projeto, settings.trilhum_dir() / "functions" / "node_modules", credenciais, emulador,
+                   salt=salt)
+
     @property
     def configurada(self) -> bool:
-        return bool(self.url and self.chave and self.token)
+        return bool(self.uid)
 
     def problema(self) -> str | None:
-        """Por que não dá para ler (sem citar o token nem a chave); None se está tudo certo."""
+        """Por que não dá para ler (sem citar o uid nem a credencial); None se está tudo certo."""
         if not self.configurada:
-            return ("a sincronização do Trilhum não está configurada: faltam JARVIS_TRILHUM_SYNC_URL, "
-                    "JARVIS_TRILHUM_SYNC_CHAVE e JARVIS_TRILHUM_SYNC_TOKEN no .env do JARVIS-TRILHUM")
-        if not SUPABASE.match(self.url):
-            return "JARVIS_TRILHUM_SYNC_URL precisa ser o endereço do Supabase da Trilha (https://….supabase.co)"
-        if not 32 <= len(self.token) <= 200:
-            return "JARVIS_TRILHUM_SYNC_TOKEN não parece um token de sincronização do Trilhum (32 a 200 caracteres)"
-        return None
+            return ("a sincronização do Trilhum não está configurada: falta JARVIS_TRILHUM_UID (o código de "
+                    "\"Copiar código para o JARVIS\" no app) no .env do JARVIS-TRILHUM")
+        return super().problema()
 
     def ler(self, plano_sync: str) -> Progresso | None:
         """O progresso do plano (None se o plano ainda não foi sincronizado). Guardado por TTL_S."""
         bruto = self._ler(plano_sync)
+        if isinstance(bruto, dict) and isinstance(bruto.get("data"), dict):   # o envelope {app, plano, ts, data, em}
+            bruto = bruto["data"]
         return Progresso.do_app(bruto, self.salt) if isinstance(bruto, dict) else None
 
     def catalogo(self) -> dict[str, dict]:
-        """Os planos salvos no app ({id: plano}), que viajam com o token no registro "_planos". São as versões que o
+        """Os planos salvos no app ({id: plano}), que viajam na conta no registro "_planos". São as versões que o
         usuário de fato usa, e podem não existir na pasta planos\\ (ex.: um plano gerado ou importado no app)."""
         bruto = self._ler("_planos")
         if not isinstance(bruto, dict):
@@ -179,23 +186,13 @@ class SincronizacaoTrilhum:
             agora = self.relogio()
             if (c := self._cache.get(nome)) and agora - c[0] < self.ttl_s:
                 return c[1]
-            cliente = self._cliente or httpx.Client(timeout=10.0, trust_env=False)
-            try:
-                r = cliente.post(self.url.rstrip("/") + "/rest/v1/rpc/trilha_sync_get",
-                                 headers={"apikey": self.chave, "Content-Type": "application/json"},
-                                 json={"p_token": self.token, "p_plano": nome})
-            except httpx.HTTPError as e:
-                raise TrilhumErro(f"não consegui falar com a sincronização do Trilhum ({type(e).__name__})") from e
-            finally:
-                if self._cliente is None:
-                    cliente.close()
-            if r.status_code != 200:
-                raise TrilhumErro(f"a sincronização do Trilhum recusou a leitura (HTTP {r.status_code}); confira a "
-                                  "chave e o token no .env")
-            try:
-                bruto = r.json()
-            except ValueError as e:
-                raise TrilhumErro("a sincronização do Trilhum devolveu algo que não é JSON") from e
+            d = self._rodar(SCRIPT, plano=nome)
+            bruto = None
+            if d.get("existe") and isinstance(d.get("json"), str):
+                try:
+                    bruto = json.loads(d["json"])
+                except ValueError as e:
+                    raise TrilhumErro("a sincronização do Trilhum guardou algo que não é JSON") from e
             self._cache[nome] = (agora, bruto)
             return bruto
 

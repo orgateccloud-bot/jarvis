@@ -326,7 +326,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--data", type=date.fromisoformat, help="dia para --listar (AAAA-MM-DD); padrão: hoje")
     a = ap.parse_args(argv)
     s = get_settings()
-    trilhum = Trilhum(s.trilhum_dir(), s.trilhum_plano(), sync=SincronizacaoTrilhum(*s.trilhum_sync(), salt=s.salt()))
+    trilhum = Trilhum(s.trilhum_dir(), s.trilhum_plano(), sync=SincronizacaoTrilhum.da_config(s, s.salt()))
     ag = montar(s, trilhum, dry_run=a.dry_run or a.listar)
     if a.listar:
         try:

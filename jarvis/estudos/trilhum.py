@@ -5,8 +5,8 @@ simulado, como os testes do Trilhum fazem, e devolve as semanas que ele monta. C
 (fases, data-alvo, fase extra, reta final, rodízio de tópicos, sábados) para Python divergiria do app.
 
 O cadastro (início, data-alvo, dias e horários) e o progresso do usuário ficam no navegador dele, com
-sincronização opcional pelo Supabase da Trilha. Com a sincronização configurada (sincronizacao.py), a agenda é
-montada com o cadastro dele e os blocos feitos são marcados; sem ela, valem os padrões do plano. Nada é gravado na
+sincronização opcional pela conta do Trilhum (Firestore). Com a sincronização configurada (sincronizacao.py), a
+agenda é montada com o cadastro dele e os blocos feitos são marcados; sem ela, valem os padrões do plano. Nada é gravado na
 Trilha.
 """
 

@@ -1,11 +1,13 @@
 """JARVIS do Trilhum ULTRA: questionário (chave jarvis) da sincronização, anonimização, coach, modelo por plano de
 assinatura com teto por aluno e os avisos pelo WhatsApp 30 minutos antes de cada bloco.
 
-Nada aqui fala com a Anthropic, com o Supabase ou com a Meta: transportes falsos do httpx e o FakeAnthropic.
+Nada aqui fala com a Anthropic, com o Firestore ou com a Meta: executores e transportes falsos e o FakeAnthropic.
 """
 
 import json
+import tempfile
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import pytest
@@ -32,8 +34,6 @@ from jarvis.estudos.sincronizacao import FeedbackJarvis, Progresso, Sincronizaca
 from jarvis.estudos.trilhum import Agenda, Trilhum
 from tests.conftest import FakeAnthropic
 
-TOKEN = "tk_" + "abcdefghijklmnopqrstuvwxyz0123456789"
-URL = "https://projetoteste.supabase.co"
 SALT = "salt-teste"
 NUMERO = "5562999998888"
 
@@ -75,18 +75,23 @@ AGENDA = {
 }
 
 
-class SupabaseFalso:
+class SyncFalso:
+    """No lugar do Node com o firebase-admin (sync_trilhum.mjs): o plano rota40-oab-48 no envelope do app."""
+
     def __init__(self, dados=None):
         self.dados = DADOS_APP if dados is None else dados
 
-    def __call__(self, req: httpx.Request) -> httpx.Response:
-        nome = json.loads(req.content)["p_plano"]
-        corpo = self.dados if nome == "rota40-oab-48" else None
-        return httpx.Response(200, content=json.dumps(corpo).encode(), headers={"content-type": "application/json"})
+    def __call__(self, argv, timeout_s, entrada, ambiente):
+        if json.loads(entrada)["plano"] != "rota40-oab-48":
+            return json.dumps({"existe": False})
+        return json.dumps({"existe": True, "json": json.dumps({"app": "trilha", "plano": "rota40-oab-48", "ts": {},
+                                                               "data": self.dados, "em": 1762000000000})})
 
     def sync(self, **kw):
-        return SincronizacaoTrilhum(URL, "chave", TOKEN, cliente=httpx.Client(transport=httpx.MockTransport(self)),
-                                    salt=SALT, **kw)
+        nm = Path(tempfile.gettempdir()) / "jarvis-testes-trilhum" / "node_modules"
+        (nm / "firebase-admin").mkdir(parents=True, exist_ok=True)
+        return SincronizacaoTrilhum("AbC123uid", "demo-trilhum", nm, emulador="127.0.0.1:8085", node="node",
+                                    executar=self, salt=SALT, **kw)
 
 
 @pytest.fixture
@@ -100,7 +105,7 @@ def pasta(tmp_path):
 
 def _trilhum(pasta, dados=None, sync=True):
     return Trilhum(pasta, node="node", executar=lambda argv, t, e=None: json.dumps(AGENDA),
-                   sync=SupabaseFalso(dados).sync() if sync else None)
+                   sync=SyncFalso(dados).sync() if sync else None)
 
 
 # ── 1. leitura do questionário (chave jarvis) ────────────────

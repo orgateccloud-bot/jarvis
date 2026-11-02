@@ -66,9 +66,10 @@ class Settings(BaseModel):
         return _env("JARVIS_WHATSAPP_NUMERO", ""), _env("JARVIS_WHATSAPP_CONSENTIMENTO", "")
 
     def firebase(self) -> tuple[str, str, str, str]:
-        """Firestore do Trilhum (assinantes/{uid}, só leitura): uid do aluno, projeto, arquivo da conta de serviço
-        (fora do Git) e, no modo teste, o emulador local (127.0.0.1:8085, projeto demo-trilhum). Com o uid, o número e
-        o consentimento vêm de lá e a configuração local é ignorada."""
+        """Firestore do Trilhum (sync/{uid} e assinantes/{uid}, só leitura): uid do aluno (o código que ele copia no
+        app), projeto, arquivo da conta de serviço (fora do Git) e, no modo teste, o emulador local (127.0.0.1:8085,
+        projeto demo-trilhum). Com o uid, o progresso, o número e o consentimento vêm de lá e a configuração local do
+        WhatsApp é ignorada. Lidos do ambiente na hora: não são campos, então não aparecem no repr."""
         return (_env("JARVIS_TRILHUM_UID", ""), _env("JARVIS_FIREBASE_PROJETO", "trilha-estudos-2026"),
                 _env("JARVIS_FIREBASE_CREDENCIAIS", ""), _env("JARVIS_FIRESTORE_EMULADOR", ""))
 
@@ -117,12 +118,6 @@ class Settings(BaseModel):
     def trilhum_plano(self) -> str:
         """Plano usado quando o pedido não diz qual (JARVIS_TRILHUM_PLANO); vazio = o em andamento."""
         return _env("JARVIS_TRILHUM_PLANO", "")
-
-    def trilhum_sync(self) -> tuple[str, str, str]:
-        """Sincronização do Trilhum (progresso, só leitura): endereço do Supabase da Trilha, chave publishable e o
-        token de sincronização do usuário. Lidos do ambiente na hora: não são campos, então não aparecem no repr."""
-        return (_env("JARVIS_TRILHUM_SYNC_URL", ""), _env("JARVIS_TRILHUM_SYNC_CHAVE", ""),
-                _env("JARVIS_TRILHUM_SYNC_TOKEN", ""))
 
     def voz_dir(self) -> Path:
         """Modelos de voz e gravações de teste, fora do repositório: JARVIS_VOZ_DIR ou D:\\JARVIS-Voz."""

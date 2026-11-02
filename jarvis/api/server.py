@@ -74,7 +74,7 @@ def build_conversation(settings: Settings, claude_client=None, approval_timeout_
     if plano:
         tools = {k: v for k, v in tools.items() if k in FERRAMENTAS_ALUNO}
     trilhum = Trilhum(settings.trilhum_dir(), settings.trilhum_plano(),
-                      sync=SincronizacaoTrilhum(*settings.trilhum_sync(), salt=salt))
+                      sync=SincronizacaoTrilhum.da_config(settings, salt))
     return Conversation(
         claude=ClaudeBrain(settings.max_tokens, settings.user_name, client=claude_client,
                            manifesto=manifesto(tools, web), assistente=settings.assistente,
