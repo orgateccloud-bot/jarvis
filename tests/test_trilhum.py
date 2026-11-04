@@ -3,7 +3,7 @@ leitura) e as quatro ferramentas.
 
 Os unitários usam executores falsos no lugar do Node (agenda e Firestore do Trilhum); um deles roda o
 sync_trilhum.mjs de verdade com um firebase-admin falso. O de integração
-roda o app de verdade (D:\\01_Projetos_Ativos\\Trilha) e é pulado se o Node, a pasta ou o jsdom dos testes do
+roda o app de verdade (D:\\01_Projetos_Ativos\\Geladeira\\edtech-ai-platform\\trilhum) e é pulado se o Node, a pasta ou o jsdom dos testes do
 Trilhum não estiverem na máquina.
 """
 
@@ -378,7 +378,7 @@ def test_planos_salvos_no_app_entram_e_sao_preferidos(pasta):
     assert "rota40-oab-48" in {p.id for p in sem_catalogo.planos()}   # catálogo fora do ar: a pasta continua valendo
 
 
-REAL = Path(r"D:\01_Projetos_Ativos\Trilha")
+REAL = Path(r"D:\01_Projetos_Ativos\Geladeira\edtech-ai-platform\trilhum")
 
 
 @pytest.mark.skipif(not (shutil.which("node") and (REAL / "planos" / "rota40-oab-48.json").is_file()

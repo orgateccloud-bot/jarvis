@@ -1,4 +1,4 @@
-"""Trilhum: planos de estudo para concurso e OAB (projeto em D:\\01_Projetos_Ativos\\Trilha), só leitura.
+"""Trilhum: planos de estudo para concurso e OAB (projeto em D:\\01_Projetos_Ativos\\Geladeira\\edtech-ai-platform\\trilhum), só leitura.
 
 A agenda (o que estudar em cada dia) vem do próprio app: agenda_trilhum.mjs abre o trilha.html num navegador
 simulado, como os testes do Trilhum fazem, e devolve as semanas que ele monta. Copiar a lógica do calendário

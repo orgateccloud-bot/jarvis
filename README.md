@@ -239,7 +239,7 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 | `JARVIS_PASTAS` | pastas pessoais | O que as ferramentas de arquivo podem ler e de onde podem mover (**substitui** o padrão; veja abaixo) |
 | `JARVIS_ARQUIVO` | `D:\JARVIS-Arquivo` | Destino reversível dos movimentos e dos arquivos gerados |
 | `JARVIS_CONHECIMENTO` | `D:\JARVIS-Conhecimento` | Base de leis e documentos (uma subpasta por área) |
-| `JARVIS_TRILHUM_DIR` | `D:\01_Projetos_Ativos\Trilha` | Projeto do Trilhum: planos de estudo (só leitura) e o app que monta a agenda |
+| `JARVIS_TRILHUM_DIR` | `D:\01_Projetos_Ativos\Geladeira\edtech-ai-platform\trilhum` | Projeto do Trilhum: planos de estudo (só leitura) e o app que monta a agenda |
 | `JARVIS_TRILHUM_PLANO` | (vazio) | Plano usado quando o pedido não diz qual; vazio = o plano em andamento |
 | `JARVIS_TRILHUM_UID`, `JARVIS_FIREBASE_CREDENCIAIS` | (vazio) | Conta do Trilhum (o código de "Copiar código para o JARVIS" no app) e a conta de serviço do Firebase: com elas, a agenda usa o seu cadastro e o JARVIS vê o progresso (`sync/{uid}/planos` no Firestore). Só leitura; no modo teste, `JARVIS_FIRESTORE_EMULADOR` |
 | `JARVIS_VOZ_LOCAL` | `0` | `1` liga a [voz local](#voz-local-sem-o-hud) (a API sobe o serviço de voz) |

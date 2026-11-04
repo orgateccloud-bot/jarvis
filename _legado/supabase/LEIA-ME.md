@@ -2,7 +2,7 @@
 
 Nada foi apagado: `jarvis/estudos/sincronizacao.py` foi movido com `git mv` para `sincronizacao_supabase.py` quando
 o Trilhum concentrou tudo no Firebase (commit `3559352` do Trilhum). O projeto Supabase da Trilha
-(`cbzaghttykchvjqsnqyo`) também foi aposentado; o código dele está em `D:\01_Projetos_Ativos\Trilha\_legado\supabase`.
+(`cbzaghttykchvjqsnqyo`) também foi aposentado; o código dele está em `D:\01_Projetos_Ativos\Geladeira\edtech-ai-platform\trilhum\_legado\supabase`.
 
 | Antes (Supabase) | Agora (Firestore) |
 |---|---|
