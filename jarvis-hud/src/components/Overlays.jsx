@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NOME } from '../lib/marca.js'
 import { astroDe } from '../lib/astro.js'
+import { ESPERA } from '../lib/atividade.js'
 
 const ASTRO = astroDe()
 const LINES = [ASTRO.abertura, 'Desdobrando a galáxia', 'Conectando ao Claude', 'Sistemas online']
@@ -47,12 +48,13 @@ const HINT = {
   wake: 'Diga “Jarvis” para começar',
 }
 
-/** Legenda sob o sol: o que o usuário está dizendo, ou uma dica do que fazer. */
-export function Caption({ mode, phase, caption }) {
+/** Legenda sob o sol: o que o usuário está dizendo, o que o JARVIS está fazendo, ou uma dica do que fazer. */
+export function Caption({ mode, phase, caption, atividade }) {
   let text = caption
   if (!text) {
     if (phase === 'listening') text = 'Ouvindo…'
-    else if (phase === 'thinking') text = 'Pensando…'
+    else if (phase === 'waiting') text = ESPERA
+    else if (phase === 'thinking') text = `${atividade || 'Pensando'}…`
     else if (phase === 'idle') text = HINT[mode] || ''
   }
   if (!text) return null

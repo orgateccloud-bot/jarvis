@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { VERT, fragDoAstro } from './shaders.js'
-import { fpsAlvo, proximoQuadro } from './pacing.js'
+import { fpsAlvo, proximoQuadro, pulsoDaEspera } from './pacing.js'
 import { TIERS, hexToRgb } from '../lib/tiers.js'
 import { ASTRO, astroDe } from '../lib/astro.js'
 import { TRANSICAO_MS, flameLim } from '../spike/params.js'
@@ -43,7 +43,7 @@ function noiseTexture(gl) {
  * Cosmos em tela cheia atrás da interface: universo em expansão, galáxia espiral e o astro do centro
  * (sol flamejante no JARVIS principal, um planeta nos outros; ver lib/astro.js).
  *
- * state: 'idle' | 'listening' | 'thinking' | 'speaking'
+ * state: 'idle' | 'listening' | 'thinking' | 'speaking' | 'waiting' (esperando uma aprovação)
  * tier: chave de TIERS (regras | simples | media | complexa) — define a classe estelar do sol (ou da luz do planeta)
  * alert: tinge de classe M e dispara a ejeção de massa coronal (no planeta, a aurora)
  * energyRef: ref 0..1 "chutado" a cada trecho/palavra; decai sozinho
@@ -137,7 +137,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
     const tierOf = tg => TIERS[tg.alert ? 'alerta' : tg.tier] || TIERS.regras
     const t0 = tierOf(target.current)
     const cur = {
-      listen: 0, think: 0, speak: 0, energy: 0, alert: 0, boot: 0,
+      listen: 0, think: 0, speak: 0, wait: 0, energy: 0, alert: 0, boot: 0,
       temp: t0.temp, giant: t0.giant, tint: hexToRgb(t0.galaxy),
       expand: 0, spin: 0, clock: 0,
     }
@@ -234,10 +234,11 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       cur.listen = lerp(cur.listen, tg.state === 'listening' ? 1 : 0, k)
       cur.think = lerp(cur.think, tg.state === 'thinking' ? 1 : 0, k)
       cur.speak = lerp(cur.speak, tg.state === 'speaking' ? 1 : 0, k)
+      cur.wait = lerp(cur.wait, tg.state === 'waiting' ? 1 : 0, k)
       cur.alert = lerp(cur.alert, tg.alert ? 1 : 0, k)
       cur.boot = Math.min(1, cur.boot + dt / 3.2)
       if (energyRef) {
-        cur.energy = Math.max(cur.energy * Math.exp(-dt * 3), energyRef.current || 0)
+        cur.energy = Math.max(cur.energy * Math.exp(-dt * 3), energyRef.current || 0, cur.wait * pulsoDaEspera(cur.clock))
         energyRef.current = (energyRef.current || 0) * Math.exp(-dt * 6)
       }
       const t = tierOf(tg)
@@ -248,8 +249,8 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
       cur.tint = cur.tint.map((v, i) => lerp(v, tint[i], k * 0.8))
 
       cur.clock += dt
-      cur.expand += dt * (1 + 2.2 * cur.think + 0.8 * cur.speak - 0.5 * cur.listen)
-      cur.spin += dt * (0.025 + 0.09 * cur.think - 0.01 * cur.listen)
+      cur.expand += dt * (1 + 2.2 * cur.think + 0.8 * cur.speak - 0.5 * cur.listen - 0.6 * cur.wait)
+      cur.spin += dt * (0.025 + 0.09 * cur.think - 0.01 * cur.listen - 0.015 * cur.wait)
 
       draw()
       raf = requestAnimationFrame(frame)
@@ -296,7 +297,7 @@ export default function CosmosScene({ state = 'idle', tier = 'regras', alert = f
         const tier = tierOf(tg)
         Object.assign(cur, {
           listen: tg.state === 'listening' ? 1 : 0, think: tg.state === 'thinking' ? 1 : 0,
-          speak: tg.state === 'speaking' ? 1 : 0, alert: tg.alert ? 1 : 0, boot: 1,
+          speak: tg.state === 'speaking' ? 1 : 0, wait: tg.state === 'waiting' ? 1 : 0, alert: tg.alert ? 1 : 0, boot: 1,
           energy: tg.state === 'speaking' ? energy : 0, temp: tier.temp, giant: tier.giant,
           tint: hexToRgb(tier.galaxy), clock: t, expand: t * 1.5, spin: t * 0.05,
         })
