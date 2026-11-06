@@ -12,7 +12,7 @@ import psutil
 from loguru import logger
 
 from .contracts import StreamEvent
-from .costs import price_usage
+from .costs import price_usage, tentativas_cobradas
 
 SYSTEM_PROMPT = """Você é o {assistente}, assistente pessoal de {nome}, rodando no PC dele.
 
@@ -223,22 +223,21 @@ class ClaudeBrain:
             logger.warning(f"Recusa de {model} (categoria={category})")
 
         u = final.usage
-        cache_read = u.cache_read_input_tokens or 0
-        cache_write = u.cache_creation_input_tokens or 0
         served_by = final.model or model
         searches = getattr(getattr(u, "server_tool_use", None), "web_search_requests", 0) or 0
+        tentativas = tentativas_cobradas(u, model, served_by)
+        _, entrada, saida, leitura, escrita = zip(*tentativas, strict=True)
         yield TurnOutcome(
             text=text,
             model=served_by,
             content=[b.to_dict() for b in final.content],
             stop_reason=final.stop_reason,
-            input_tokens=u.input_tokens,
-            output_tokens=u.output_tokens,
-            cache_read_tokens=cache_read,
-            cache_write_tokens=cache_write,
+            input_tokens=sum(entrada),
+            output_tokens=sum(saida),
+            cache_read_tokens=sum(leitura),
+            cache_write_tokens=sum(escrita),
             web_searches=searches,
-            cost_usd=round(price_usage(served_by, u.input_tokens, u.output_tokens, cache_read, cache_write)
-                           + searches * WEB_SEARCH_USD, 6),
+            cost_usd=round(sum(price_usage(*t) for t in tentativas) + searches * WEB_SEARCH_USD, 6),
         )
 
 

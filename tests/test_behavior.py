@@ -1,15 +1,30 @@
 import sqlite3
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 from jarvis.api.server import build_conversation
 from jarvis.core.costs import CostLedger
 from jarvis.core.session import SessionStore
 from jarvis.tools import manifesto, registry
-from tests.conftest import FakeAnthropic
+from tests.conftest import FakeAnthropic, text_turn
 
 
 async def run(conv, msg, session="t"):
     return [ev async for ev in conv.turn(session, msg)]
+
+
+async def test_compactacao_entra_no_custo_do_turno_e_no_teto(settings):
+    compactacao = SimpleNamespace(type="compaction", input_tokens=3000, output_tokens=500,
+                                  cache_read_input_tokens=0, cache_creation_input_tokens=0)
+    mensagem = SimpleNamespace(type="message", model="claude-haiku-5-5", input_tokens=800, output_tokens=300,
+                               cache_read_input_tokens=6000, cache_creation_input_tokens=0)
+    fake = FakeAnthropic(script=[{**text_turn("Pronto."), "iterations": [compactacao, mensagem]}])
+    conv = build_conversation(settings, claude_client=fake)
+    evs = await run(conv, "me conta uma curiosidade")
+    uso = next(e.data for e in evs if e.type == "usage")
+    assert uso["entrada"] == 3800 and uso["saida"] == 800
+    assert abs(uso["custo_usd"] - 0.00084) < 1e-6                # só o topo daria 0,00029
+    assert abs(conv.ledger.month_total() - 0.00084) < 1e-6       # o teto mensal enxerga a compactação
 
 
 def test_manifesto_lista_cada_ferramenta_e_as_que_pedem_confirmacao():

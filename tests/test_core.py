@@ -1,8 +1,9 @@
 from datetime import datetime
+from types import SimpleNamespace
 
 from jarvis.core.audit import AuditChain
 from jarvis.core.contracts import AgentResult, BudgetState, Route, UsageRecord
-from jarvis.core.costs import CostLedger, price_usage
+from jarvis.core.costs import CostLedger, price_usage, tentativas_cobradas
 from jarvis.core.privacy import anonimizar_cpf, pseudonimizar_nome, sanitizar
 from jarvis.core.router import Tiers, decide, strip_force
 
@@ -92,6 +93,44 @@ def test_preco_por_camada_turno_tipico():
 
 def test_haiku_prompt_longo_usa_segunda_tabela():
     assert price_usage("claude-haiku-5-5", 120_000, 0, 0, 0) == 0.06
+
+
+def _iteracao(tipo, modelo=None, entrada=0, saida=0):
+    campos = {"model": modelo} if modelo else {}  # a compactação não traz o campo `model`
+    return SimpleNamespace(type=tipo, input_tokens=entrada, output_tokens=saida, cache_read_input_tokens=0,
+                           cache_creation_input_tokens=0, **campos)
+
+
+def _usage(entrada, saida, iteracoes=None):
+    return SimpleNamespace(input_tokens=entrada, output_tokens=saida, cache_read_input_tokens=None,
+                           cache_creation_input_tokens=0, iterations=iteracoes)
+
+
+def test_sem_iteracoes_valem_os_campos_do_topo():
+    assert tentativas_cobradas(_usage(800, 300), "claude-opus-5-5", "claude-opus-5-5") == [
+        ("claude-opus-5-5", 800, 300, 0, 0)]
+
+
+def test_compactacao_fica_fora_do_topo_e_e_cobrada_no_modelo_pedido():
+    u = _usage(800, 300, [_iteracao("compaction", entrada=3000, saida=500),
+                          _iteracao("message", "claude-sonnet-5-5", 800, 300)])
+    tentativas = tentativas_cobradas(u, "claude-sonnet-5-5", "claude-sonnet-5-5")
+    assert tentativas[0] == ("claude-sonnet-5-5", 3000, 500, 0, 0)
+    assert abs(sum(price_usage(*t) for t in tentativas) - 0.0156) < 1e-6  # só o topo daria 0,0046
+
+
+def test_fallback_cobra_cada_tentativa_no_preco_do_seu_modelo():
+    u = _usage(412, 264, [_iteracao("message", "claude-fable-5-1", 412, 100),
+                          _iteracao("fallback_message", "claude-opus-5-5", 412, 264)])
+    tentativas = tentativas_cobradas(u, "claude-fable-5-1", "claude-opus-5-5")
+    assert [t[0] for t in tentativas] == ["claude-fable-5-1", "claude-opus-5-5"]
+    assert abs(sum(price_usage(*t) for t in tentativas) - 0.016048) < 1e-6  # só o topo daria 0,006928
+
+
+def test_tabela_de_prompt_longo_do_haiku_vale_por_tentativa():
+    u = _usage(60_000, 0, [_iteracao("compaction", entrada=60_000), _iteracao("message", "claude-haiku-5-5", 60_000)])
+    tentativas = tentativas_cobradas(u, "claude-haiku-5-5", "claude-haiku-5-5")
+    assert abs(sum(price_usage(*t) for t in tentativas) - 0.012) < 1e-6  # juntas passariam de 100 mil: 0,06
 
 
 def test_estados_do_orcamento(tmp_path):

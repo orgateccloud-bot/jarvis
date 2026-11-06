@@ -60,7 +60,8 @@ class FakeStream:
             stop_reason=self.turn["stop_reason"],
             model=self.kwargs["model"],
             usage=SimpleNamespace(
-                input_tokens=800, output_tokens=300, cache_read_input_tokens=6000, cache_creation_input_tokens=0
+                input_tokens=800, output_tokens=300, cache_read_input_tokens=6000, cache_creation_input_tokens=0,
+                iterations=self.turn.get("iterations"),
             ),
         )
 
