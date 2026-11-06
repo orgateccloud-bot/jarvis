@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from jarvis.core.audit import AuditChain
 from jarvis.core.contracts import AgentResult, BudgetState, Route, UsageRecord
 from jarvis.core.costs import CostLedger, price_usage, tentativas_cobradas
-from jarvis.core.privacy import anonimizar_cpf, pseudonimizar_nome, sanitizar
+from jarvis.core.privacy import anonimizar_contato, anonimizar_cpf, pseudonimizar_nome, sanitizar
 from jarvis.core.router import Tiers, decide, strip_force
 
 
@@ -16,6 +16,38 @@ def test_cpf_mascarado_com_e_sem_pontuacao():
 def test_cnpj_mascarado_antes_do_cpf():
     out = sanitizar("Banco 60.746.948/0001-12")
     assert "60.746" not in out and "**.***.***/****-**" in out
+
+
+def test_cnpj_alfanumerico_mascarado_em_qualquer_formato():
+    assert sanitizar("novo 12.ABC.345/01DE-35") == "novo **.***.***/****-**"
+    assert sanitizar("cru 12ABC34501DE35 fim") == "cru **.***.***/****-** fim"
+    assert sanitizar("minusculo 12abc34501de35") == "minusculo **.***.***/****-**"
+
+
+def test_palavra_com_cara_de_cnpj_alfanumerico_fica():
+    # 14 caracteres terminados em 2 dígitos, sem o formato completo e com dígito verificador errado
+    for texto in ("organizacoes26", "organizacoes-26", "12ABC34501DE36"):
+        assert sanitizar(texto) == texto
+
+
+def test_email_e_telefone_formatado_mascarados():
+    assert sanitizar("fale com ana.souza+nf@orgatec.com.br.") == "fale com ***@***."
+    assert sanitizar("zap (62) 99999-8888") == "zap (**) *****-****"
+    assert sanitizar("fixo 62 3333-4444 ou +5562999998888") == "fixo (**) *****-**** ou (**) *****-****"
+
+
+def test_numero_sem_cara_de_telefone_ou_email_fica():
+    for texto in ("protocolo 6233334444", "2026-11-02", "processo 1078499-98.2025.8.26.0100",
+                  "R$ 1.234.567,89", "CEP 74000-000", "react@18.3.1", "vigencia 2025-2026", "02/11 2025-2026"):
+        assert sanitizar(texto) == texto
+
+
+def test_anonimizar_contato_pega_tambem_numero_puro():
+    assert anonimizar_contato("fixo 6233334444, a@b.com") == "fixo (**) *****-****, ***@***"
+
+
+def test_nome_inteiro_nao_pega_pedaco_de_palavra():
+    assert "Anabela" in sanitizar("Ana e Anabela", nomes=["Ana"], salt="s", inteiras=True)
 
 
 def test_nome_pseudonimizado_deterministico():
