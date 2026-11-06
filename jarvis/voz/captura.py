@@ -25,6 +25,11 @@ def microfones() -> list[tuple[int, str]]:
     return [(i, d["name"]) for i, d in enumerate(sd.query_devices()) if d["max_input_channels"] > 0]
 
 
+def alto_falantes() -> list[tuple[int, str]]:
+    """Dispositivos de saída: (índice, nome). Só leitura."""
+    return [(i, d["name"]) for i, d in enumerate(sd.query_devices()) if d["max_output_channels"] > 0]
+
+
 def escolher(nome: str | None) -> int | None:
     """Índice do primeiro microfone cujo nome contém `nome` (sem diferenciar maiúsculas); None = padrão do Windows."""
     if not nome:
