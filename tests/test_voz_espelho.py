@@ -100,6 +100,17 @@ async def test_event_source_serve_os_eventos_do_turno():
     bus.publish(StreamEvent(type="text", data="oi"))
     assert json.loads((await leitura)[6:]) == {"type": "text", "data": "oi"}
     await fonte.aclose()
+    assert bus.subscribers == 0
+
+
+async def test_keepalive_nao_derruba_o_stream():
+    bus = EventBus(queue_size=10)
+    fonte = event_source(bus, None, keepalive_s=0.01)
+    assert await anext(fonte) == ": ping\n\n"
+    assert await anext(fonte) == ": ping\n\n"          # antes daqui, o stream morria com RuntimeError
+    bus.publish(StreamEvent(type="done"))
+    assert json.loads((await anext(fonte))[6:])["type"] == "done"
+    await fonte.aclose()
 
 
 def test_cliente_da_voz_se_identifica_como_voz():
