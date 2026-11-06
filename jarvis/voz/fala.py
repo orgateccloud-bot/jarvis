@@ -16,6 +16,7 @@ import wave
 from collections.abc import Callable
 
 import numpy as np
+from loguru import logger
 
 VOZ = "Daniel"          # webspeech.js escolhe a 1ª voz pt-BR local: no Chrome desta máquina, "Microsoft Daniel"
 RATE, PITCH = 1.05, 0.92  # webspeech.js:145-146
@@ -50,19 +51,50 @@ def sintetizador_winrt(voz: str = VOZ, rate: float = RATE, pitch: float = PITCH)
     return sintetizar
 
 
-def tocador_sounddevice(dispositivo: int | None = None) -> Callable[[np.ndarray, int, Callable[[], bool]], None]:
+def tocador_sounddevice(pedido: str = "") -> Callable[[np.ndarray, int, Callable[[], bool]], None]:
+    """`pedido` é parte do nome do alto-falante (JARVIS_VOZ_ALTO_FALANTE); vazio = o padrão do Windows.
+
+    Um viva-voz só cancela o eco do que sai por ele. O aparelho é procurado a cada frase, porque o índice muda quando
+    o PortAudio relê a lista. Sem ele, ou se ele falhar (desconectado, o PortAudio ainda lista até reiniciar), a frase
+    toca no padrão do Windows: melhor falar em outro lugar que ficar mudo.
+    """
     import sounddevice as sd
 
-    from jarvis.voz.captura import TRAVA_PORTAUDIO
+    from jarvis.voz.captura import TRAVA_PORTAUDIO, alto_falantes
 
-    def tocar(audio: np.ndarray, taxa: int, cancelado: Callable[[], bool]) -> None:
-        # a trava impede que a reabertura do microfone reinicie o PortAudio com este stream aberto
-        with TRAVA_PORTAUDIO, sd.OutputStream(samplerate=taxa, channels=1, dtype="int16",
-                                              device=dispositivo) as out:
+    ausente = False
+
+    def procurar() -> int | None:
+        nonlocal ausente
+        if not pedido:
+            return None
+        achado = next((i for i, nome in alto_falantes() if pedido.lower() in nome.lower()), None)
+        if (achado is None) != ausente:  # só registra quando muda
+            ausente = achado is None
+            if ausente:
+                logger.warning("voz: alto-falante {!r} não está conectado; falando no padrão do Windows", pedido)
+            else:
+                logger.info("voz: alto-falante {!r} voltou", pedido)
+        return achado
+
+    def reproduzir(audio: np.ndarray, taxa: int, cancelado: Callable[[], bool], dispositivo: int | None) -> None:
+        with sd.OutputStream(samplerate=taxa, channels=1, dtype="int16", device=dispositivo) as out:
             for i in range(0, len(audio), BLOCO):
                 if cancelado():
                     return
                 out.write(audio[i:i + BLOCO].reshape(-1, 1))
+
+    def tocar(audio: np.ndarray, taxa: int, cancelado: Callable[[], bool]) -> None:
+        # a trava impede que a reabertura do microfone reinicie o PortAudio com este stream aberto
+        with TRAVA_PORTAUDIO:
+            dispositivo = procurar()
+            if dispositivo is not None:
+                try:
+                    reproduzir(audio, taxa, cancelado, dispositivo)
+                    return
+                except sd.PortAudioError as e:
+                    logger.warning("voz: alto-falante {!r} falhou ({}); falando no padrão do Windows", pedido, e)
+            reproduzir(audio, taxa, cancelado, None)
 
     return tocar
 

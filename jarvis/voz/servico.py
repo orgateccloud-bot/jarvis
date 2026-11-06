@@ -18,7 +18,7 @@ from jarvis.voz.captura import DetectorDeSilencio, Microfone
 from jarvis.voz.cliente import Cliente
 from jarvis.voz.conversa import Conversa
 from jarvis.voz.escuta import Escuta
-from jarvis.voz.fala import VozLocal
+from jarvis.voz.fala import VozLocal, tocador_sounddevice
 
 BATIMENTO_S = 1.0
 ESPERAS_REABRIR_S = (2.0, 5.0, 10.0, 30.0, 60.0)  # entre tentativas de abrir o microfone que sumiu (fica no último)
@@ -37,12 +37,13 @@ def texto_para_log(texto: str) -> str:
 
 class Servico:
     def __init__(self, escuta: Escuta, cliente: Cliente, microfone: Microfone, interromper: bool = False,
-                 pai: int | None = None, voz: VozLocal | None = None):
+                 pai: int | None = None, voz: VozLocal | None = None, alto_falante: str = ""):
         self.escuta, self.cliente, self.mic = escuta, cliente, microfone
         self.pai = pai
         self.parar = threading.Event()
         self.dono = False
-        self.voz = voz or VozLocal(ao_terminar=lambda: self.conversa.fala_terminou(),
+        self.voz = voz or VozLocal(tocar=tocador_sounddevice(alto_falante),
+                                   ao_terminar=lambda: self.conversa.fala_terminou(),
                                    na_frase=lambda t: self.conversa.na_frase(t))
         self.conversa = Conversa(cliente, self.voz, interromper=interromper)
 
