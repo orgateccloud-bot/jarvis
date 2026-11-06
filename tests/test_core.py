@@ -34,6 +34,7 @@ def test_email_e_telefone_formatado_mascarados():
     assert sanitizar("fale com ana.souza+nf@orgatec.com.br.") == "fale com ***@***."
     assert sanitizar("zap (62) 99999-8888") == "zap (**) *****-****"
     assert sanitizar("fixo 62 3333-4444 ou +5562999998888") == "fixo (**) *****-**** ou (**) *****-****"
+    assert sanitizar("ligue (62) 99999-8888.") == "ligue (**) *****-****."  # o ponto final não protege o número
 
 
 def test_numero_sem_cara_de_telefone_ou_email_fica():

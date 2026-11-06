@@ -15,7 +15,7 @@ _MASCARA_EMAIL = "***@***"
 _TELEFONE = re.compile(r"(?<!\d)(?:\+?55[\s.-]?)?\(?\d{2}\)?[\s.-]?9?\d{4}[\s.-]?\d{4}(?!\d)")
 # em sanitizar(), só o que tem cara de telefone: número puro de 10 dígitos pode ser protocolo, conta ou valor
 _TELEFONE_FORMATADO = re.compile(
-    r"(?<![\d./-])(?:\+55[\s.-]?)?(?:\(\d{2}\)[\s.-]?|\d{2}[\s.-])9?\d{4}[\s.-]\d{4}(?![\d./-])"
+    r"(?<!\d)(?<!\d[./-])(?:\+55[\s.-]?)?(?:\(\d{2}\)[\s.-]?|\d{2}[\s.-])9?\d{4}[\s.-]\d{4}(?![./-]?\d)"
     r"|(?<!\d)\+55\d{10,11}(?!\d)"
 )
 _MASCARA_TELEFONE = "(**) *****-****"
