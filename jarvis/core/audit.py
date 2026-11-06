@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Any
+
+from loguru import logger
 
 from .contracts import AgentResult
 
@@ -26,14 +29,37 @@ class AuditChain:
         self._last = self._read_last()
 
     def _read_last(self) -> str:
+        """Último hash legível. Linha ilegível não impede a subida: fica no arquivo e o verify() a denuncia."""
         if not self.path.exists():
             return GENESIS
         last = GENESIS
-        with self.path.open(encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    last = json.loads(line)["audit_hash"]
+        ilegiveis = []
+        with self.path.open("rb") as f:
+            for numero, line in enumerate(f, 1):
+                if not line.strip():
+                    continue
+                try:
+                    selado = json.loads(line.decode("utf-8"))["audit_hash"]
+                except (ValueError, KeyError, TypeError, RecursionError):
+                    selado = None
+                if isinstance(selado, str):
+                    last = selado
+                else:
+                    ilegiveis.append(numero)
+        if ilegiveis:
+            logger.warning(
+                f"{self.path.name}: {len(ilegiveis)} linha(s) ilegível(is), a primeira é a {ilegiveis[0]}; "
+                "a cadeia segue do último hash legível e /audit/verify responde integra false"
+            )
         return last
+
+    def _linha_aberta(self) -> bool:
+        """True se a última gravação foi cortada antes da quebra de linha."""
+        if not self.path.exists() or self.path.stat().st_size == 0:
+            return False
+        with self.path.open("rb") as f:
+            f.seek(-1, os.SEEK_END)
+            return f.read(1) != b"\n"
 
     @staticmethod
     def compute(prev: str, result: AgentResult) -> str:
@@ -44,8 +70,10 @@ class AuditChain:
             result.audit_hash = self.compute(self._last, result)
             record = {"prev": self._last, **result.model_dump(mode="json")}
             self.path.parent.mkdir(parents=True, exist_ok=True)
+            # sem isto, o registro novo colaria na sobra de uma gravação cortada e ficaria ilegível também
+            quebra = "\n" if self._linha_aberta() else ""
             with self.path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                f.write(quebra + json.dumps(record, ensure_ascii=False) + "\n")
             self._last = result.audit_hash
         return result
 
