@@ -16,7 +16,7 @@ import { usePainelFiscal } from './hooks/usePainelFiscal.js'
 import { useConversation } from './hooks/useConversation.js'
 import { useVozLocal } from './hooks/useVozLocal.js'
 import { CardsContexto, useCardsMinimizados } from './hooks/useCards.js'
-import { FASE_DO_SERVICO, avisoDaVoz } from './lib/voice/servico.js'
+import { FASE_DO_SERVICO, avisoDaVoz, intervaloDaSilaba, silaba } from './lib/voice/servico.js'
 import { ROUTE_TO_TIER, TIERS } from './lib/tiers.js'
 
 const REST_AFTER_MS = 30000 // depois de 30 s em espera, o sol volta a ser o Sol (G2V)
@@ -79,6 +79,19 @@ export default function App() {
 
   const externo = vozLocal.ativo ? { estado: vozLocal.voz.estado, comando: vozLocal.comando } : null
   const conv = useConversation({ send, approve, energyRef, busy: j.busy, externo })
+
+  // com o serviço falando, nenhum texto chega ao HUD: a onda do astro pulsa em ritmo de sílaba (simulação)
+  const servicoFalando = externo?.estado === 'falando'
+  useEffect(() => {
+    if (!servicoFalando) return
+    let timer = 0
+    const pulsar = () => {
+      energyRef.current = silaba()
+      timer = setTimeout(pulsar, intervaloDaSilaba())
+    }
+    pulsar()
+    return () => clearTimeout(timer)
+  }, [servicoFalando, energyRef])
   const { say, ask, stop, clearApproval, error: voiceError } = conv
   useEffect(() => { sayRef.current = say }, [say])
 

@@ -1,7 +1,7 @@
 // Testes do HUD com o serviço de voz local no comando (Etapa 2, Decisão A). Rode: npm test
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { FASE_DO_SERVICO, acaoDoSol, avisoDaVoz, modoDoServico } from '../src/lib/voice/servico.js'
+import { FASE_DO_SERVICO, acaoDoSol, avisoDaVoz, intervaloDaSilaba, modoDoServico, silaba } from '../src/lib/voice/servico.js'
 
 test('o sol e o microfone viram comandos para o serviço: abrem em repouso, param com a conversa aberta', () => {
   assert.equal(acaoDoSol('repouso'), 'ouvir')
@@ -14,6 +14,13 @@ test('o estado do serviço vira a fase visual e o modo da conversa no HUD', () =
   assert.equal(FASE_DO_SERVICO.repouso, undefined)       // repouso: a fase vem do resto do HUD
   assert.equal(modoDoServico('ouvindo'), 'active')
   assert.equal(modoDoServico('repouso'), 'off')
+})
+
+test('a sílaba simulada fica entre 0,6 e 1, a cada 160 a 300 ms', () => {
+  assert.equal(silaba(() => 0), 0.6)
+  assert.equal(silaba(() => 1), 1)
+  assert.equal(intervaloDaSilaba(() => 0), 160)
+  assert.equal(intervaloDaSilaba(() => 1), 300)
 })
 
 test('aviso: nada com a flag desligada ou o serviço vivo; oferece o microfone do navegador quando ele para', () => {
