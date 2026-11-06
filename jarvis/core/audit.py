@@ -6,10 +6,17 @@ import hashlib
 import json
 import threading
 from pathlib import Path
+from typing import Any
 
 from .contracts import AgentResult
 
 GENESIS = "0" * 64
+
+
+def _digest(prev: str, payload: dict[str, Any]) -> str:
+    """JSON canônico da cadeia: quem sela e quem confere precisam passar por aqui."""
+    canon = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(f"{prev}|{canon}".encode()).hexdigest()
 
 
 class AuditChain:
@@ -30,9 +37,7 @@ class AuditChain:
 
     @staticmethod
     def compute(prev: str, result: AgentResult) -> str:
-        payload = result.model_dump(mode="json", exclude={"audit_hash"})
-        canon = json.dumps(payload, sort_keys=True, ensure_ascii=False)
-        return hashlib.sha256(f"{prev}|{canon}".encode()).hexdigest()
+        return _digest(prev, result.model_dump(mode="json", exclude={"audit_hash"}))
 
     def seal(self, result: AgentResult) -> AgentResult:
         with self._lock:
@@ -45,19 +50,27 @@ class AuditChain:
         return result
 
     def verify(self) -> bool:
-        """Revalida a cadeia inteira; False se algum registro foi adulterado."""
+        """Revalida a cadeia inteira; False se algum registro foi adulterado ou está ilegível.
+
+        O hash é recalculado sobre o registro como foi gravado, sem passar pelo AgentResult: o arquivo
+        é append-only e guarda valores que os contratos de hoje não aceitam mais (ex.: a rota "chat").
+        """
         if not self.path.exists():
             return True
         prev = GENESIS
-        with self.path.open(encoding="utf-8") as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                rec = json.loads(line)
-                if rec.pop("prev") != prev:
-                    return False
-                result = AgentResult.model_validate(rec)
-                if self.compute(prev, result) != rec["audit_hash"]:
-                    return False
-                prev = rec["audit_hash"]
+        try:
+            with self.path.open(encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    rec = json.loads(line)
+                    selado = rec["audit_hash"]
+                    if rec["prev"] != prev:
+                        return False
+                    payload = {k: v for k, v in rec.items() if k not in ("prev", "audit_hash")}
+                    if _digest(prev, payload) != selado:
+                        return False
+                    prev = selado
+        except (OSError, ValueError, KeyError, TypeError, RecursionError):
+            return False
         return True
