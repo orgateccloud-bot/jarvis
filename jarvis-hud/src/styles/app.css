@@ -514,6 +514,7 @@
 .aviso {
   padding: 8px 10px; border-radius: 4px var(--radius-sm) var(--radius-sm) var(--radius-sm);
   background: rgba(255, 255, 255, 0.04); border: 1px solid var(--hairline); border-left: 3px solid var(--aviso);
+  animation: aviso-chega 520ms var(--ease) both;
 }
 .nivel-aviso { --aviso: var(--warn); }
 .nivel-critico { --aviso: var(--danger); }
@@ -526,7 +527,21 @@
   min-width: 20px; padding: 0 6px; border-radius: 999px; text-align: center;
   font-size: 11px; line-height: 18px; color: var(--aviso);
   border: 1px solid color-mix(in srgb, var(--aviso) 45%, transparent);
+  animation: conta-salta 420ms var(--ease) both;
+}
+/* custo do último turno: aparece junto do selo e some sozinho */
+.custo-sobe {
+  position: absolute; top: 34px; right: 16px; pointer-events: none;
+  font-size: 11px; color: var(--aurora-3); text-shadow: 0 0 10px rgba(14, 165, 233, 0.6);
+  animation: custo-sobe 2.8s var(--ease) both;
 }
 
+@keyframes aviso-chega { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes conta-salta { 0% { transform: scale(1); } 45% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes custo-sobe {
+  0% { opacity: 0; transform: translateY(10px); }
+  15%, 65% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
 @keyframes halo { 50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--aurora-3) 60%, transparent), 0 0 70px 10px rgba(14, 165, 233, 0.18); } }
 @keyframes pulse-soft { 50% { opacity: 0.55; } }

@@ -164,7 +164,7 @@ export default function App() {
               <aside className="side side-left" aria-label="Sistema e custos">
                 {/* o JARVIS-TRILHUM não lê o Windows (/system/status dá 404): sem dados, sem o card */}
                 {j.vitals && <VitalsCard vitals={j.vitals} history={j.history} />}
-                <CostCard costs={j.costs} />
+                <CostCard costs={j.costs} uso={j.neural?.uso} />
               </aside>
               <aside className="side side-right" aria-label="Avisos e estado neural">
                 <AvisosCard avisos={j.avisos} onLimpar={j.limparAvisos} />
