@@ -1,10 +1,16 @@
-import { Ring, Sparkline } from './Gauges.jsx'
+import { Contador, Ring, Sparkline } from './Gauges.jsx'
 import { MODEL_TO_TIER, ROUTE_LABEL, ROUTE_TO_TIER, TIERS } from '../lib/tiers.js'
+import { faixa } from '../lib/contador.js'
 import { useCard } from '../hooks/useCards.js'
 
-const level = v => (v >= 90 ? 'var(--danger)' : v >= 75 ? 'var(--warn)' : 'var(--aurora-3)')
+const COR_DA_FAIXA = ['var(--aurora-3)', 'var(--warn)', 'var(--danger)']
+const FAIXA_DO_CUSTO = { economia: 1, teto: 2 }
+const level = v => COR_DA_FAIXA[faixa(v)]
 const usd = v => `US$ ${(v ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const pct = v => `${(v ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`
+const inteiro = v => String(Math.round(v))
+const inteiroPct = v => `${Math.round(v)}%`
+const usd4 = v => `US$ ${(v ?? 0).toFixed(4).replace('.', ',')}`
 
 // Minimizado, o card fica só com o título (e o `aside`, que já resume o conteúdo). A chave é o `id` ou o título.
 function Card({ title, aside, children, className = '', id }) {
@@ -39,8 +45,8 @@ export function VitalsCard({ vitals, history }) {
       <div className="vitals">
         {items.map(([label, v]) => (
           <div className="vital" key={label}>
-            <Ring value={v} size={58} color={level(v ?? 0)} label={label}>
-              <span className="mono ring-num">{v == null ? '—' : Math.round(v)}</span>
+            <Ring value={v} size={58} color={level(v ?? 0)} faixa={faixa(v ?? 0)} label={label}>
+              <span className="mono ring-num"><Contador valor={v} formato={inteiro} /></span>
             </Ring>
             <span className="vital-label">{label}</span>
           </div>
@@ -56,21 +62,27 @@ export function VitalsCard({ vitals, history }) {
   )
 }
 
-export function CostCard({ costs }) {
-  const pct = costs?.uso_pct ?? 0
+// `uso`: o custo do último turno sobe no canto do card. Fica no `aside`, que não remonta ao minimizar: não repete.
+export function CostCard({ costs, uso }) {
+  const usoPct = costs?.uso_pct ?? 0
   const color = costs?.estado === 'teto' ? 'var(--danger)' : costs?.estado === 'economia' ? 'var(--warn)' : 'var(--aurora-2)'
   const estado = { normal: 'Normal', economia: 'Economia', teto: 'Teto atingido' }[costs?.estado] || '—'
   return (
-    <Card title="Custo Claude" aside={<span className={`badge badge-${costs?.estado || 'normal'}`}>{estado}</span>}>
+    <Card title="Custo Claude" aside={
+      <>
+        {uso?.custo_usd > 0 && <span key={uso.audit_hash} className="custo-sobe mono">+{usd4(uso.custo_usd)}</span>}
+        <span className={`badge badge-${costs?.estado || 'normal'}`}>{estado}</span>
+      </>
+    }>
       <div className="cost">
-        <Ring value={pct} size={92} stroke={6} color={color} label="Uso do teto mensal">
-          <span className="mono ring-big">{Math.round(pct)}%</span>
+        <Ring value={usoPct} size={92} stroke={6} color={color} faixa={FAIXA_DO_CUSTO[costs?.estado] || 0} label="Uso do teto mensal">
+          <span className="mono ring-big"><Contador valor={costs?.uso_pct} formato={inteiroPct} /></span>
           <span className="ring-sub">do teto</span>
         </Ring>
         <dl className="kv">
-          <div><dt>Mês</dt><dd className="mono">{usd(costs?.mes_usd)}</dd></div>
+          <div><dt>Mês</dt><dd className="mono"><Contador valor={costs?.mes_usd} formato={usd} /></dd></div>
           <div><dt>Teto</dt><dd className="mono">{usd(costs?.teto_usd)}</dd></div>
-          <div><dt>Hoje</dt><dd className="mono">{usd(costs?.hoje_usd)}</dd></div>
+          <div><dt>Hoje</dt><dd className="mono"><Contador valor={costs?.hoje_usd} formato={usd} /></dd></div>
           <div><dt>Cache</dt><dd className="mono">{costs ? `${costs.cache_hit_pct}%` : '—'}</dd></div>
         </dl>
       </div>
@@ -121,7 +133,7 @@ export function AvisosCard({ avisos, onLimpar }) {
   return (
     <Card title="Avisos" className="avisos" aside={avisos.length > 0 && (
       <>
-        <span className={`avisos-conta mono nivel-${avisos[0].nivel}`} title={avisos.length === 1 ? '1 aviso' : `${avisos.length} avisos`}>{avisos.length}</span>
+        <span key={avisos.length} className={`avisos-conta mono nivel-${avisos[0].nivel}`} title={avisos.length === 1 ? '1 aviso' : `${avisos.length} avisos`}>{avisos.length}</span>
         <button type="button" className="card-min" onClick={onLimpar} aria-label="Limpar os avisos" title="Limpar os avisos">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2"
             strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -168,7 +180,7 @@ export function NeuralCard({ neural }) {
           </div>
           {uso && (
             <div className="turn mono">
-              <span>US$ {(uso.custo_usd ?? 0).toFixed(4).replace('.', ',')}</span>
+              <span>{usd4(uso.custo_usd)}</span>
               <span>{uso.entrada}↑ {uso.saida}↓</span>
               <span>cache {uso.cache_read}</span>
               <span title={uso.audit_hash}>#{uso.audit_hash?.slice(0, 8)}</span>
