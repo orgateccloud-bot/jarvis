@@ -162,7 +162,7 @@ export default function App() {
             <div className={`panels ${panelsOpen ? 'open' : ''}`}>
               <aside className="side side-left" aria-label="Sistema e custos">
                 <VitalsCard vitals={j.vitals} history={j.history} />
-                <CostCard costs={j.costs} />
+                <CostCard costs={j.costs} uso={j.neural?.uso} />
               </aside>
               <aside className="side side-right" aria-label="Avisos e estado neural">
                 <AvisosCard avisos={j.avisos} onLimpar={j.limparAvisos} />
