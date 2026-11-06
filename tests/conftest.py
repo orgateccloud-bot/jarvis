@@ -49,6 +49,8 @@ class FakeStream:
             for b in self.turn["content"]:
                 if b["type"] == "text" and b["text"]:
                     yield _delta_event("text_delta", b["text"])
+                elif b["type"] == "server_tool_use":
+                    yield SimpleNamespace(type="content_block_start", content_block=_Block(**b))
 
         return gen()
 

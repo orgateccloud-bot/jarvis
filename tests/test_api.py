@@ -109,9 +109,30 @@ def test_recusa_do_haiku_escala_para_sonnet(settings):
     client, conv = _client(settings, fake)
     evs = _events(client.post("/chat/stream", headers=AUTH, json={"message": "me conta uma curiosidade"}))
     assert [c["model"] for c in fake.calls] == ["claude-haiku-5-5", "claude-sonnet-5-5"]
-    assert any(e["type"] == "error" and "escalando" in e["data"] for e in evs)
+    assert any(e["type"] == "aviso" and "escalando" in e["data"] for e in evs)  # aviso, não erro
+    assert not any(e["type"] == "error" for e in evs)
+    assert [e["data"]["rota"] for e in evs if e["type"] == "route"] == ["simples", "media"]  # o HUD vê a camada nova
     assert next(e for e in evs if e["type"] == "usage")["data"]["modelo"] == "claude-sonnet-5-5"
     assert conv.ledger.summary()["turnos_claude_mes"] == 2  # a tentativa recusada também é contabilizada
+
+
+def test_rota_informa_a_area_da_pergunta(settings, fake_claude):
+    client, _ = _client(settings, fake_claude)
+    evs = _events(client.post("/chat/stream", headers=AUTH, json={"message": "qual a alíquota do ISS?"}))
+    assert next(e for e in evs if e["type"] == "route")["data"]["area"] == "tributario"
+
+
+def test_busca_na_web_avisa_o_inicio_antes_de_terminar(settings):
+    turno = {"stop_reason": "end_turn", "content": [
+        {"type": "server_tool_use", "id": "srvtoolu_1", "name": "web_search", "input": {"query": "dólar hoje"}},
+        {"type": "web_search_tool_result", "tool_use_id": "srvtoolu_1", "content": []},
+        {"type": "text", "text": "Achei."},
+    ]}
+    client, _ = _client(settings, FakeAnthropic(script=[turno]))
+    evs = _events(client.post("/chat/stream", headers=AUTH, json={"message": "pesquise a cotação do dólar"}))
+    ferramentas = [e["data"] for e in evs if e["type"] == "tool"]
+    assert ferramentas[0] == {"fase": "inicio", "nome": "web_search", "resumo": "Buscando na web"}
+    assert ferramentas[1]["fase"] == "fim" and "dólar hoje" in ferramentas[1]["resumo"]
 
 
 def test_trivial_sem_regra_vai_para_haiku(settings, fake_claude):

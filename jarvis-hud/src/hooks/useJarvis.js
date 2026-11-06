@@ -150,6 +150,7 @@ export function useJarvis(callbacks = {}) {
           full += ev.data
           segment += ev.data
           patch(jid, { text: segment })
+          setAtividade(null) // ferramenta de servidor só termina no fim da resposta: o texto já é o sinal de que voltou
           setPhase('speaking')
           energyRef.current = Math.min(1, energyRef.current + 0.45)
           opts.onText?.(ev.data)
@@ -185,6 +186,8 @@ export function useJarvis(callbacks = {}) {
         } else if (ev.type === 'usage') {
           setNeural(n => ({ ...n, uso: ev.data }))
           patch(jid, { custo: ev.data.custo_usd, modelo: ev.data.modelo })
+        } else if (ev.type === 'aviso') {
+          pushToast(ev.data, 'warn')
         } else if (ev.type === 'error') {
           pushToast(ev.data, 'danger')
           flashAlert()

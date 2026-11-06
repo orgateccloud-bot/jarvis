@@ -208,7 +208,8 @@ class Conversation:
         yield StreamEvent(
             type="route",
             data={"rota": decision.route.value, "modelo": decision.model or "regras", "effort": decision.effort,
-                  "motivo": decision.reason, "orcamento": budget.value, "nova_conversa": nova},
+                  "motivo": decision.reason, "orcamento": budget.value, "nova_conversa": nova,
+                  "area": decision.area},
         )
 
         history = self.store.history(session_id)
@@ -323,7 +324,9 @@ class Conversation:
                 route = escalate(route)
                 model = self.tiers.model(route)
                 yield route
-                yield StreamEvent(type="error", data=f"Recusa no modelo simples; escalando para {model}.")
+                yield StreamEvent(type="route", data={"rota": route.value, "modelo": model, "effort": effort,
+                                                      "motivo": "recusa no modelo simples", "area": decision.area})
+                yield StreamEvent(type="aviso", data=f"Recusa no modelo simples; escalando para {model}.")
                 step -= 1
                 continue
 

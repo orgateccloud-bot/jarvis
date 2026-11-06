@@ -43,7 +43,7 @@ class ApprovalDecision(BaseModel):
 class StreamEvent(BaseModel):
     """Evento enviado ao HUD por SSE."""
 
-    type: Literal["route", "thinking", "text", "tool", "approval", "usage", "error", "done"]
+    type: Literal["route", "thinking", "text", "tool", "approval", "usage", "aviso", "error", "done"]
     data: Any = None
 
 

@@ -7,6 +7,9 @@ const ROTULOS = {
   memory: 'Acessando a memória',
   web_search: 'Buscando na web',
   web_fetch: 'Lendo a página',
+  code_execution: 'Rodando no sandbox',
+  bash_code_execution: 'Rodando no sandbox',
+  text_editor_code_execution: 'Rodando no sandbox',
 
   status_sistema: 'Lendo o sistema',
   hardware_info: 'Lendo o sistema',

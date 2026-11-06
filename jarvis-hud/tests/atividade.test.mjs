@@ -8,6 +8,8 @@ test('cada ferramenta conhecida tem o seu rótulo; a desconhecida cai em "Trabal
   assert.equal(rotuloDaFerramenta('analisar_espaco'), 'Analisando o disco')
   assert.equal(rotuloDaFerramenta('trilhum_agenda'), 'Abrindo a agenda de estudos')
   assert.equal(rotuloDaFerramenta('comandar_agente'), 'Acionando o agente')
+  assert.equal(rotuloDaFerramenta('web_search'), 'Buscando na web')
+  assert.equal(rotuloDaFerramenta('bash_code_execution'), 'Rodando no sandbox')
   assert.equal(rotuloDaFerramenta('ferramenta_nova'), 'Trabalhando')
   assert.equal(rotuloDaFerramenta(undefined), 'Trabalhando')
 })
