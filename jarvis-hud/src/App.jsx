@@ -125,7 +125,7 @@ export default function App() {
       <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef} sun={sun}
         statsRef={import.meta.env.DEV ? devStats : undefined} />
       <SunButton mode={conv.mode} speaking={conv.speaking} onClick={conv.toggle} disabled={!conv.supported.listen} />
-      <Caption mode={conv.mode} phase={phase} caption={conv.caption} />
+      <Caption mode={conv.mode} phase={phase} caption={conv.caption} atividade={j.atividade} />
       <BootIgnition />
       <div className={`app ${sp.holo ? 'holo' : ''}`} style={{ '--tier': TIERS[uiTier].ui }}>
         <TopBar

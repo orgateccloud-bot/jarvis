@@ -7,7 +7,7 @@ import './styles/tokens.css'
 
 // Bancada do cosmos: troca astro, estado, classe estelar, alerta e ignição sem precisar da API.
 // Parâmetros de URL: ?astro=anelado&estado=thinking&camada=complexa&alerta=1
-const STATES = { idle: 'Ocioso', listening: 'Ouvindo', thinking: 'Pensando', speaking: 'Falando' }
+const STATES = { idle: 'Ocioso', listening: 'Ouvindo', thinking: 'Pensando', speaking: 'Falando', waiting: 'Aguardando' }
 
 // eslint-disable-next-line react-refresh/only-export-components
 function Bancada() {
