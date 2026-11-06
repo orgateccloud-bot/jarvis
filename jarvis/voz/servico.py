@@ -1,7 +1,7 @@
 """O serviço de voz em execução: microfone → Escuta → Conversa → API local → voz local.
 
-Decisão A (dono do microfone): a cada 1 s o serviço manda o batimento para a API e só abre o microfone quando a
-resposta diz dono=servico. Sem resposta da API (caiu ou travou), fecha o microfone: sem API não há para onde
+Decisão A (dono do microfone): a cada 1 s, e na hora em que o estado muda, o serviço manda o batimento para a API e
+só abre o microfone quando a resposta diz dono=servico. Sem resposta da API (caiu ou travou), fecha o microfone: sem API não há para onde
 perguntar. A resposta do batimento também traz os comandos do HUD (ouvir, parar, mudo, som).
 """
 
@@ -21,6 +21,7 @@ from jarvis.voz.escuta import Escuta
 from jarvis.voz.fala import VozLocal, tocador_sounddevice
 
 BATIMENTO_S = 1.0
+OLHAR_ESTADO_S = 0.05  # de quanto em quanto tempo o estado é olhado: mudou, o batimento sai na hora e o HUD reage já
 ESPERAS_REABRIR_S = (2.0, 5.0, 10.0, 30.0, 60.0)  # entre tentativas de abrir o microfone que sumiu (fica no último)
 CONFERIR_PEDIDO_S = 60.0  # no padrão do Windows, de quanto em quanto tempo ver se o microfone pedido voltou
 LEMBRETE_S = 300.0  # sem microfone nenhum há muito tempo, o log lembra a cada 5 min (o serviço segue vivo)
@@ -49,20 +50,28 @@ class Servico:
 
     # ---------- batimento e avisos ----------
     def _batimento(self) -> None:
+        enviado, proximo = None, 0.0
         while not self.parar.is_set():
-            try:
-                r = self.cliente.batimento(self.conversa.estado())
-                self.dono = r.get("dono") == "servico"
-                for acao in r.get("comandos", []):
-                    self.conversa.comando(acao)
-            except Exception as e:  # noqa: BLE001 — qualquer falha = sem API = microfone fechado
-                if self.dono:
-                    logger.warning("voz: sem resposta da API ({}); microfone fechado", type(e).__name__)
-                self.dono = False
-            if self.pai and not psutil.pid_exists(self.pai):
-                logger.info("voz: a API (pid {}) terminou; encerrando", self.pai)
-                self.parar.set()
-            self.parar.wait(BATIMENTO_S)
+            estado = self.conversa.estado()
+            agora = time.monotonic()
+            if estado != enviado or agora >= proximo:
+                enviado, proximo = estado, agora + BATIMENTO_S  # antes de enviar: API fora não vira rajada de tentativas
+                self._bater(estado)
+            self.parar.wait(OLHAR_ESTADO_S)
+
+    def _bater(self, estado: str) -> None:
+        try:
+            r = self.cliente.batimento(estado)
+            self.dono = r.get("dono") == "servico"
+            for acao in r.get("comandos", []):
+                self.conversa.comando(acao)
+        except Exception as e:  # noqa: BLE001 — qualquer falha = sem API = microfone fechado
+            if self.dono:
+                logger.warning("voz: sem resposta da API ({}); microfone fechado", type(e).__name__)
+            self.dono = False
+        if self.pai and not psutil.pid_exists(self.pai):
+            logger.info("voz: a API (pid {}) terminou; encerrando", self.pai)
+            self.parar.set()
 
     def _avisos(self) -> None:
         while not self.parar.is_set():
