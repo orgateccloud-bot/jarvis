@@ -103,10 +103,13 @@ export default function App() {
 
   useEffect(() => { if (voiceError) pushToast(voiceError, 'danger') }, [voiceError, pushToast])
 
-  // fase visual: a voz manda quando está falando; senão o stream; senão a escuta
-  const phase = (externo && FASE_DO_SERVICO[externo.estado]) || (conv.speaking ? 'speaking'
-    : j.phase !== 'idle' ? j.phase
-      : conv.mode === 'active' ? 'listening' : 'idle')
+  // fase visual: a voz manda quando está falando; senão o stream; senão a escuta. A espera de aprovação aparece mesmo
+  // com o serviço de voz ativo, menos enquanto ele fala a pergunta
+  const faseServico = externo && FASE_DO_SERVICO[externo.estado]
+  const phase = j.phase === 'waiting' && faseServico !== 'speaking' ? 'waiting'
+    : faseServico || (conv.speaking ? 'speaking'
+      : j.phase !== 'idle' ? j.phase
+        : conv.mode === 'active' ? 'listening' : 'idle')
 
   // o sol mantém a classe de quem respondeu e, em repouso, volta a G2V
   useEffect(() => {

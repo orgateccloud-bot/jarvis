@@ -364,6 +364,8 @@ Mockup antes do código: V5, I8, I9, I10, I11 e I12.
 
 ## 6. Ordem recomendada
 
+Situação em 06/11/2026: o pacote A foi mesclado no PR #24, e o B foi feito logo depois, com a sua decisão de mostrar o texto da voz quando ela vira pergunta.
+
 | Pacote | Itens | O que você ganha | Tamanho |
 |---|---|---|---|
 | **A. Vivo já** | V1, V2, V3, V4 | O HUD reage de verdade, com quase nada no backend | Cerca de 150 linhas: plano e "execute" |
@@ -383,7 +385,7 @@ Recomendo começar pelo A: entrega resultado visível rápido e não depende de 
 ## 8. Decisões que dependem de você
 
 1. Qual pacote vem primeiro.
-2. Texto da sua voz na tela do HUD: pode aparecer quando virar pergunta? (B2)
+2. Texto da sua voz na tela do HUD: pode aparecer quando virar pergunta? (B2) **Decidido em 06/11/2026: sim.**
 3. O sol pode reagir a qualquer fala na sala? (V2, estado `captando`)
 4. Resposta digitada deve ser falada quando o serviço de voz está ativo?
 5. `src/spike/`: aposentar em `_legado/`, ou o modo palco ainda interessa?

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from collections.abc import AsyncIterator
 from contextlib import aclosing
@@ -89,6 +90,22 @@ def fechar_ferramentas_orfas(history: list[dict]) -> int:
         elif not restantes:  # mensagem do usuário só com resultados de ferramentas tiradas
             restantes.append({"type": "text", "text": "(resultado de ferramenta interrompida)"})
     return tirados
+
+
+def mensagens_de_texto(history: list[dict]) -> list[dict]:
+    """O que a conversa mostra na tela: só pergunta e resposta, sem notas de sistema nem blocos de ferramenta. Passos
+    seguidos de um mesmo turno viram uma resposta só, como no HUD ao vivo."""
+    saida: list[dict] = []
+    for m in history:
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            saida.append({"role": "user", "text": m["content"]})
+        elif m.get("role") == "assistant":
+            texto = "".join(b.get("text", "") for b in _blocos(m) if b.get("type") == "text")
+            if texto and saida and saida[-1]["role"] == "jarvis":
+                saida[-1]["text"] += f"\n\n{texto}"
+            elif texto:
+                saida.append({"role": "jarvis", "text": texto})
+    return saida
 
 
 class SessionStore:
@@ -190,6 +207,19 @@ class Conversation:
             self._avisos.pop(session_id, None)
             return self.store.nova(session_id)
 
+    def pergunta(self, message: str) -> str:
+        """A pergunta como entra na conversa e aparece na tela: sem o prefixo de camada e com CPF e CNPJ mascarados."""
+        return sanitizar(strip_force(message), salt=self.salt)
+
+    def mensagens(self, session_id: str, limite: int = 40) -> dict:
+        """Últimas mensagens para o HUD repor a tela depois do F5. `conversa` identifica esta conversa (a nota do
+        primeiro turno traz data e hora) e `total` deixa o HUD saber até onde a tela foi limpa."""
+        history = self.store.history(session_id)
+        texto = mensagens_de_texto(history)
+        inicio = json.dumps(history[:2], ensure_ascii=False, sort_keys=True).encode()
+        return {"conversa": hashlib.sha256(inicio).hexdigest()[:12] if history else "", "total": len(texto),
+                "mensagens": texto[-limite:]}
+
     async def turn(self, session_id: str, message: str) -> AsyncIterator[StreamEvent]:
         lock = self._locks.setdefault(session_id, asyncio.Lock())
         async with lock, aclosing(self._turn(session_id, message)) as agen:
@@ -208,11 +238,12 @@ class Conversation:
         yield StreamEvent(
             type="route",
             data={"rota": decision.route.value, "modelo": decision.model or "regras", "effort": decision.effort,
-                  "motivo": decision.reason, "orcamento": budget.value, "nova_conversa": nova},
+                  "motivo": decision.reason, "orcamento": budget.value, "nova_conversa": nova,
+                  "area": decision.area},
         )
 
         history = self.store.history(session_id)
-        history.append({"role": "user", "content": sanitizar(strip_force(message), salt=self.salt)})
+        history.append({"role": "user", "content": self.pergunta(message)})
         route = decision.route
         texts: list[str] = []
         total = TurnOutcome(text="", model=decision.model or "regras")
@@ -323,7 +354,9 @@ class Conversation:
                 route = escalate(route)
                 model = self.tiers.model(route)
                 yield route
-                yield StreamEvent(type="error", data=f"Recusa no modelo simples; escalando para {model}.")
+                yield StreamEvent(type="route", data={"rota": route.value, "modelo": model, "effort": effort,
+                                                      "motivo": "recusa no modelo simples", "area": decision.area})
+                yield StreamEvent(type="aviso", data=f"Recusa no modelo simples; escalando para {model}.")
                 step -= 1
                 continue
 

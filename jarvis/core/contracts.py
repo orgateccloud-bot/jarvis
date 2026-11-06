@@ -34,6 +34,7 @@ class Decision(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     session_id: str = Field(default="default", pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    origem: Literal["hud", "voz"] = "hud"  # o turno pedido pela voz é espelhado no HUD
 
 
 class ApprovalDecision(BaseModel):
@@ -43,7 +44,8 @@ class ApprovalDecision(BaseModel):
 class StreamEvent(BaseModel):
     """Evento enviado ao HUD por SSE."""
 
-    type: Literal["route", "thinking", "text", "tool", "approval", "usage", "error", "done"]
+    type: Literal["route", "thinking", "text", "tool", "approval", "usage", "aviso", "error", "done",
+                  "pergunta", "aprovacao"]  # os dois últimos só no espelho do turno de voz
     data: Any = None
 
 

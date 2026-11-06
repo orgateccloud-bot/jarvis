@@ -65,6 +65,8 @@ WEB_SEARCH_USD = 0.01  # busca na web cobrada à parte (US$ 10 por mil)
 # Resumo automático no servidor ao passar deste tamanho (mínimo da API: 50 mil). Abaixo de 100 mil o Haiku
 # não entra na tabela de prompt longo (5x) e as regravações de cache ficam baratas.
 COMPACT_AT = 60_000
+# Ferramentas de servidor: no início do bloco a entrada ainda não chegou, então o resumo diz só o que ela faz.
+SERVER_TOOL_INICIO = {"web_search": "Buscando na web", "web_fetch": "Lendo a página"}
 
 
 @dataclass
@@ -161,7 +163,13 @@ class ClaudeBrain:
         try:
             async with self.client.beta.messages.stream(**params) as stream:
                 async for event in stream:
-                    if event.type == "content_block_delta":
+                    if event.type == "content_block_start" and event.content_block.type == "server_tool_use":
+                        nome = event.content_block.name
+                        yield StreamEvent(type="tool", data={
+                            "fase": "inicio", "nome": nome,
+                            "resumo": SERVER_TOOL_INICIO.get(nome, "Rodando no sandbox"),
+                        })
+                    elif event.type == "content_block_delta":
                         if event.delta.type == "thinking_delta" and event.delta.thinking:
                             yield StreamEvent(type="thinking", data=event.delta.thinking)
                         elif event.delta.type == "text_delta":

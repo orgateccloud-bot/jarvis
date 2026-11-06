@@ -35,6 +35,9 @@ export const ROUTE_LABEL = {
   local: 'Regras', simples: 'Simples', media: 'Intermediária', complexa: 'Complexa', fable: 'Topo',
 }
 
+// Área da pergunta vinda do backend (evento "route"); a que não tem rótulo aparece como veio.
+export const AREA_LABEL = { tributario: 'Tributário', oab: 'OAB', juridico: 'Jurídico', contabil: 'Contábil' }
+
 // Modelo da API → camada (para a telemetria de custos por modelo).
 export const MODEL_TO_TIER = Object.fromEntries(
   Object.entries(TIERS).filter(([, t]) => t.model.startsWith('claude-')).map(([k, t]) => [t.model, k]),

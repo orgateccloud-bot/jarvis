@@ -117,6 +117,8 @@ parar a instância em execução: `Stop-ScheduledTask -TaskName JARVIS`.
 | `POST /chat/stream` | Conversa em SSE (rota, pensamento, texto, ferramentas, aprovações, custo) |
 | `POST /approvals/{id}` | Aprova ou nega uma ação |
 | `GET /events` | Avisos proativos em SSE |
+| `GET /sessions/{id}/mensagens` | Últimas perguntas e respostas da conversa, só o texto (o HUD repõe a tela depois do F5) |
+| `GET /turnos/eventos` | Espelho em SSE do turno pedido pela voz (só com `JARVIS_VOZ_LOCAL=1`) |
 | `GET /costs` | Gasto do dia e do mês |
 | `GET /audit/verify` | Confere a cadeia de auditoria |
 
