@@ -52,6 +52,17 @@ def test_corte_artigo_sem_tipo_e_igual_ao_antigo():
     assert [r for r, _ in cortar(texto, "anexo")] == ["Preâmbulo", "Anexo I"]
 
 
+def test_corte_artigo_milhar_letra_falsa_e_adct():
+    """Formas reais do Planalto (CC, CPC, CLT, CP e CF), levantadas na análise da F2 em 05/11/2026."""
+    texto = ("Art. 5º - A todo trabalho igual salário.\nArt. 11 - O direito prescreve.\nArt. 13 - A Carteira de Trabalho.\n"
+             "Art. 528 -Ocorrendo dissídio.\nArt. 58-A. Tempo parcial.\nArt. 359-M-A. Delitos.\nArt. 877-A - É competente.\n"
+             "Art.896-A - O Tribunal.\nArt. 1 o Toda pessoa.\nArt. 1.022. Cabem embargos.\nArt. 1337. Sem o ponto.\n"
+             "ATO DAS DISPOSIÇÕES CONSTITUCIONAIS TRANSITÓRIAS\nArt. 1º O Presidente.\nArt. 60. Fundeb.\n")
+    assert [r for r, _ in cortar(texto, "artigo")] == [
+        "Art. 5", "Art. 11", "Art. 13", "Art. 528", "Art. 58-A", "Art. 359-M-A", "Art. 877-A", "Art. 896-A", "Art. 1",
+        "Art. 1.022", "Art. 1.337", "ADCT Art. 1", "ADCT Art. 60"]
+
+
 def test_divisao_tem_sobreposicao_curta():
     longo = "Art. 1. " + " ".join(f"palavra{i}" for i in range(600))
     partes = cortar(longo + "\nArt. 2. b\nArt. 3. c\n")

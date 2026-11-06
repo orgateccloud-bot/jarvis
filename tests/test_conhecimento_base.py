@@ -8,6 +8,7 @@ import pytest
 
 from jarvis.conhecimento import base as base_mod
 from jarvis.conhecimento.base import KnowledgeBase
+from jarvis.conhecimento.indice import chaves_citadas, cita, norm
 from tests.test_conhecimento_catalogo import catalogo
 from tests.test_conhecimento_documento import SUMULAS
 
@@ -110,6 +111,62 @@ def test_item_citado_pelo_numero_vem_primeiro(tmp_path, fts):
 
 
 @MOTORES
+def test_lei_citada_manda_no_artigo(tmp_path, fts):
+    """Com várias leis na base os números se repetem: "art. 5 da CF" não pode trazer o art. 5 de outra lei."""
+    root = tmp_path / "base"
+    (root / "juridico").mkdir(parents=True)
+    catalogo(root / "_catalogo", "01.toml", fontes=[{"fid": "cf"}, {"fid": "cpc"}, {"fid": "clt"}])
+    toml = (root / "_catalogo" / "01.toml").read_text(encoding="utf-8")
+    for fid, apelidos in (("cf", '["cf", "adct"]'), ("cpc", '["cpc", "13105"]'), ("clt", '["clt"]')):
+        toml = toml.replace(f'id = "{fid}"\n', f'id = "{fid}"\napelidos = {apelidos}\n')
+    (root / "_catalogo" / "01.toml").write_text(toml, encoding="utf-8")
+    (root / "juridico" / "cf.md").write_text(
+        "Art. 5º Todos são iguais perante a lei.\nArt. 6º Direitos sociais.\nArt. 156. Impostos dos Municípios.\n"
+        "Art. 156-A. Imposto sobre bens e serviços.\nATO DAS DISPOSIÇÕES CONSTITUCIONAIS TRANSITÓRIAS\n"
+        "Art. 5º Eleições de 1989.\n", encoding="utf-8")
+    (root / "juridico" / "cpc.md").write_text(
+        "Art. 1º O processo civil.\nArt. 5º Aquele que participa do processo deve agir de boa-fé.\n"
+        "Art. 1.022. Cabem embargos de declaração.\n", encoding="utf-8")
+    (root / "juridico" / "clt.md").write_text(
+        "Art. 5º - A todo trabalho de igual valor corresponderá salário igual.\nArt. 6º - Não se distingue.\n"
+        "Art. 7º - Os preceitos desta Consolidação.\n", encoding="utf-8")
+    kb = KnowledgeBase(root, fts=fts)
+
+    def primeiro(pergunta):
+        t = kb.buscar(pergunta)[0][1]
+        return t.fonte_id, t.rotulo
+
+    assert primeiro("art. 5 da CF") == ("cf", "Art. 5")
+    assert primeiro("art. 5º do CPC") == ("cpc", "Art. 5")
+    assert primeiro("artigo 5 da CLT") == ("clt", "Art. 5")
+    assert primeiro("art. 5 do ADCT") == ("cf", "ADCT Art. 5")
+    assert primeiro("art. 156-A da CF") == ("cf", "Art. 156-A")
+    assert primeiro("art. 1.022 do CPC") == primeiro("artigo 1022 da Lei 13.105") == ("cpc", "Art. 1.022")
+    assert primeiro("art. 7 do CPC") == ("clt", "Art. 7")      # a lei nomeada não tem o artigo: vale quem tem
+    assert {t.fonte_id for _, t in kb.buscar("art. 5")} == {"cf", "cpc", "clt"}      # sem lei citada: todas
+
+
+def test_apelido_e_palavra_inteira():
+    assert cita("mei", "o mei paga das") and not cita("mei", "meio ambiente")
+    assert cita("cf", "art. 5 da cf") and not cita("cf", "conselho cfc")
+    assert cita("cf/88", "a cf/88 diz") and cita("Código Penal", "art. 121 do codigo penal")
+
+
+def test_pagina_salva_pelo_navegador_fica_fora_da_base(tmp_path):
+    """O "Salvar como" do navegador deixou um console inteiro na raiz da base em 04/11/2026: a pasta virou área."""
+    root = tmp_path / "base"
+    (root / "juridico").mkdir(parents=True)
+    (root / "juridico" / "lei.md").write_text("Art. 1 Tributo.\nArt. 2 b\nArt. 3 c\n", encoding="utf-8")
+    (root / "Console.html").write_text("<p>Regras do projeto firebase.</p>", encoding="utf-8")
+    (root / "Console_files").mkdir()
+    (root / "Console_files" / "recurso.html").write_text("<p>Mais firebase.</p>", encoding="utf-8")
+    (root / "nota.html").write_text("<p>Nota avulsa sobre usucapião.</p>", encoding="utf-8")
+    kb = KnowledgeBase(root, fts=True)
+    assert not kb.buscar("firebase") and kb.buscar("usucapião")[0][1].area == "geral"
+    assert kb.areas() == ["geral", "juridico"] and kb.areas_em_uso() == ["geral", "juridico"]
+
+
+@MOTORES
 def test_precedente_transversal_entra_em_qualquer_area(tmp_path, fts):
     """A busca do agente tributário (area="tributario") também acha a SV 8, que mora na área juridico."""
     root = tmp_path / "base"
@@ -197,7 +254,8 @@ def _catalogo_das_3_leis(pasta):
 def test_regressao_as_3_leis_respondem_igual(tmp_path, fts):
     """Golden gravado com o BM25 antigo (31/10/2026): mesmo 1º lugar (lei e artigo) e os artigos do top 3 antigo
     dentro do top 5 novo. A ordem do 2º/3º lugar pode trocar: a R7 pôs sobreposição nas partes de artigos longos e o
-    FTS5 usa k1=1,2 (o antigo usava 1,5)."""
+    FTS5 usa k1=1,2 (o antigo usava 1,5). Quando a pergunta cita o artigo de uma lei, o top 3 antigo só vale para essa
+    lei: "art. 3 do CTN" trazer o art. 3 da LC 123 era o defeito que a lei citada corrigiu em 05/11/2026."""
     root = tmp_path / "base"
     shutil.copytree(FIXTURES / "leis", root)
     _catalogo_das_3_leis(root / "_catalogo")
@@ -211,7 +269,9 @@ def test_regressao_as_3_leis_respondem_igual(tmp_path, fts):
         achados = kb.buscar(pergunta)
         assert (achados[0][1].arquivo, achados[0][1].rotulo) == (esperado[0]["arquivo"], esperado[0]["rotulo"]), \
             pergunta
-        assert artigos((e["arquivo"], e["rotulo"]) for e in esperado[:3]) <= \
+        lei_citada = chaves_citadas(pergunta) and any(cita(a, norm(pergunta)) for a in ("ctn", "lc 123", "estatuto"))
+        top3 = [e for e in esperado[:3] if not lei_citada or e["arquivo"] == esperado[0]["arquivo"]]
+        assert artigos((e["arquivo"], e["rotulo"]) for e in top3) <= \
             artigos((t.arquivo, t.rotulo) for _, t in achados[:5]), pergunta
         assert achados[0][1].fonte == esperado[0]["fonte"] and achados[0][1].area == esperado[0]["area"]
         assert achados[0][1].url.startswith("https://www.planalto.gov.br/") and achados[0][1].baixado_em == "26/10/2026"
