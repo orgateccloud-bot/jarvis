@@ -14,6 +14,15 @@ export const acaoDoSol = estado => (ATIVOS.includes(estado) ? 'parar' : 'ouvir')
 export const modoDoServico = estado => (ATIVOS.includes(estado) ? 'active' : 'off')
 
 /**
+ * Energia de uma "sílaba" enquanto o serviço fala. O HUD não recebe o áudio nem o texto da fala do serviço, então a
+ * onda do astro pulsa num ritmo parecido com o da fala, como na bancada. É simulação: não acompanha o som de verdade.
+ */
+export const silaba = (rand = Math.random) => 0.6 + rand() * 0.4
+
+/** Intervalo até a próxima sílaba, em ms. */
+export const intervaloDaSilaba = (rand = Math.random) => 160 + rand() * 140
+
+/**
  * Aviso no topo quando o serviço para: o usuário pode pegar o microfone do navegador (o Chrome envia o áudio ao
  * servidor dele) e devolver depois. null = nada a avisar.
  */
