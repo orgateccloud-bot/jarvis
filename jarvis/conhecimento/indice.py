@@ -20,7 +20,7 @@ from pathlib import Path
 
 from loguru import logger
 
-VERSAO = "3"          # muda quando tokens() ou o esquema mudam: o índice é refeito do zero
+VERSAO = "4"          # muda quando tokens(), o esquema ou os rótulos mudam: o índice é refeito do zero
 CACHE_KB = 8000
 _BLOCO = 20           # rowid do trecho = id do documento << _BLOCO | posição (apagar um documento é um intervalo)
 
@@ -68,15 +68,26 @@ def termos_da_consulta(consulta: str) -> list[str]:
     return list(dict.fromkeys(termos))
 
 
+def sem_milhar(t: str) -> str:
+    """ "1.022" → "1022": a pergunta e o rótulo podem escrever o número de um jeito ou de outro."""
+    return re.sub(r"(?<=\d)\.(?=\d{3}(?!\d))", "", t)
+
+
 def chave_rotulo(rotulo: str) -> str:
-    """ "Súmula Vinculante 8 (parte 2)" → "sumula vinculante 8"; "Art. 174-A" → "art 174 a"; "SÚMULA 603" → "sumula 603"."""
-    return re.sub(r"[^a-z0-9]+", " ", norm(rotulo.split(" (")[0])).strip()
+    """ "Súmula Vinculante 8 (parte 2)" → "sumula vinculante 8"; "Art. 174-A" → "art 174 a"; "SÚMULA 603" → "sumula 603";
+    "Art. 1.022" → "art 1022"; "ADCT Art. 60" → "adct art 60"."""
+    return re.sub(r"[^a-z0-9]+", " ", sem_milhar(norm(rotulo.split(" (")[0]))).strip()
+
+
+def cita(apelido: str, q: str) -> bool:
+    """A pergunta normalizada nomeia a lei? Palavra inteira: "mei" não casa com "meio", nem "cf" com "cfc"."""
+    return re.search(rf"(?<![a-z0-9]){re.escape(norm(apelido))}(?![a-z0-9])", q) is not None
 
 
 # item citado pelo número na pergunta ("art. 173", "súmula vinculante 8", "tema repetitivo 1001", "IAC 5"); o número
 # de um dígito não vira termo de busca, então o item é achado pela chave do rótulo
+_ART_CITADO = re.compile(r"\bart(?:igo)?s?\.?\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:o\b)?((?:-[a-z]{1,2}\b)*)")
 _CITACOES = (
-    (re.compile(r"\bart(?:igo)?\.?\s*(\d+)"), "art {}"),
     (re.compile(r"\bsumula\s+(vinculante\s+)?(?:n[.o]?\s*)?(\d+)"), "sumula {}{}"),
     (re.compile(r"\btema\s+(repetitivo\s+)?(?:n[.o]?\s*)?(\d+)"), "tema {}{}"),
     (re.compile(r"\biac\s+(?:n[.o]?\s*)?(\d+)"), "iac {}"),
@@ -85,7 +96,8 @@ _CITACOES = (
 
 def chaves_citadas(consulta: str) -> list[str]:
     q = re.sub(r"[º°]", "o", norm(consulta))
-    chaves = []
+    adct = "adct " if "adct" in q or "ato das disposicoes" in q else ""
+    chaves = [adct + chave_rotulo(f"art {m.group(1)}{m.group(2)}") for m in _ART_CITADO.finditer(q)]
     for rx, modelo in _CITACOES:
         for m in rx.finditer(q):
             grupos = [g.strip() + " " if g and not g.isdigit() else (g or "") for g in m.groups()]
