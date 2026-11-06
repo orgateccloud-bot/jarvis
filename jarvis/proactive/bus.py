@@ -31,14 +31,22 @@ class EventBus:
                 q.get_nowait()
             q.put_nowait(ev)
 
-    async def subscribe(self) -> AsyncIterator[ProactiveEvent]:
-        q: asyncio.Queue[ProactiveEvent] = asyncio.Queue(self.queue_size)
+    def abrir(self) -> asyncio.Queue:
+        """Fila de um assinante; quem abre fecha com `fechar`."""
+        q: asyncio.Queue = asyncio.Queue(self.queue_size)
         self._subs.add(q)
+        return q
+
+    def fechar(self, q: asyncio.Queue) -> None:
+        self._subs.discard(q)
+
+    async def subscribe(self) -> AsyncIterator[ProactiveEvent]:
+        q = self.abrir()
         try:
             while True:
                 yield await q.get()
         finally:
-            self._subs.discard(q)
+            self.fechar(q)
 
     @property
     def subscribers(self) -> int:
@@ -49,13 +57,16 @@ async def event_source(bus: EventBus, greeting: ProactiveEvent | None, keepalive
     """Linhas SSE: saudação (opcional), depois cada evento; comentário de keepalive quando ocioso."""
     if greeting:
         yield f"data: {greeting.model_dump_json()}\n\n"
-    sub = bus.subscribe()
+    # Espera na fila, não em subscribe(): cancelar o anext de um gerador o encerra, e o primeiro keepalive derrubaria o
+    # stream. Cancelar q.get() no tempo limite não perde evento.
+    q = bus.abrir()
     try:
         while True:
             try:
-                ev = await asyncio.wait_for(anext(sub), timeout=keepalive_s)
-                yield f"data: {ev.model_dump_json()}\n\n"
+                ev = await asyncio.wait_for(q.get(), timeout=keepalive_s)
             except TimeoutError:
                 yield ": ping\n\n"
+                continue
+            yield f"data: {ev.model_dump_json()}\n\n"
     finally:
-        await sub.aclose()
+        bus.fechar(q)
