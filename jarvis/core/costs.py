@@ -32,6 +32,23 @@ def price_usage(model: str, input_tokens: int, output_tokens: int, cache_read: i
     return round(total / 1_000_000, 6)
 
 
+def tentativas_cobradas(usage, pedido: str, servido: str) -> list[tuple[str, int, int, int, int]]:
+    """O que a API cobrou numa resposta, por tentativa: (modelo, entrada, saída, leitura de cache, escrita de cache).
+
+    `usage.iterations` é o registro da cobrança: os campos do topo de `usage` deixam de fora a compactação e as
+    tentativas recusadas antes de um fallback. A compactação não informa o modelo porque roda no modelo pedido.
+    Sem `iterations`, valem os campos do topo, no modelo que serviu.
+    """
+    def linha(modelo: str, u) -> tuple[str, int, int, int, int]:
+        return (modelo, getattr(u, "input_tokens", 0) or 0, getattr(u, "output_tokens", 0) or 0,
+                getattr(u, "cache_read_input_tokens", 0) or 0, getattr(u, "cache_creation_input_tokens", 0) or 0)
+
+    iteracoes = getattr(usage, "iterations", None)
+    if not iteracoes:
+        return [linha(servido, usage)]
+    return [linha(getattr(it, "model", None) or pedido, it) for it in iteracoes]
+
+
 class CostLedger:
     def __init__(self, db_path: Path, monthly_budget_usd: float, economy_threshold: float = 0.8):
         self.db_path = db_path
