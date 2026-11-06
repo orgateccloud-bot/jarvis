@@ -5,7 +5,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from jarvis.api.server import build_conversation, create_app
-from tests.conftest import FakeAnthropic
+from tests.conftest import FakeAnthropic, text_turn, tool_turn
 
 AUTH = {"Authorization": "Bearer token-de-teste"}
 
@@ -114,6 +114,38 @@ def test_recusa_do_haiku_escala_para_sonnet(settings):
     assert [e["data"]["rota"] for e in evs if e["type"] == "route"] == ["simples", "media"]  # o HUD vê a camada nova
     assert next(e for e in evs if e["type"] == "usage")["data"]["modelo"] == "claude-sonnet-5-5"
     assert conv.ledger.summary()["turnos_claude_mes"] == 2  # a tentativa recusada também é contabilizada
+
+
+def test_mensagens_traz_so_o_texto_da_conversa(settings):
+    fake = FakeAnthropic(script=[tool_turn("ferramenta_nova", {}, text="Vou ver."), text_turn("Gastou pouco.")])
+    client, _ = _client(settings, fake)
+    corpo = {"message": "/opus quanto gastei? meu cpf é 123.456.789-09", "session_id": "hud"}
+    _events(client.post("/chat/stream", headers=AUTH, json=corpo))
+    r = client.get("/sessions/hud/mensagens", headers=AUTH).json()
+    assert r["total"] == 2 and r["conversa"]
+    assert r["mensagens"] == [
+        {"role": "user", "text": "quanto gastei? meu cpf é ***.***.***-**"},    # mascarado e sem o prefixo /opus
+        {"role": "jarvis", "text": "Vou ver.\n\nGastou pouco."},                # sem nota de sistema nem ferramenta
+    ]
+    so_a_ultima = client.get("/sessions/hud/mensagens?limite=1", headers=AUTH).json()
+    assert so_a_ultima["total"] == 2 and [m["role"] for m in so_a_ultima["mensagens"]] == ["jarvis"]
+
+
+def test_mensagens_pede_token_e_limite_valido(settings, fake_claude):
+    client, _ = _client(settings, fake_claude)
+    assert client.get("/sessions/hud/mensagens").status_code == 401
+    assert client.get("/sessions/hud/mensagens?limite=0", headers=AUTH).status_code == 422
+    assert client.get("/sessions/hud/mensagens", headers=AUTH).json() == {"conversa": "", "total": 0, "mensagens": []}
+
+
+def test_conversa_nova_tem_outra_identidade(settings, fake_claude):
+    client, conv = _client(settings, fake_claude)
+    _events(client.post("/chat/stream", headers=AUTH, json={"message": "me conta algo", "session_id": "hud"}))
+    antes = client.get("/sessions/hud/mensagens", headers=AUTH).json()["conversa"]
+    conv.store.nova("hud")
+    _events(client.post("/chat/stream", headers=AUTH, json={"message": "outra coisa", "session_id": "hud"}))
+    depois = client.get("/sessions/hud/mensagens", headers=AUTH).json()
+    assert depois["conversa"] != antes and depois["total"] == 2
 
 
 def test_rota_informa_a_area_da_pergunta(settings, fake_claude):

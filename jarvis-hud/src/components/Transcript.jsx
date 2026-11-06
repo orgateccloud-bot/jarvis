@@ -90,6 +90,7 @@ export default function Transcript({ messages, onDecide }) {
         if (m.role === 'approval') {
           return <li key={m.id} className="msg msg-approval"><ApprovalCard m={m} onDecide={onDecide} /></li>
         }
+        if (m.role === 'marco') return <li key={m.id} className="msg msg-marco">{m.text}</li>
         const t = TIERS[m.tier] || TIERS.regras
         return (
           <li key={m.id} className={`msg msg-${m.role}`}
