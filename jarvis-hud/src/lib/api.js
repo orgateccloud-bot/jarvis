@@ -95,6 +95,13 @@ export async function* streamEvents({ greeting = true, signal } = {}) {
   yield* readSSE(res, signal)
 }
 
+/** Espelho do turno pedido pela voz: pergunta seguida dos eventos do turno. Só existe com a voz local (senão, 404). */
+export async function* streamTurnos({ signal } = {}) {
+  const res = await authFetch('/turnos/eventos', { signal })
+  if (!res.ok) throw new HttpError(res.status)
+  yield* readSSE(res, signal)
+}
+
 /** Últimas mensagens da conversa guardada na API, para repor a tela depois do F5. */
 export const lerMensagens = (limite = 40, sessionId = 'hud') => getJson(`/sessions/${sessionId}/mensagens?limite=${limite}`)
 

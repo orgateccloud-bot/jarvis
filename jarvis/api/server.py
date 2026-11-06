@@ -27,7 +27,7 @@ HOSTS_LOCAIS = {"127.0.0.1", "localhost", "[::1]"}
 from ..conhecimento.base import KnowledgeBase
 from ..core.approvals import Approvals
 from ..core.audit import AuditChain
-from ..core.contracts import ApprovalDecision, ChatRequest
+from ..core.contracts import ApprovalDecision, ChatRequest, StreamEvent
 from ..core.costs import CostLedger
 from ..core.llm import ClaudeBrain, RuleResponder
 from ..core.router import Tiers
@@ -79,9 +79,12 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     proactive = settings.proactive if proactive is None else proactive
 
     # Etapa 2: escuta por voz local. Com a flag em 0, nada disto existe (nem rota, nem processo).
-    voz_estado = supervisor = None
+    voz_estado = supervisor = espelho = None
     if settings.voz_local:
         from .voz import EstadoVoz, Supervisor
+
+        # Turno pedido pela voz, para o HUD. Canal próprio: a fila de /events guarda 50 eventos e perderia trechos de texto.
+        espelho = EventBus(queue_size=2000)
 
         def publicar_voz(kind: str, texto: str) -> None:
             bus.publish(ProactiveEvent(kind=kind, titulo="voz", texto=texto, falar=False))
@@ -120,8 +123,9 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     if voz_estado is not None:
         from .voz import rotas
 
-        app.include_router(rotas(voz_estado, conv, require_token, publicar_voz))
+        app.include_router(rotas(voz_estado, conv, require_token, publicar_voz, espelho=espelho))
         app.state.voz = voz_estado
+        app.state.espelho = espelho
 
     @app.get("/health")
     async def health():
@@ -134,14 +138,23 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
 
     @app.post("/chat/stream", dependencies=[Depends(require_token)])
     async def chat_stream(req: ChatRequest):
+        def espelhar(ev: StreamEvent) -> None:
+            if espelho is not None and req.origem == "voz":
+                espelho.publish(ev)
+
         async def sse():
+            espelhar(StreamEvent(type="pergunta", data=conv.pergunta(req.message)))
             try:
                 async for ev in conv.turn(req.session_id, req.message):
+                    espelhar(ev)
                     yield f"data: {ev.model_dump_json()}\n\n"
             except Exception as e:  # noqa: BLE001 — nunca deixar o stream morrer sem aviso
                 logger.exception("falha no turno")
+                espelhar(StreamEvent(type="error", data=f"falha interna: {type(e).__name__}"))
                 yield f'data: {{"type":"error","data":"falha interna: {type(e).__name__}"}}\n\n'
                 yield 'data: {"type":"done"}\n\n'
+            finally:
+                espelhar(StreamEvent(type="done"))  # o HUD fecha o turno mesmo se o serviço de voz cair no meio
 
         return StreamingResponse(sse(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
@@ -160,6 +173,8 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
     async def decide_approval(approval_id: str, body: ApprovalDecision):
         if not conv.approvals.resolve(approval_id, body.aprovar):
             raise HTTPException(status_code=404, detail="aprovação inexistente ou já decidida")
+        if espelho is not None:  # decidida por voz ou por clique, o card do HUD acompanha
+            espelho.publish(StreamEvent(type="aprovacao", data={"id": approval_id, "aprovado": body.aprovar}))
         return {"ok": True, "aprovado": body.aprovar}
 
     @app.get("/costs", dependencies=[Depends(require_token)])

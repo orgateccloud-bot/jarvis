@@ -35,7 +35,7 @@ class Cliente:
 
     def perguntar(self, texto: str) -> Iterator[dict]:
         """Eventos do turno: route, thinking, text (trecho), tool, approval ({id, resumo, ...}), usage, error, done."""
-        yield from self._sse("POST", "/chat/stream", json={"message": texto, "session_id": SESSAO})
+        yield from self._sse("POST", "/chat/stream", json={"message": texto, "session_id": SESSAO, "origem": "voz"})
 
     def eventos(self) -> Iterator[dict]:
         """Avisos proativos (lembretes, alertas). Os com "falar" o serviço fala quando é o dono do alto-falante."""
