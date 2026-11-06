@@ -57,4 +57,6 @@ def test_descricao_gerada_dos_catalogos_e_curta(kb):
     assert "tributario" in kb.areas() and "tributario" not in kb.areas_em_uso()   # catálogo sem texto: fora da lista
     longa = descricao([f"area_{i:02d}" for i in range(40)])
     assert len(longa) <= LIMITE_DESCRICAO and "area_00" in longa
+    estranha = descricao(["Uma pasta salva por engano com nome comprido demais", "juridico", "oab", "tributario"])
+    assert len(estranha) <= LIMITE_DESCRICAO and "juridico, oab, tributario" in estranha and "engano" not in estranha
     assert "enum" not in json.dumps(tool.definition()["input_schema"]["properties"]["area"])   # não é Literal

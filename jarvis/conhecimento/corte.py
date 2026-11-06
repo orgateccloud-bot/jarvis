@@ -14,8 +14,12 @@ import textwrap
 TAM_TRECHO = 1500
 SOBREPOSICAO = 150
 
-_ARTIGO = re.compile(r"^Art\.?\s*(\d+)\s*[ºo°]?\s*(-\s*[A-Z]{1,2}\b)?", re.MULTILINE)
+# "Art. 1.022", "Art. 156-A", "Art. 359-M-A". A letra vem colada no hífen: em "Art. 5º - A todo trabalho" o "A" é a
+# primeira palavra do artigo (forma comum na CLT e no Código Penal)
+_ARTIGO = re.compile(r"^Art\.?\s*(\d{1,3}(?:\.\d{3})+|\d+)\s*[ºo°]?\s?((?:-[A-Z]{1,2}\b)*)", re.MULTILINE)
 _ANEXO = re.compile(r"^ANEXO\s+([IVXL]+)\b", re.MULTILINE)
+# o ADCT recomeça a numeração: sem o prefixo, o art. 5 da CF e o art. 5 do ADCT teriam o mesmo rótulo
+_ADCT = re.compile(r"^ATO DAS DISPOSI[ÇC][ÕO]ES CONSTITUCIONAIS TRANSIT[ÓO]RIAS\s*$", re.MULTILINE)
 _ITEM = re.compile(r"^#{2,3}\s+(.+?)\s*$", re.MULTILINE)
 _SECAO = re.compile(r"^(?:#{1,6}\s+(.+?)|((?:T[ÍI]TULO|CAP[ÍI]TULO|SE[ÇC][ÃA]O|PARTE|LIVRO)\s+[IVXLC\d]+.*?))\s*$",
                     re.MULTILINE)
@@ -69,7 +73,12 @@ def _paragrafos(texto: str) -> list[tuple[str, str]]:
 
 
 def _marcas_artigo(texto: str) -> list[tuple[int, str]]:
-    return [(m.start(), f"Art. {m.group(1)}{(m.group(2) or '').replace(' ', '')}") for m in _ARTIGO.finditer(texto)]
+    adct = _ADCT.search(texto)
+    marcas = []
+    for m in _ARTIGO.finditer(texto):
+        numero = f"{int(m.group(1).replace('.', '')):,}".replace(",", ".")   # "Art. 1337" e "Art. 1.337" são o mesmo
+        marcas.append((m.start(), f"{'ADCT ' if adct and m.start() > adct.start() else ''}Art. {numero}{m.group(2)}"))
+    return marcas
 
 
 def _marcas_anexo(texto: str) -> list[tuple[int, str]]:

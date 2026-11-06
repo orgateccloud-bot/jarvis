@@ -26,8 +26,10 @@ from .indice import (
     Trecho,
     chave_rotulo,
     chaves_citadas,
+    cita,
     fts5_disponivel,
     norm,
+    sem_milhar,
     termos_da_consulta,
 )
 
@@ -51,6 +53,12 @@ def _iso(d: date | None) -> str:
 
 def _br(iso: str) -> str:
     return data_br(date.fromisoformat(iso)) if iso else ""
+
+
+def _pagina_salva(p: Path, partes: tuple[str, ...]) -> bool:
+    """"Salvar como" do navegador (Nome.html + Nome_files/): não é fonte, mesmo que caia na pasta da base por engano."""
+    return any(parte.endswith("_files") for parte in partes) or (
+        p.suffix.lower() in (".html", ".htm") and p.with_name(f"{p.stem}_files").is_dir())
 
 
 def selecionar(docs: list[Documento], f: Filtros, transversais: frozenset[str] | set[str] = frozenset()
@@ -104,7 +112,7 @@ class KnowledgeBase:
                 continue
             partes = p.relative_to(self.root).parts
             versao = len(partes) == 3 and partes[0] == "_versoes" and not partes[1].startswith(("_", "."))
-            if versao or not any(part.startswith(("_", ".")) for part in partes):
+            if versao or not (any(part.startswith(("_", ".")) for part in partes) or _pagina_salva(p, partes)):
                 out.append(p)
         return sorted(out)
 
@@ -218,7 +226,8 @@ class KnowledgeBase:
     def areas(self) -> list[str]:
         with self._trava:
             self._catalogo()
-        pastas = {p.name for p in self.root.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))} \
+        pastas = {p.name for p in self.root.iterdir()
+                  if p.is_dir() and not p.name.startswith(("_", ".")) and not p.name.endswith("_files")} \
             if self.root.is_dir() else set()
         return sorted(set(self.carga.areas()) | pastas | {"geral"})
 
@@ -248,20 +257,23 @@ class KnowledgeBase:
             docs = {d.caminho: d for d in motor.documentos()}
             transversais = {f.id for f in self.carga.fontes() if f.transversal}
             permitidos = selecionar(list(docs.values()), Filtros(area, uf, tipo, esfera, vigente_em), transversais)
-            q = norm(consulta)
+            q = sem_milhar(norm(consulta))
             chaves = chaves_citadas(consulta)
             candidatos = motor.buscar(termos_da_consulta(consulta), set(permitidos), 60, chaves)
+            nomeadas = {f.id for f in map(self.carga.fonte, {docs[c].fonte_id for c in permitidos} - {""})
+                        if f and any(cita(a, q) for a in f.apelidos)}
+        # números de artigo se repetem entre as leis: se a lei nomeada tem o item citado, só ela leva o reforço
+        alvo = nomeadas & {docs[c[1]].fonte_id for c in candidatos if chave_rotulo(c[2]) in chaves}
         hoje = date.today()
         pontos = []
         for s, cam, rot, txt, sit_item, url_item in candidatos:
             d = docs[cam]
-            fonte = self.carga.fonte(d.fonte_id) if d.fonte_id else None
-            if s and fonte and any(norm(a) in q for a in fonte.apelidos):
+            if s and d.fonte_id in nomeadas:
                 s += 2.0  # a pergunta nomeia a lei
-            if chaves and chave_rotulo(rot) in chaves:
-                s += 10.0  # "art. 173", "súmula vinculante 8": o próprio item vem primeiro
-                if " (parte " not in rot and not rot.startswith(("Art", "Anexo")):
-                    s += 10.0  # na jurisprudência, a 1ª parte traz o enunciado/tese: vem antes dos precedentes
+            if chave_rotulo(rot) in chaves and (not alvo or d.fonte_id in alvo):
+                s += 20.0 if alvo else 10.0  # "art. 173", "súmula vinculante 8": o próprio item vem primeiro
+                if " (parte " not in rot:
+                    s += 10.0  # a 1ª parte traz o caput ou o enunciado/tese: vem antes dos incisos e precedentes
             if s > 0:
                 pontos.append((s, cam, rot, txt, sit_item, url_item))
         pontos.sort(key=lambda c: c[0], reverse=True)

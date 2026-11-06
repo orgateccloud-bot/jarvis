@@ -20,7 +20,7 @@ LIMITE_DESCRICAO = 300
 class BuscaParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
     consulta: str = Field(min_length=2, max_length=300,
-                          description="O que procurar, de preferência com as palavras que a lei usaria")
+                          description="As palavras que a lei usaria, ou o artigo com a lei: art. 5 da CF")
     area: str | None = Field(default=None, max_length=40, description="Restringe a uma área da lista")
     uf: str | None = Field(default=None, pattern=r"^[A-Za-z]{2}$", description="UF (GO, TO...) ou BR")
     tipo: str | None = Field(default=None, max_length=40, description="lei, sumula, precedente, codigo...")
@@ -29,12 +29,12 @@ class BuscaParams(BaseModel):
 
 
 def descricao(areas: list[str]) -> str:
-    texto = ("Busca leis, súmulas e temas do STF/STJ na base local (áreas: {}; súmulas e temas entram em "
-             "qualquer área). Filtros: area, uf, tipo, esfera, vigente_em. Cite fonte, URL e data da captura; "
-             "repita o aviso se houver. Sem o artigo certo, use as palavras da lei.")
+    texto = ("Busca leis, súmulas e temas STF/STJ na base local (áreas: {}; súmulas e temas entram em "
+             "qualquer área). Filtros: area, uf, tipo, esfera, vigente_em. Nomeie a lei na consulta (art. 5 da CF). "
+             "Cite fonte, URL e data; repita o aviso.")
     lista = [a for a in areas if a != "geral"]
-    while lista and len(texto.format(", ".join(lista))) > LIMITE_DESCRICAO:
-        lista.pop()
+    while lista and len(texto.format(", ".join(lista))) > LIMITE_DESCRICAO:   # sai a de nome mais longo: um nome
+        lista.remove(max(reversed(lista), key=len))                           # estranho não leva as outras junto
     return texto.format(", ".join(lista) or "geral")
 
 
