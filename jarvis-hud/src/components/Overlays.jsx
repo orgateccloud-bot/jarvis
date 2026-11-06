@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NOME } from '../lib/marca.js'
 import { astroDe } from '../lib/astro.js'
 import { ESPERA } from '../lib/atividade.js'
 
@@ -15,7 +16,7 @@ export function BootIgnition() {
   if (step > LINES.length) return null
   return (
     <div className={`boot ${step === LINES.length ? 'boot-out' : ''}`} aria-hidden="true">
-      <div className="boot-brand">JARVIS</div>
+      <div className="boot-brand">{NOME}</div>
       <div className="boot-line" key={step}>{LINES[Math.min(step, LINES.length - 1)]}</div>
     </div>
   )
