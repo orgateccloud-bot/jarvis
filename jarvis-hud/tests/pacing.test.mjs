@@ -1,14 +1,23 @@
 // Testes do ritmo de quadros do cosmos. Rode: npm test
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { FPS_ATIVO, FPS_REPOUSO, fpsAlvo, proximoQuadro } from '../src/cosmos/pacing.js'
+import { FPS_ATIVO, FPS_REPOUSO, fpsAlvo, proximoQuadro, pulsoDaEspera } from '../src/cosmos/pacing.js'
 
-test('60 fps pensando ou falando; 30 fps em repouso e escutando', () => {
+test('60 fps pensando ou falando; 30 fps em repouso, escutando e esperando aprovação', () => {
   assert.equal(fpsAlvo('thinking'), FPS_ATIVO)
   assert.equal(fpsAlvo('speaking'), FPS_ATIVO)
   assert.equal(fpsAlvo('idle'), FPS_REPOUSO)
   assert.equal(fpsAlvo('listening'), FPS_REPOUSO)
+  assert.equal(fpsAlvo('waiting'), FPS_REPOUSO)
   assert.equal(fpsAlvo(undefined), FPS_REPOUSO)
+})
+
+test('o pulso da espera fica entre 0,12 e 0,32 e fecha o ciclo em 3,7 s', () => {
+  for (let t = 0; t < 8; t += 0.05) {
+    const p = pulsoDaEspera(t)
+    assert.ok(p >= 0.12 - 1e-9 && p <= 0.32 + 1e-9, `fora da faixa: ${p}`)
+  }
+  assert.ok(Math.abs(pulsoDaEspera(0) - pulsoDaEspera(3.7)) < 1e-9)
 })
 
 // simula o rAF de um monitor de `hz` por 10 s (com jitter) e devolve os quadros desenhados por segundo

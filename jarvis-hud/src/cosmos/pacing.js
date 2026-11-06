@@ -5,6 +5,11 @@ export const FPS_REPOUSO = 30
 
 export const fpsAlvo = state => (state === 'thinking' || state === 'speaking' ? FPS_ATIVO : FPS_REPOUSO)
 
+const CICLO_ESPERA_S = 3.7 // o mesmo ciclo da atmosfera dos planetas
+
+/** Energia do astro esperando uma aprovação, de 0,12 a 0,32: uma respiração lenta. `t` em segundos. */
+export const pulsoDaEspera = t => 0.22 + 0.1 * Math.sin((t * 2 * Math.PI) / CICLO_ESPERA_S)
+
 // folga de ~2 ms: o rAF oscila em torno de 16,7 ms e, sem ela, 30 fps viraria 20 fps em monitor de 60 Hz
 const FOLGA_MS = 2
 

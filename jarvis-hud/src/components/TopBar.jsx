@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { TIERS } from '../lib/tiers.js'
 
-const PHASE = { idle: 'Em espera', listening: 'Ouvindo', thinking: 'Pensando', speaking: 'Respondendo' }
+const PHASE = { idle: 'Em espera', listening: 'Ouvindo', thinking: 'Pensando', speaking: 'Respondendo',
+  waiting: 'Aguardando você' }
 
 function useClock() {
   const [now, setNow] = useState(() => new Date())

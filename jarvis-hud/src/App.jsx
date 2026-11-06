@@ -13,7 +13,7 @@ import { useJarvis } from './hooks/useJarvis.js'
 import { useConversation } from './hooks/useConversation.js'
 import { useVozLocal } from './hooks/useVozLocal.js'
 import { CardsContexto, useCardsMinimizados } from './hooks/useCards.js'
-import { FASE_DO_SERVICO, avisoDaVoz } from './lib/voice/servico.js'
+import { FASE_DO_SERVICO, avisoDaVoz, intervaloDaSilaba, silaba } from './lib/voice/servico.js'
 import { ROUTE_TO_TIER, TIERS } from './lib/tiers.js'
 
 const REST_AFTER_MS = 30000 // depois de 30 s em espera, o sol volta a ser o Sol (G2V)
@@ -75,6 +75,19 @@ export default function App() {
 
   const externo = vozLocal.ativo ? { estado: vozLocal.voz.estado, comando: vozLocal.comando } : null
   const conv = useConversation({ send, approve, energyRef, busy: j.busy, externo })
+
+  // com o serviço falando, nenhum texto chega ao HUD: a onda do astro pulsa em ritmo de sílaba (simulação)
+  const servicoFalando = externo?.estado === 'falando'
+  useEffect(() => {
+    if (!servicoFalando) return
+    let timer = 0
+    const pulsar = () => {
+      energyRef.current = silaba()
+      timer = setTimeout(pulsar, intervaloDaSilaba())
+    }
+    pulsar()
+    return () => clearTimeout(timer)
+  }, [servicoFalando, energyRef])
   const { say, ask, stop, clearApproval, error: voiceError } = conv
   useEffect(() => { sayRef.current = say }, [say])
 
@@ -111,7 +124,7 @@ export default function App() {
       <CosmosScene state={phase} tier={activeTier} alert={alert} energyRef={energyRef} sun={sun}
         statsRef={import.meta.env.DEV ? devStats : undefined} />
       <SunButton mode={conv.mode} speaking={conv.speaking} onClick={conv.toggle} disabled={!conv.supported.listen} />
-      <Caption mode={conv.mode} phase={phase} caption={conv.caption} />
+      <Caption mode={conv.mode} phase={phase} caption={conv.caption} atividade={j.atividade} />
       <BootIgnition />
       <div className={`app ${sp.holo ? 'holo' : ''}`} style={{ '--tier': TIERS[uiTier].ui }}>
         <TopBar
@@ -149,7 +162,7 @@ export default function App() {
             <div className={`panels ${panelsOpen ? 'open' : ''}`}>
               <aside className="side side-left" aria-label="Sistema e custos">
                 <VitalsCard vitals={j.vitals} history={j.history} />
-                <CostCard costs={j.costs} />
+                <CostCard costs={j.costs} uso={j.neural?.uso} />
               </aside>
               <aside className="side side-right" aria-label="Avisos e estado neural">
                 <AvisosCard avisos={j.avisos} onLimpar={j.limparAvisos} />

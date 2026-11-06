@@ -111,6 +111,75 @@ class VozMuda:
         pass
 
 
+class ClienteQueAnota(ClienteSoBatimento):
+    def __init__(self):
+        self.batidas: list[tuple[float, str]] = []
+
+    def batimento(self, estado):
+        self.batidas.append((time.monotonic(), estado))
+        return super().batimento(estado)
+
+
+def _ate(condicao, segundos=3.0):
+    limite = time.monotonic() + segundos
+    while time.monotonic() < limite and not condicao():
+        time.sleep(0.005)
+    return condicao()
+
+
+def test_batimento_sai_na_hora_quando_o_estado_muda(monkeypatch):
+    monkeypatch.setattr(mod, "BATIMENTO_S", 30.0)                 # o batimento normal nunca sairia durante o teste
+    cliente = ClienteQueAnota()
+    srv = mod.Servico(EscutaFalsa(), cliente, object(), voz=VozMuda())
+    t = threading.Thread(target=srv._batimento, daemon=True)
+    t.start()
+    try:
+        assert _ate(lambda: len(cliente.batidas) == 1)
+        srv.conversa.ocupado = True
+        assert _ate(lambda: len(cliente.batidas) == 2), "a mudança de estado não saiu na hora"
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert [e for _, e in cliente.batidas] == ["repouso", "processando"]
+
+
+def test_batimento_normal_continua_sem_mudanca_de_estado(monkeypatch):
+    monkeypatch.setattr(mod, "BATIMENTO_S", 0.1)
+    cliente = ClienteQueAnota()
+    srv = mod.Servico(EscutaFalsa(), cliente, object(), voz=VozMuda())
+    t = threading.Thread(target=srv._batimento, daemon=True)
+    t.start()
+    try:
+        assert _ate(lambda: len(cliente.batidas) >= 3)
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert {e for _, e in cliente.batidas} == {"repouso"}
+
+
+def test_api_fora_nao_vira_rajada_de_tentativas(monkeypatch):
+    monkeypatch.setattr(mod, "BATIMENTO_S", 30.0)
+
+    class ClienteFora(ClienteQueAnota):
+        def batimento(self, estado):
+            super().batimento(estado)
+            raise ConnectionError("sem API")
+
+    cliente = ClienteFora()
+    srv = mod.Servico(EscutaFalsa(), cliente, object(), voz=VozMuda())
+    srv.dono = True
+    t = threading.Thread(target=srv._batimento, daemon=True)
+    t.start()
+    try:
+        assert _ate(lambda: len(cliente.batidas) == 1)
+        time.sleep(0.2)                                           # várias olhadas no estado, nenhuma nova tentativa
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert len(cliente.batidas) == 1
+    assert srv.dono is False
+
+
 def test_servico_reabre_o_microfone_que_parou_sem_erro(monkeypatch):
     monkeypatch.setattr(mod, "ESPERAS_REABRIR_S", (0.01,))
     mic, escuta = MicrofoneQueTrava(), EscutaFalsa()
