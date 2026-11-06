@@ -20,10 +20,12 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends
 from fastapi import Path as Caminho
+from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel
 
 from ..config import ROOT
+from ..proactive.bus import EventBus, event_source
 
 BATIMENTO_VIVO_S = 6.0     # sem batimento por mais que isso = parado
 TRAVADO_S = 10.0           # processo vivo mas sem batimento = travado: o supervisor reinicia
@@ -143,9 +145,15 @@ class Supervisor:
                 self.proc.kill()
 
 
-def rotas(estado: EstadoVoz, conv, exigir_token, publicar: Callable[[str, str], None] = lambda _k, _t: None
-          ) -> APIRouter:
+def rotas(estado: EstadoVoz, conv, exigir_token, publicar: Callable[[str, str], None] = lambda _k, _t: None,
+          *, espelho: EventBus) -> APIRouter:
     r = APIRouter(dependencies=[Depends(exigir_token)])
+
+    @r.get("/turnos/eventos")
+    async def turnos():
+        """Espelho do turno pedido pela voz. Só passa a fala que virou pergunta, nunca a conversa da casa."""
+        return StreamingResponse(event_source(espelho, None), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache"})
 
     @r.get("/voz")
     async def voz():

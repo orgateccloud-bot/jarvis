@@ -207,6 +207,10 @@ class Conversation:
             self._avisos.pop(session_id, None)
             return self.store.nova(session_id)
 
+    def pergunta(self, message: str) -> str:
+        """A pergunta como entra na conversa e aparece na tela: sem o prefixo de camada e com CPF e CNPJ mascarados."""
+        return sanitizar(strip_force(message), salt=self.salt)
+
     def mensagens(self, session_id: str, limite: int = 40) -> dict:
         """Últimas mensagens para o HUD repor a tela depois do F5. `conversa` identifica esta conversa (a nota do
         primeiro turno traz data e hora) e `total` deixa o HUD saber até onde a tela foi limpa."""
@@ -239,7 +243,7 @@ class Conversation:
         )
 
         history = self.store.history(session_id)
-        history.append({"role": "user", "content": sanitizar(strip_force(message), salt=self.salt)})
+        history.append({"role": "user", "content": self.pergunta(message)})
         route = decision.route
         texts: list[str] = []
         total = TurnOutcome(text="", model=decision.model or "regras")

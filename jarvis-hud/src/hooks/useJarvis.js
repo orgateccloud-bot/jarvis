@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { decideApproval, getJson, lerMensagens, streamChat, streamEvents } from '../lib/api.js'
-import { ROUTE_TO_TIER } from '../lib/tiers.js'
-import {
-  comMarcoDeConversaNova, lerLimpeza, mensagensParaRepor, mensagensQueFicam, salvarLimpeza,
-} from '../lib/telaLimpa.js'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { decideApproval, getJson, lerMensagens, streamChat, streamEvents, streamTurnos } from '../lib/api.js'
+import { lerLimpeza, mensagensParaRepor, mensagensQueFicam, salvarLimpeza } from '../lib/telaLimpa.js'
 import { acrescentarAviso, novoAviso } from '../lib/avisos.js'
-import { faseDepoisDaFerramenta, rotuloDaFerramenta } from '../lib/atividade.js'
+import { comAprovacaoDecidida, criarTurno } from '../lib/turno.js'
 
 const HISTORY = 60
 let seq = 0
@@ -48,7 +45,9 @@ export function useJarvis(callbacks = {}) {
     setTimeout(() => setAlertFlash(false), 3000)
   }, [])
 
-  const patch = (id, fields) => setMessages(m => m.map(x => (x.id === id ? { ...x, ...(typeof fields === 'function' ? fields(x) : fields) } : x)))
+  const tela = useMemo(() => ({
+    uid, setMessages, setNeural, setPhase, setAtividade, pushToast, flashAlert, energyRef,
+  }), [pushToast, flashAlert])
 
   // polling de saúde, sinais vitais e custos
   useEffect(() => {
@@ -112,6 +111,59 @@ export function useJarvis(callbacks = {}) {
     return () => { stopped = true; ctrl.abort() }
   }, [online, authOk, pushToast, flashAlert])
 
+  // espelho do turno pedido pela voz (só com JARVIS_VOZ_LOCAL=1): aparece como um turno digitado, inclusive o card de
+  // aprovação clicável. Quem fala é o serviço, então nada aqui vai para a voz do navegador.
+  useEffect(() => {
+    if (!online || !authOk) return
+    const ctrl = new AbortController()
+    let stopped = false
+    let turno = null
+    const fechar = () => {
+      if (!turno) return
+      turno.encerrar()
+      turno = null
+      busyRef.current = false
+      setBusy(false)
+      setPhase('idle')
+      setAtividade(null)
+    }
+    const abrir = pergunta => {
+      const jid = uid()
+      setMessages(m => [...m, ...(pergunta ? [{ id: uid(), role: 'user', text: pergunta, mode: 'voz' }] : []),
+        { id: jid, role: 'jarvis', text: '', streaming: true, tools: [] }])
+      busyRef.current = true
+      setBusy(true)
+      setPhase('thinking')
+      turno = criarTurno(jid, tela)
+    }
+    const loop = async () => {
+      while (!stopped) {
+        try {
+          for await (const ev of streamTurnos({ signal: ctrl.signal })) {
+            if (ev.type === 'aprovacao') {
+              setMessages(m => comAprovacaoDecidida(m, ev.data))
+              setPhase(p => (p === 'waiting' ? 'thinking' : p))
+            } else if (ev.type === 'done') {
+              fechar()
+            } else if (ev.type === 'pergunta') {
+              fechar()
+              abrir(ev.data)
+            } else {
+              if (!turno) abrir(null) // HUD aberto no meio do turno: mostra o resto da resposta
+              turno.aplicar(ev)
+            }
+          }
+        } catch (e) {
+          if (e.status === 404) return // sem a voz local não há espelho
+        }
+        fechar()
+        if (!stopped) await new Promise(r => setTimeout(r, 3000))
+      }
+    }
+    loop()
+    return () => { stopped = true; ctrl.abort(); fechar() }
+  }, [online, authOk, tela])
+
   // ao abrir, repõe a conversa guardada na API, menos o que já foi limpo da tela
   const repostaRef = useRef(false)
   useEffect(() => {
@@ -142,86 +194,27 @@ export function useJarvis(callbacks = {}) {
     busyRef.current = true
     setBusy(true)
     setPhase('thinking')
-    let jid = uid()
+    const jid = uid()
     const shown = (opts.display || text).trim() // o balão mostra o texto do usuário, sem o prefixo /opus etc.
     setMessages(m => [...m, { id: uid(), role: 'user', text: shown, mode: opts.mode },
       { id: jid, role: 'jarvis', text: '', streaming: true, tools: [] }])
-    let full = ''
-    let segment = ''
-    let thinking = ''
-    let tier = null
+    const turno = criarTurno(jid, tela, opts)
     try {
-      for await (const ev of streamChat(text)) {
-        if (ev.type === 'route') {
-          tier = ROUTE_TO_TIER[ev.data.rota] || 'regras'
-          setNeural({ ...ev.data, thinking: '' })
-          patch(jid, { tier, modelo: ev.data.modelo })
-          if (ev.data.nova_conversa) setMessages(m => comMarcoDeConversaNova(m, uid()))
-        } else if (ev.type === 'thinking') {
-          thinking += ev.data
-          setNeural(n => ({ ...n, thinking }))
-        } else if (ev.type === 'text') {
-          full += ev.data
-          segment += ev.data
-          patch(jid, { text: segment })
-          setAtividade(null) // ferramenta de servidor só termina no fim da resposta: o texto já é o sinal de que voltou
-          setPhase('speaking')
-          energyRef.current = Math.min(1, energyRef.current + 0.45)
-          opts.onText?.(ev.data)
-        } else if (ev.type === 'tool') {
-          const d = ev.data
-          setAtividade(d.fase === 'inicio' ? rotuloDaFerramenta(d.nome) : null)
-          setPhase(p => faseDepoisDaFerramenta(p, d))
-          energyRef.current = Math.max(energyRef.current, d.fase === 'inicio' ? 0.7 : 0.45) // cada ferramenta dá um pulso
-          patch(jid, x => {
-            const tools = [...(x.tools || [])]
-            const i = tools.findIndex(t => t.nome === d.nome && t.fase === 'inicio')
-            if (d.fase === 'fim' && i >= 0) tools[i] = d
-            else tools.push(d)
-            return { tools }
-          })
-          if (d.negado) {
-            setMessages(m => m.map(x => (x.role === 'approval' && x.nome === d.nome && x.status === 'pendente'
-              ? { ...x, status: 'expirado' } : x)))
-          }
-        } else if (ev.type === 'approval') {
-          // o card entra na conversa; o texto seguinte do modelo vai para uma nova bolha abaixo dele
-          setAtividade(null)
-          setPhase('waiting')
-          patch(jid, { streaming: false })
-          const nid = uid()
-          setMessages(m => [...m,
-            { id: uid(), role: 'approval', approvalId: ev.data.id, nome: ev.data.nome, resumo: ev.data.resumo,
-              expiraEm: Date.now() + ev.data.expira_s * 1000, status: 'pendente', detalhes: ev.data.detalhes },
-            { id: nid, role: 'jarvis', text: '', streaming: true, tools: [], tier }])
-          jid = nid
-          segment = ''
-          opts.onApproval?.(ev.data)
-        } else if (ev.type === 'usage') {
-          setNeural(n => ({ ...n, uso: ev.data }))
-          patch(jid, { custo: ev.data.custo_usd, modelo: ev.data.modelo })
-        } else if (ev.type === 'aviso') {
-          pushToast(ev.data, 'warn')
-        } else if (ev.type === 'error') {
-          pushToast(ev.data, 'danger')
-          flashAlert()
-        }
-      }
-      setMessages(m => m.filter(x => !(x.id === jid && !x.text && !(x.tools || []).length))
-        .map(x => (x.id === jid ? { ...x, streaming: false } : x)))
-      opts.onDone?.(full)
+      for await (const ev of streamChat(text)) turno.aplicar(ev)
+      turno.encerrar()
+      opts.onDone?.(turno.full)
     } catch (e) {
-      patch(jid, { streaming: false, text: segment || 'Não consegui falar com o núcleo do JARVIS.' })
+      turno.falhar('Não consegui falar com o núcleo do JARVIS.')
       pushToast(`Falha de comunicação: ${e.message}`, 'danger')
       flashAlert()
-      opts.onDone?.(full)
+      opts.onDone?.(turno.full)
     } finally {
       busyRef.current = false
       setBusy(false)
       setPhase('idle')
       setAtividade(null)
     }
-  }, [pushToast, flashAlert])
+  }, [tela, pushToast, flashAlert])
 
   // tela limpa: tira as mensagens da tela; o histórico da sessão na API continua (o contexto do JARVIS não muda).
   // Guarda até onde limpou, senão tudo voltaria no F5.
