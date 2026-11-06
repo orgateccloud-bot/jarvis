@@ -1,11 +1,58 @@
-// Medidores em SVG: anel de progresso e sparkline.
+// Medidores em SVG: anel de progresso e sparkline. E o número que anda até o valor novo.
+import { useEffect, useRef, useState } from 'react'
+import { interpolar } from '../lib/contador.js'
 
-export function Ring({ value = 0, size = 64, stroke = 5, color = 'var(--aurora-2)', children, label }) {
+const movimentoReduzido = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+/**
+ * Número que anda até o valor novo. Escreve direto no elemento, sem renderizar o React a cada quadro.
+ * `formato` precisa ser estável (função do módulo): trocar de função reinicia a animação.
+ */
+export function Contador({ valor, formato = String, ms = 600 }) {
+  const ref = useRef(null)
+  const mostrado = useRef(valor)
+  const [inicial] = useState(() => (valor == null ? '—' : formato(valor)))
+
+  useEffect(() => {
+    const el = ref.current
+    const de = mostrado.current
+    if (valor == null || de == null || de === valor || movimentoReduzido()) {
+      mostrado.current = valor
+      el.textContent = valor == null ? '—' : formato(valor)
+      return undefined
+    }
+    let raf = 0
+    let inicio = null
+    const passo = agora => {
+      inicio ??= agora
+      const p = (agora - inicio) / ms
+      mostrado.current = interpolar(de, valor, p)
+      el.textContent = formato(mostrado.current)
+      if (p < 1) raf = requestAnimationFrame(passo)
+    }
+    raf = requestAnimationFrame(passo)
+    return () => cancelAnimationFrame(raf)
+  }, [valor, formato, ms])
+
+  return <span ref={ref}>{inicial}</span>
+}
+
+/** `faixa`: 0, 1 ou 2 (lib/contador.js). O anel dá um pulso só ao subir de faixa. */
+export function Ring({ value = 0, size = 64, stroke = 5, color = 'var(--aurora-2)', faixa = 0, children, label }) {
+  const ref = useRef(null)
+  const antes = useRef(faixa)
+  useEffect(() => {
+    if (faixa > antes.current && !movimentoReduzido()) {
+      ref.current.animate?.([{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' }],
+        { duration: 700, easing: 'ease-out' })
+    }
+    antes.current = faixa
+  }, [faixa])
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const v = Math.max(0, Math.min(100, value || 0))
   return (
-    <div className="ring" style={{ width: size, height: size }} role="meter" aria-valuenow={Math.round(v)}
+    <div ref={ref} className="ring" style={{ width: size, height: size }} role="meter" aria-valuenow={Math.round(v)}
       aria-valuemin={0} aria-valuemax={100} aria-label={label}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,.07)" strokeWidth={stroke} />

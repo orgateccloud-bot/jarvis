@@ -174,7 +174,7 @@ export default function App() {
                 <AvisosCard avisos={j.avisos} onLimpar={j.limparAvisos} />
                 <NeuralCard neural={j.neural} />
                 <VitalsCard vitals={j.vitals} history={j.history} />
-                <CostCard costs={j.costs} />
+                <CostCard costs={j.costs} uso={j.neural?.uso} />
               </aside>
             </div>
           </CardsContexto.Provider>
