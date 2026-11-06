@@ -3,6 +3,7 @@ import { decideApproval, getJson, streamChat, streamEvents } from '../lib/api.js
 import { ROUTE_TO_TIER } from '../lib/tiers.js'
 import { mensagensQueFicam } from '../lib/telaLimpa.js'
 import { acrescentarAviso, novoAviso } from '../lib/avisos.js'
+import { faseDepoisDaFerramenta, rotuloDaFerramenta } from '../lib/atividade.js'
 
 const HISTORY = 60
 let seq = 0
@@ -10,14 +11,15 @@ const uid = () => `m${Date.now().toString(36)}${(seq++).toString(36)}`
 
 /**
  * Estado do JARVIS: conversa em streaming (com ferramentas e aprovações), eventos proativos,
- * sinais vitais, custos e alertas. `phase` reflete só o stream (thinking/speaking/idle);
- * a voz e a escuta compõem a fase visual no App.
+ * sinais vitais, custos e alertas. `phase` reflete só o stream (thinking/speaking/waiting/idle; waiting é a espera de
+ * uma aprovação); `atividade` diz o que a ferramenta em curso está fazendo. A voz e a escuta compõem a fase visual no App.
  * callbacks: { onProactive(ev) } — ex.: falar avisos e lembretes.
  */
 export function useJarvis(callbacks = {}) {
   const cb = useRef(callbacks)
   useEffect(() => { cb.current = callbacks })
   const [phase, setPhase] = useState('idle')
+  const [atividade, setAtividade] = useState(null)
   const [messages, setMessages] = useState([])
   const [avisos, setAvisos] = useState([])
   const [busy, setBusy] = useState(false)
@@ -112,6 +114,7 @@ export function useJarvis(callbacks = {}) {
   const approve = useCallback(async (id, ok) => {
     setMessages(m => m.map(x => (x.role === 'approval' && x.approvalId === id && x.status === 'pendente'
       ? { ...x, status: ok ? 'aprovando' : 'negando' } : x)))
+    setPhase(p => (p === 'waiting' ? 'thinking' : p))
     const sent = await decideApproval(id, ok)
     setMessages(m => m.map(x => (x.role === 'approval' && x.approvalId === id
       ? { ...x, status: sent ? (ok ? 'aprovado' : 'negado') : 'expirado' } : x)))
@@ -152,6 +155,9 @@ export function useJarvis(callbacks = {}) {
           opts.onText?.(ev.data)
         } else if (ev.type === 'tool') {
           const d = ev.data
+          setAtividade(d.fase === 'inicio' ? rotuloDaFerramenta(d.nome) : null)
+          setPhase(p => faseDepoisDaFerramenta(p, d))
+          energyRef.current = Math.max(energyRef.current, d.fase === 'inicio' ? 0.7 : 0.45) // cada ferramenta dá um pulso
           patch(jid, x => {
             const tools = [...(x.tools || [])]
             const i = tools.findIndex(t => t.nome === d.nome && t.fase === 'inicio')
@@ -165,6 +171,8 @@ export function useJarvis(callbacks = {}) {
           }
         } else if (ev.type === 'approval') {
           // o card entra na conversa; o texto seguinte do modelo vai para uma nova bolha abaixo dele
+          setAtividade(null)
+          setPhase('waiting')
           patch(jid, { streaming: false })
           const nid = uid()
           setMessages(m => [...m,
@@ -194,6 +202,7 @@ export function useJarvis(callbacks = {}) {
       busyRef.current = false
       setBusy(false)
       setPhase('idle')
+      setAtividade(null)
     }
   }, [pushToast, flashAlert])
 
@@ -202,7 +211,7 @@ export function useJarvis(callbacks = {}) {
   const limparAvisos = useCallback(() => setAvisos([]), [])
 
   return {
-    phase, messages, avisos, busy, neural, vitals, history, costs, online, authOk,
+    phase, atividade, messages, avisos, busy, neural, vitals, history, costs, online, authOk,
     toasts, dismissToast, pushToast, alertFlash, energyRef, sendMessage, approve, limparTela, limparAvisos,
   }
 }
