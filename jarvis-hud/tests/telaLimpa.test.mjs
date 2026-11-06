@@ -1,7 +1,10 @@
 // Tela limpa: cards minimizados (lembrados no navegador) e conversa limpa da tela. Rode: npm test
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { alternar, alternarTodos, lerMinimizados, mensagensQueFicam, salvarMinimizados } from '../src/lib/telaLimpa.js'
+import {
+  alternar, alternarTodos, comMarcoDeConversaNova, lerLimpeza, lerMinimizados, mensagensParaRepor, mensagensQueFicam,
+  salvarLimpeza, salvarMinimizados,
+} from '../src/lib/telaLimpa.js'
 
 function armazemFalso() {
   const dados = new Map()
@@ -45,4 +48,34 @@ test('limpar a conversa tira tudo, menos confirmação sem resposta e resposta a
   ]
   assert.deepEqual(mensagensQueFicam(msgs).map(m => m.id), [4, 5])
   assert.deepEqual(mensagensQueFicam([]), [])
+})
+
+test('a marca de limpeza fica no navegador e sobrevive a dado estragado', () => {
+  const a = armazemFalso()
+  assert.equal(lerLimpeza(a), null)
+  salvarLimpeza({ conversa: 'abc', ate: 6 }, a)
+  assert.deepEqual(lerLimpeza(a), { conversa: 'abc', ate: 6 })
+  a.setItem('jarvis.conversa.limpa', '{quebrado')
+  assert.equal(lerLimpeza(a), null)
+  a.setItem('jarvis.conversa.limpa', JSON.stringify({ conversa: 'abc', ate: 'seis' }))
+  assert.equal(lerLimpeza(a), null)
+  const recusa = { getItem() { throw new Error('bloqueado') }, setItem() { throw new Error('bloqueado') } }
+  assert.equal(lerLimpeza(recusa), null)
+  assert.doesNotThrow(() => salvarLimpeza({ conversa: 'abc', ate: 1 }, recusa))
+})
+
+test('depois do F5 volta só o que veio depois da limpeza', () => {
+  const mensagens = ['a', 'b', 'c', 'd']                                        // as 4 últimas de 10
+  const resposta = { conversa: 'abc', total: 10, mensagens }
+  assert.deepEqual(mensagensParaRepor(resposta, null), mensagens)               // nunca limpou
+  assert.deepEqual(mensagensParaRepor(resposta, { conversa: 'abc', ate: 8 }), ['c', 'd'])
+  assert.deepEqual(mensagensParaRepor(resposta, { conversa: 'abc', ate: 3 }), mensagens) // limpou antes da janela
+  assert.deepEqual(mensagensParaRepor(resposta, { conversa: 'abc', ate: 10 }), [])       // limpou tudo
+  assert.deepEqual(mensagensParaRepor(resposta, { conversa: 'xyz', ate: 10 }), mensagens) // limpeza de outra conversa
+})
+
+test('o marco de conversa nova entra antes da pergunta que a abriu', () => {
+  const msgs = [{ id: 1, role: 'user' }, { id: 2, role: 'jarvis' }, { id: 3, role: 'user' }, { id: 4, role: 'jarvis' }]
+  assert.deepEqual(comMarcoDeConversaNova(msgs, 9).map(m => m.id), [1, 2, 9, 3, 4])
+  assert.equal(comMarcoDeConversaNova(msgs, 9)[2].role, 'marco')
 })

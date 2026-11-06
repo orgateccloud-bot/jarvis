@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { decideApproval, getJson, streamChat, streamEvents } from '../lib/api.js'
+import { decideApproval, getJson, lerMensagens, streamChat, streamEvents } from '../lib/api.js'
 import { ROUTE_TO_TIER } from '../lib/tiers.js'
-import { mensagensQueFicam } from '../lib/telaLimpa.js'
+import {
+  comMarcoDeConversaNova, lerLimpeza, mensagensParaRepor, mensagensQueFicam, salvarLimpeza,
+} from '../lib/telaLimpa.js'
 import { acrescentarAviso, novoAviso } from '../lib/avisos.js'
 import { faseDepoisDaFerramenta, rotuloDaFerramenta } from '../lib/atividade.js'
 
@@ -110,6 +112,17 @@ export function useJarvis(callbacks = {}) {
     return () => { stopped = true; ctrl.abort() }
   }, [online, authOk, pushToast, flashAlert])
 
+  // ao abrir, repõe a conversa guardada na API, menos o que já foi limpo da tela
+  const repostaRef = useRef(false)
+  useEffect(() => {
+    if (!online || !authOk || repostaRef.current) return
+    repostaRef.current = true
+    lerMensagens().then(r => {
+      const repor = mensagensParaRepor(r, lerLimpeza()).map(m => ({ ...m, id: uid() }))
+      setMessages(atuais => (atuais.length ? atuais : repor))
+    }).catch(() => { /* API sem a rota ou fora do ar: a tela só começa vazia */ })
+  }, [online, authOk])
+
   /** Aprova ou nega uma ação pendente (clique no card ou "sim"/"não" por voz). */
   const approve = useCallback(async (id, ok) => {
     setMessages(m => m.map(x => (x.role === 'approval' && x.approvalId === id && x.status === 'pendente'
@@ -143,6 +156,7 @@ export function useJarvis(callbacks = {}) {
           tier = ROUTE_TO_TIER[ev.data.rota] || 'regras'
           setNeural({ ...ev.data, thinking: '' })
           patch(jid, { tier, modelo: ev.data.modelo })
+          if (ev.data.nova_conversa) setMessages(m => comMarcoDeConversaNova(m, uid()))
         } else if (ev.type === 'thinking') {
           thinking += ev.data
           setNeural(n => ({ ...n, thinking }))
@@ -209,8 +223,12 @@ export function useJarvis(callbacks = {}) {
     }
   }, [pushToast, flashAlert])
 
-  // tela limpa: tira as mensagens da tela; o histórico da sessão na API continua (o contexto do JARVIS não muda)
-  const limparTela = useCallback(() => setMessages(mensagensQueFicam), [])
+  // tela limpa: tira as mensagens da tela; o histórico da sessão na API continua (o contexto do JARVIS não muda).
+  // Guarda até onde limpou, senão tudo voltaria no F5.
+  const limparTela = useCallback(() => {
+    setMessages(mensagensQueFicam)
+    lerMensagens(1).then(r => salvarLimpeza({ conversa: r.conversa, ate: r.total })).catch(() => {})
+  }, [])
   const limparAvisos = useCallback(() => setAvisos([]), [])
 
   return {

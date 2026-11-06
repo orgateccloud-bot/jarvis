@@ -253,6 +253,11 @@
 .msg-meta .mono { color: var(--text-faint); font-weight: 400; }
 .msg-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--msg); box-shadow: 0 0 8px var(--msg); }
 .msg-end { height: 1px; }
+.msg-marco {
+  align-self: center; padding: 1px 12px; border-radius: 999px;
+  font-size: 11.5px; letter-spacing: 0.04em; color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--hairline);
+}
 .msg-mode {
   display: inline-block; margin-right: 8px; padding: 0 7px; border-radius: 999px;
   font-size: 11px; font-weight: 600; text-transform: capitalize; background: rgba(255, 255, 255, 0.18);

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import psutil
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Path as Caminho
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -151,6 +152,11 @@ def create_app(settings: Settings | None = None, conversation: Conversation | No
         greeting = await asyncio.to_thread(monitor.greeting) if saudacao else None
         return StreamingResponse(event_source(bus, greeting), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache"})
+
+    @app.get("/sessions/{session_id}/mensagens", dependencies=[Depends(require_token)])
+    async def mensagens(session_id: str = Caminho(pattern=r"^[A-Za-z0-9_-]{1,64}$"),  # mesmo formato do ChatRequest
+                        limite: int = Query(default=40, ge=1, le=200)):
+        return conv.mensagens(session_id, limite)
 
     @app.post("/approvals/{approval_id}", dependencies=[Depends(require_token)])
     async def decide_approval(approval_id: str, body: ApprovalDecision):

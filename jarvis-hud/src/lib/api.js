@@ -95,6 +95,9 @@ export async function* streamEvents({ greeting = true, signal } = {}) {
   yield* readSSE(res, signal)
 }
 
+/** Últimas mensagens da conversa guardada na API, para repor a tela depois do F5. */
+export const lerMensagens = (limite = 40, sessionId = 'hud') => getJson(`/sessions/${sessionId}/mensagens?limite=${limite}`)
+
 /** Decide uma aprovação pendente (ação com efeito pedida pelo modelo). */
 export async function decideApproval(id, aprovar) {
   const res = await authFetch(`/approvals/${encodeURIComponent(id)}`, {
