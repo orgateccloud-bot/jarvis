@@ -126,6 +126,8 @@ parar a instância em execução: `Stop-ScheduledTask -TaskName JARVIS`.
 | `POST /chat/stream` | Conversa em SSE (rota, pensamento, texto, ferramentas, aprovações, custo) |
 | `POST /approvals/{id}` | Aprova ou nega uma ação |
 | `GET /events` | Avisos proativos em SSE |
+| `GET /sessions/{id}/mensagens` | Últimas perguntas e respostas da conversa, só o texto (o HUD repõe a tela depois do F5) |
+| `GET /turnos/eventos` | Espelho em SSE do turno pedido pela voz (só com `JARVIS_VOZ_LOCAL=1`) |
 | `GET /costs` | Gasto do dia e do mês |
 | `GET /audit/verify` | Confere a cadeia de auditoria |
 
@@ -167,6 +169,7 @@ esse áudio ao servidor dele, por isso só com o seu clique, e até você devolv
 
 ```bat
 .venv\Scripts\python -m jarvis.voz --listar-microfones
+.venv\Scripts\python -m jarvis.voz --listar-alto-falantes
 .venv\Scripts\python -m jarvis.voz --sem-api          :: só escuta e registra em logs\voz.log
 .venv\Scripts\python -m jarvis.voz.gravar             :: grava ~60 frases suas (fora do git)
 .venv\Scripts\python -m jarvis.voz.gravar --avaliar   :: mede o acerto nas suas gravações
@@ -230,6 +233,7 @@ Todas as opções estão comentadas em [`.env.example`](.env.example). As princi
 | `JARVIS_VOZ_LOCAL` | `0` | `1` liga a [voz local](#voz-local-sem-o-hud) (a API sobe o serviço de voz) |
 | `JARVIS_VOZ_DIR` | `D:\JARVIS-Voz` | Modelos de voz e gravações de teste (fora do repositório) |
 | `JARVIS_VOZ_MICROFONE` | o do Windows | Parte do nome do microfone (`--listar-microfones`) |
+| `JARVIS_VOZ_ALTO_FALANTE` | o do Windows | Parte do nome do alto-falante da fala (`--listar-alto-falantes`). Com um viva-voz, use o mesmo aparelho do microfone: ele só cancela o eco do que sai por ele. Sem o aparelho, a fala sai no padrão do Windows. |
 | `JARVIS_VOZ_INTERROMPER` | `0` | `1` = modo fone: microfone aberto durante a fala, para "Jarvis, pare" |
 
 > **Atenção: `JARVIS_PASTAS` substitui a lista padrão, não soma a ela.**

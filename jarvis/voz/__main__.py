@@ -5,7 +5,8 @@ comando (Decisão B) → a mesma pergunta do HUD à API local → resposta falad
 Com JARVIS_VOZ_LOCAL=1 a API sobe e supervisiona este processo; ele também roda sozinho para diagnóstico:
 
     python -m jarvis.voz --listar-microfones
-    python -m jarvis.voz [--microfone "K8"] [--cpu]       serviço completo (precisa da API no ar)
+    python -m jarvis.voz --listar-alto-falantes
+    python -m jarvis.voz [--microfone "K8"] [--alto-falante "Jabra"] [--cpu]       serviço completo (precisa da API no ar)
     python -m jarvis.voz --sem-api                        só escuta e registra no log (fase 2b)
     python -m jarvis.voz --medir 600                      sem API: 10 min e imprime CPU, RAM, falas e latências
 
@@ -52,8 +53,11 @@ def _falhas_nativas() -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m jarvis.voz", description="Escuta por voz local do JARVIS.")
     ap.add_argument("--listar-microfones", action="store_true")
+    ap.add_argument("--listar-alto-falantes", action="store_true")
     ap.add_argument("--microfone", default=os.getenv("JARVIS_VOZ_MICROFONE", ""),
                     help="parte do nome do microfone (padrão: o do Windows)")
+    ap.add_argument("--alto-falante", default=os.getenv("JARVIS_VOZ_ALTO_FALANTE", ""),
+                    help="parte do nome do alto-falante da fala (padrão: o do Windows)")
     ap.add_argument("--limiar", type=float, default=LIMIAR_ATIVACAO)
     ap.add_argument("--cpu", action="store_true", help="Whisper na CPU mesmo com GPU")
     ap.add_argument("--medir", type=float, default=0, metavar="SEGUNDOS")
@@ -64,10 +68,10 @@ def main(argv: list[str] | None = None) -> int:
     _falhas_nativas()
     offline.ativar()  # antes de qualquer import pesado: nada neste processo sai do PC
 
-    from jarvis.voz.captura import Microfone, microfones
+    from jarvis.voz.captura import Microfone, alto_falantes, microfones
 
-    if args.listar_microfones:
-        for i, nome in microfones():
+    if args.listar_microfones or args.listar_alto_falantes:
+        for i, nome in microfones() if args.listar_microfones else alto_falantes():
             print(f"{i:3d}  {nome}")
         return 0
 
@@ -92,9 +96,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.sem_api and not args.medir:
         from jarvis.voz.servico import Servico, cliente_padrao, interromper_por_voz
 
-        srv = Servico(escuta, cliente_padrao(), Microfone(pedido=args.microfone), interromper_por_voz(), args.pai)
-        logger.info("voz: serviço local no ar (Whisper {}; interromper por voz: {})", transcritor.config,
-                    srv.conversa.interromper)
+        srv = Servico(escuta, cliente_padrao(), Microfone(pedido=args.microfone), interromper_por_voz(), args.pai,
+                      alto_falante=args.alto_falante)
+        logger.info("voz: serviço local no ar (Whisper {}; interromper por voz: {}; alto-falante: {})",
+                    transcritor.config, srv.conversa.interromper, args.alto_falante or "padrão do Windows")
         try:
             srv.rodar()
         except KeyboardInterrupt:

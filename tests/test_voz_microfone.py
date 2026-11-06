@@ -111,6 +111,75 @@ class VozMuda:
         pass
 
 
+class ClienteQueAnota(ClienteSoBatimento):
+    def __init__(self):
+        self.batidas: list[tuple[float, str]] = []
+
+    def batimento(self, estado):
+        self.batidas.append((time.monotonic(), estado))
+        return super().batimento(estado)
+
+
+def _ate(condicao, segundos=3.0):
+    limite = time.monotonic() + segundos
+    while time.monotonic() < limite and not condicao():
+        time.sleep(0.005)
+    return condicao()
+
+
+def test_batimento_sai_na_hora_quando_o_estado_muda(monkeypatch):
+    monkeypatch.setattr(mod, "BATIMENTO_S", 30.0)                 # o batimento normal nunca sairia durante o teste
+    cliente = ClienteQueAnota()
+    srv = mod.Servico(EscutaFalsa(), cliente, object(), voz=VozMuda())
+    t = threading.Thread(target=srv._batimento, daemon=True)
+    t.start()
+    try:
+        assert _ate(lambda: len(cliente.batidas) == 1)
+        srv.conversa.ocupado = True
+        assert _ate(lambda: len(cliente.batidas) == 2), "a mudança de estado não saiu na hora"
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert [e for _, e in cliente.batidas] == ["repouso", "processando"]
+
+
+def test_batimento_normal_continua_sem_mudanca_de_estado(monkeypatch):
+    monkeypatch.setattr(mod, "BATIMENTO_S", 0.1)
+    cliente = ClienteQueAnota()
+    srv = mod.Servico(EscutaFalsa(), cliente, object(), voz=VozMuda())
+    t = threading.Thread(target=srv._batimento, daemon=True)
+    t.start()
+    try:
+        assert _ate(lambda: len(cliente.batidas) >= 3)
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert {e for _, e in cliente.batidas} == {"repouso"}
+
+
+def test_api_fora_nao_vira_rajada_de_tentativas(monkeypatch):
+    monkeypatch.setattr(mod, "BATIMENTO_S", 30.0)
+
+    class ClienteFora(ClienteQueAnota):
+        def batimento(self, estado):
+            super().batimento(estado)
+            raise ConnectionError("sem API")
+
+    cliente = ClienteFora()
+    srv = mod.Servico(EscutaFalsa(), cliente, object(), voz=VozMuda())
+    srv.dono = True
+    t = threading.Thread(target=srv._batimento, daemon=True)
+    t.start()
+    try:
+        assert _ate(lambda: len(cliente.batidas) == 1)
+        time.sleep(0.2)                                           # várias olhadas no estado, nenhuma nova tentativa
+    finally:
+        srv.parar.set()
+        t.join(timeout=5)
+    assert len(cliente.batidas) == 1
+    assert srv.dono is False
+
+
 def test_servico_reabre_o_microfone_que_parou_sem_erro(monkeypatch):
     monkeypatch.setattr(mod, "ESPERAS_REABRIR_S", (0.01,))
     mic, escuta = MicrofoneQueTrava(), EscutaFalsa()
@@ -313,3 +382,99 @@ def test_a_fala_toca_segurando_a_trava(monkeypatch):
     monkeypatch.setattr(captura.sd, "OutputStream", SaidaFalsa)
     fala.tocador_sounddevice()(np.zeros(4000, dtype=np.int16), 16000, lambda: False)
     assert vistos and all(vistos) and not TRAVA_PORTAUDIO.locked()
+
+
+# --- JARVIS_VOZ_ALTO_FALANTE: o cancelamento de eco de um viva-voz só funciona se a fala sair por ele ------------
+VIVA_VOZ = (7, "Alto-falante (Jabra SPEAK2 40 M")
+REALTEK = (3, "Alto-falantes (Realtek(R) Audio")
+
+
+def _saidas(monkeypatch, lista, falha_ao_abrir=(), falha_ao_escrever=()):
+    """Saídas falsas: `lista` é o que o PortAudio enxerga; `falha_*` são índices de um aparelho que foi desconectado
+    (o PortAudio só relê a lista ao reiniciar, então ele continua aparecendo). Devolve os aparelhos abertos, em ordem."""
+    abertos = []
+
+    class Saida:
+        def __init__(self, device=None, **_kw):
+            abertos.append(device)
+            if device in falha_ao_abrir:
+                raise captura.sd.PortAudioError("Device unavailable")
+            self.device = device
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+        def write(self, _bloco):
+            if self.device in falha_ao_escrever:
+                raise captura.sd.PortAudioError("Unanticipated host error")
+
+    monkeypatch.setattr(captura.sd, "OutputStream", Saida)
+    monkeypatch.setattr(captura, "alto_falantes", lambda: lista)
+    return abertos
+
+
+def _tocador(pedido):
+    from jarvis.voz import fala
+
+    tocar = fala.tocador_sounddevice(pedido)
+    return lambda: tocar(np.zeros(4000, dtype=np.int16), 16000, lambda: False)
+
+
+def test_alto_falantes_lista_so_as_saidas(monkeypatch):
+    monkeypatch.setattr(captura.sd, "query_devices", lambda: [
+        {"name": "Microfone (K8)", "max_input_channels": 1, "max_output_channels": 0},
+        {"name": REALTEK[1], "max_input_channels": 0, "max_output_channels": 2},
+    ])
+    assert captura.alto_falantes() == [(1, REALTEK[1])]
+
+
+def test_fala_sai_pelo_alto_falante_pedido(monkeypatch):
+    abertos = _saidas(monkeypatch, [REALTEK, VIVA_VOZ])
+    _tocador("speak2")()                     # parte do nome, sem diferenciar maiúsculas
+    assert abertos == [7] and not TRAVA_PORTAUDIO.locked()
+
+
+def test_sem_pedido_a_fala_fica_no_padrao_do_windows(monkeypatch):
+    abertos = _saidas(monkeypatch, [REALTEK, VIVA_VOZ])
+    _tocador("")()
+    assert abertos == [None]
+
+
+def test_alto_falante_ausente_fala_no_padrao_e_procura_a_cada_frase(monkeypatch):
+    lista = [REALTEK]
+    abertos = _saidas(monkeypatch, lista)
+    tocar = _tocador("speak2")
+    tocar()                                  # desconectado: melhor falar em outro lugar que ficar mudo
+    lista.append((9, VIVA_VOZ[1]))           # voltou com outro índice (o PortAudio releu a lista)
+    tocar()
+    assert abertos == [None, 9]
+
+
+def test_desconectado_com_a_lista_velha_cai_no_padrao_ao_abrir(monkeypatch):
+    abertos = _saidas(monkeypatch, [REALTEK, VIVA_VOZ], falha_ao_abrir={7})
+    _tocador("speak2")()
+    assert abertos == [7, None] and not TRAVA_PORTAUDIO.locked()
+
+
+def test_desconectado_no_meio_da_frase_repete_no_padrao(monkeypatch):
+    abertos = _saidas(monkeypatch, [REALTEK, VIVA_VOZ], falha_ao_escrever={7})
+    _tocador("speak2")()
+    assert abertos == [7, None] and not TRAVA_PORTAUDIO.locked()
+
+
+def test_falha_no_padrao_do_windows_continua_subindo(monkeypatch):
+    _saidas(monkeypatch, [REALTEK], falha_ao_abrir={None})
+    with pytest.raises(captura.sd.PortAudioError):
+        _tocador("")()
+    assert not TRAVA_PORTAUDIO.locked()
+
+
+def test_servico_fala_pelo_alto_falante_pedido(monkeypatch):
+    kw = {}
+    monkeypatch.setattr(mod, "tocador_sounddevice", lambda nome: f"tocador de {nome}")
+    monkeypatch.setattr(mod, "VozLocal", lambda **k: kw.update(k) or VozMuda())
+    mod.Servico(EscutaFalsa(), ClienteSoBatimento(), None, alto_falante="Speak2")
+    assert kw["tocar"] == "tocador de Speak2"
