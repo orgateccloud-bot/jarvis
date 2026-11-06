@@ -50,6 +50,7 @@
 }
 .phase-thinking .status-dot, .phase-listening .status-dot { animation: pulse 1.1s var(--ease) infinite; }
 .phase-speaking .status-dot { animation: pulse 0.55s var(--ease) infinite; }
+.phase-waiting .status-dot { animation: pulse 3.7s ease-in-out infinite; } /* o mesmo ciclo do astro na espera */
 .status-phase { font-weight: 600; }
 .status-sep { width: 1px; height: 14px; background: var(--hairline-strong); }
 .status-model { color: var(--tier); font-weight: 600; transition: color var(--slow); }
