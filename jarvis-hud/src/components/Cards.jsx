@@ -1,5 +1,5 @@
 import { Contador, Ring, Sparkline } from './Gauges.jsx'
-import { MODEL_TO_TIER, ROUTE_LABEL, ROUTE_TO_TIER, TIERS } from '../lib/tiers.js'
+import { AREA_LABEL, MODEL_TO_TIER, ROUTE_LABEL, ROUTE_TO_TIER, TIERS } from '../lib/tiers.js'
 import { faixa } from '../lib/contador.js'
 import { useCard } from '../hooks/useCards.js'
 
@@ -173,6 +173,7 @@ export function NeuralCard({ neural }) {
             <div><dt>Modelo</dt><dd className="mono">{uso?.modelo || neural.modelo}</dd></div>
             <div><dt>Estrela</dt><dd>{t.classe} · <span className="mono">{t.temp.toLocaleString('pt-BR')} K</span></dd></div>
             {neural.effort && <div><dt>Esforço</dt><dd className="mono">{neural.effort}</dd></div>}
+            {neural.area && <div><dt>Área</dt><dd>{AREA_LABEL[neural.area] || neural.area}</dd></div>}
           </dl>
           <div className="thought" aria-label="Pensamento do modelo">
             <span className="thought-label">pensamento</span>
